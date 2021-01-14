@@ -1,6 +1,8 @@
 # Demography 7283
 Statistics for Demographic Data 2
+
 DEM 5283/7283
+
 Spring 2021
 
 ## Course Information
