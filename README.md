@@ -48,19 +48,19 @@ In Rstudio. Please have these programs downloaded and installed prior to class.
 # Course Calendar
 | **Week** | **Date** | **Topic** | **Suggested Reading - Letters refer to numbering of textbooks** |
 | --- | --- | --- | --- |
-| 1 | 1/25 | Course Introduction and introduction to datasets to be used | 1 – ch 1; 2- ch 1 |
-| 2 | 2/1 | Survey data analysis | 2- ch 1 |
-| 3 | 2/8 | Logistic/Probit Models | 1 – ch 3; 2- ch 2 |
-| 4 | 2/15 | Logistic regression for prediction **Paper topic must be identified!** | 1- ch 3 &amp; 4 ; 2- ch 3 |
+| 1 | 1/25 | Course Introduction and introduction to datasets to be used | PX ch 2; GH ch 3 |
+| 2 | 2/1 | Survey data analysis | LF |
+| 3 | 2/8 | Logistic/Probit Models | AL ch 2,3; PX ch 3|
+| 4 | 2/15 | Logistic regression for prediction **Paper topic must be identified!** | AL ch 5,6; PX ch 7, 8 |
 | 5 | 2/22 | Logistic regression for Ordinal/Multinomial outcomes **Blog post 1 due** | 2 – ch 2 |
-| 6 | 3/1 | Count Data Regression | 2 - ch 2 |
+| 6 | 3/1 | Count Data Regression | AL ch 9; PX ch 4; GH ch 6 |
 | 7 | 3/8 | **No Class**** Spring Break** |  |
-| 8 | 3/15 | Data Reduction/Principal Components | |
-| 9 | 3/22 | Multiple Imputation **Blog post 2 due** | 1 – ch 5 ; 2 ch 5 |
-| 10 | 3/29 | Longitudinal models | 2 ch 5 |
-| 11 | 4/5 | Spline Regression |  |
-| 12 | 4/12 | Multilevel Models | 1 ch 7 &amp; 8 |
-| 13 | 4/19 | Multilevel Models | 1 ch 7 &amp; 8 |
-| 14 | 4/26 | Regression Trees **Blog post 3 due** |  |
+| 8 | 3/15 | Data Reduction/Principal Components | TBA |
+| 9 | 3/22 | Multiple Imputation **Blog post 2 due** | Allison |
+| 10 | 3/29 | Longitudinal models | F ch 11; AL ch 8 |
+| 11 | 4/5 | Spline Regression | F ch 14, 15 |
+| 12 | 4/12 | Multilevel Models | GH ch 11, 12; L ch 1, 2 |
+| 13 | 4/19 | Multilevel Models | GH 11, 12; F ch 13 |
+| 14 | 4/26 | Regression Trees **Blog post 3 due** | F ch 16 |
 | 15 | 5/3 | TBA |  |
 | 16 | 5/10 | **PhD students paper due**  **All Blog posts finalized (Blog post 4 due)** |  |
