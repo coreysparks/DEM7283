@@ -4,6 +4,7 @@ author: "Corey Sparks, PhD"
 date: "February 10, 2020"
 output:
    html_document:
+    code_download: true
     df_print: paged
     fig_height: 7
     fig_width: 7
@@ -71,9 +72,8 @@ library(dplyr)
 ```{r }
 #load brfss
 load(url("https://github.com/coreysparks/data/blob/master/brfss_2017.Rdata?raw=true"))
-samps<-sample(1:dim(brfss_17)[1], size = 5000, replace = F)
 
-brfss_17<-brfss_17[samps,]
+
 #The names in the data are very ugly, so I make them less ugly
 nams<-names(brfss_17)
 head(nams, n=10)
@@ -138,10 +138,24 @@ sub<-brfss_17%>%
   select(badhealth,mmsaname, bmi, agec,race_eth, marst, educ,white, black, hispanic, other, smoke, ins, mmsawt, ststr) %>%
   filter( complete.cases(.))
 
+samps<-sample(1:dim(sub)[1], size = 10000, replace = F)
+sub<-sub[samps,]
 #First we tell R our survey design
 options(survey.lonely.psu = "adjust")
 des<-svydesign(ids=~1, strata=~ststr, weights=~mmsawt, data =sub )
 
+```
+
+
+```{r}
+fit1<-glm(badhealth~smoke*race_eth, data=sub, family=binomial)
+fit<-glm(badhealth~0+smoke + smoke:race_eth, data=sub, family=binomial)
+summary(fit)
+summary(fit1)
+
+
+library(emmeans)
+emmeans(fit1,  ~ race_eth|smoke , type="response")
 ```
 
 
@@ -199,11 +213,64 @@ Which shows a significant variation in health status by education level and race
 
 ```{r}
 #Logit model
-fit.logit<-svyglm(badhealth~race_eth+educ+agec,
+fit.logit<-svyglm(badhealth~smoke*race_eth,
                   design= des,
                   family=binomial)
 
 summary(fit.logit)
+
+library(lme4)
+fitlogit2<-glmer(badhealth~smoke*race_eth+(1|ststr),
+                  data=sub, weights=mmsawt/mean(mmsawt, na.rm=T),
+                  family=binomial)
+
+emmeans(fit.logit,  ~ race_eth|smoke , type="response",data=sub[, c("race_eth", "smoke")])
+emmeans(fitlogit2,  ~ race_eth|smoke , type="response")
+
+
+library(tidymodels)
+
+lrmod<-logistic_reg()%>%
+  set_engine("glm")
+sub$wt<-sub$mmsawt/mean(sub$mmsawt)
+mod<- glm(badhealth~smoke*race_eth, data=sub, family=binomial, weights = wt)
+mod
+
+tidy(mod)
+
+newd<-expand.grid(smoke= c("Current", "Former"), race_eth = c("hispanic", "nh black"))
+
+newd
+
+
+newd$mean_pred <- predict(mod, newdata =  newd, type="response")
+newd
+
+library(broom)
+mod%>%
+  glance()
+
+mod%>%
+  tidy(mod)
+  
+tidy(mod, exponentiate = T)
+
+rg<-ref_grid(mod)
+
+td<-tidy(rg, type="response")
+td
+
+marg<-emmeans(rg, "race_eth", type="response")
+marg
+
+tidy(contrast(marg, method = "pairwise"))
+
+
+library(ggplot2)
+ggplot(tidy(marg, conf.int = TRUE), aes(race_eth, prob)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL))
+
 ```
 
 
