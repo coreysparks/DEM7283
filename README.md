@@ -6,10 +6,10 @@ DEM 5283/7283
 Spring 2021
 
 ## Course Information
-Mondays 6-8:30
-Instructor: Dr. Corey S. Sparks
-Office hours:  Monday afternoons, preferably by appointment
-corey.sparks@utsa.edu
+Mondays 6-8:30  
+Instructor: Dr. Corey S. Sparks  
+Office hours:  Monday afternoons, preferably by appointment  
+corey.sparks@utsa.edu  
 
 ## Course Description:
 This course represents an in-depth coverage of the general linear model framework, including alternative logistic regression models, count-data regression and multi-level modeling. Model fit, model comparison and regression diagnostics for each method are covered. In addition to these topics, students are also introduced to techniques for variable reduction and analysis of data from complex surveys.  All methods will be illustrated with an appropriate demographic survey data set.
