@@ -25,6 +25,7 @@ A systematic method for gathering information from a sample of entities for the 
 
 # Core Concepts
 **_Sampling units_** - where information will be collected from
+
 **_Sampling frame_** - the set of sampling units containing distinct sets of population members
 
 # Weights and weighting
@@ -52,7 +53,7 @@ library(htmlTable)
 y<-c(4,2,1,5,2)
 wt<-c(1,2,4,1,2)
 dat<-data.frame(y=y, weight=wt)
-htmlTable(dat)
+knitr::kable(dat)
 
 ```
 
@@ -236,7 +237,7 @@ First, we will do some descriptive analysis, such as means and cross tabulations
 table(brfss_17$badhealth, brfss_17$educ)
 
 #column percentages
-prop.table(table(brfss_17$badhealth, brfss_17$educ), margin=2)
+100*prop.table(table(brfss_17$badhealth, brfss_17$educ), margin=2)
 
 #basic chi square test of independence
 chisq.test(table(brfss_17$badhealth, brfss_17$educ))
@@ -320,7 +321,7 @@ Which shows us the errors in the estimates based on the weighted proportions. Th
 
 ```{r, results='asis'}
 #Now consider the full sample design + weights
-cat<-svyby(formula = ~badhealth, by=~male, design = des, FUN=svymean)
+cat<-svyby(formula = ~badhealth, by=~male+agec+ins, design = des, FUN=svymean)
 
 svychisq(~badhealth+male, design = des)
 
