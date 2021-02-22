@@ -254,6 +254,11 @@ sub<-brfss_17 %>%
   select(badhealth,mmsaname, bmi, agec,race_eth, marst, educ,white, black, hispanic, other, smoke, ins, mmsawt, ststr) %>%
   filter( complete.cases( . ))
 
+
+cat<-sample(1:nrow(sub), size = 1000, replace = FALSE)
+
+#sub<-sub[cat, ]
+
 #First we tell R our survey design
 options(survey.lonely.psu = "adjust")
 des<-svydesign(ids= ~1,
@@ -363,11 +368,15 @@ fit.logit<-svyglm(badhealth ~ race_eth + educ + agec,
                   design = des,
                   family = binomial)
 
+summary(fit.logit)
+
 library(broom)
 fit.logit%>%
   tidy()%>%
   knitr::kable(digits = 3)
 
+
+exp(coefficients(fit.logit))
 ```
 
 
@@ -381,7 +390,7 @@ fit.logit%>%
   knitr::kable(digits = 3)
 
 
-  
+  exp(confint(fit.logit))
 ```
 And we can get simple confidence intervals for these esimates using `confint()` which will work for most models. 
 
@@ -453,7 +462,7 @@ library(emmeans)
 rg<-ref_grid(fit.logit)
 
 marg_logit<-emmeans(object = rg,
-              specs = c( "race_eth",  "educ"),
+              specs = c( "race_eth",  "educ", "agec"),
               type="response" )
 
 knitr::kable(marg_logit,  digits = 4)
