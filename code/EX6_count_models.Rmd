@@ -1,0 +1,693 @@
+---
+title: "DEM 7283 - Count Data Models for individual and aggregate data"
+author: "Corey S. Sparks, Ph.D."
+date:  "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+   html_document:
+    df_print: paged
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    toc_float: yes
+---
+
+This example will cover the use of R functions for fitting count data models to complex survey data and to aggregate data at the county level. Specifically, we focus on the Poisson and Negative Binomial models to individual level survey data as well as for aggregate data.
+
+For this example I am using 2016 CDC Behavioral Risk Factor Surveillance System (BRFSS) SMART data. [Link](https://www.cdc.gov/brfss/smart/smart_2016.html)
+
+We will also use data from the HRSA [Area Resource File](https://data.hrsa.gov/topics/health-workforce/ahrf) on mortality in US counties. 
+
+
+##  Poisson disribution for counts or rates
+A model that is used commonly for the analysis of count data, meaning integer data, such as the number of deaths, number of crimes or number of cases of a disease, is the **_Poisson Distribution_**. 
+
+For the Poisson model, you observe a count of events in a small area or time period (crimes, deaths, etc). Unlike the Normal distribution, the Poisson is defined strictly for positive integer values.
+
+The Poisson distribution has a single parameter, the mean or $\lambda$. When we construct a model for the mean of the Poisson model, we use a natural logarithm link function. This model is referred to as a type of **_log-linear model_**. 
+
+The mean count of the event, $\lambda$ is linked to the linear mean function through the natural log link:
+
+$$ln(\lambda) = \beta_0 + \beta_1 x_1$$
+
+and using the relationship between exponents and natural logarithms, the mean is:
+
+$$\lambda = \text{exp}( \beta_0 + \beta_1 x_1)$$
+
+which ensures that the linear mean function is always positive, matching the range of the Poisson count data. 
+
+
+##  Poisson distribution modeling
+
+The mean of the Poisson distribution, $(\lambda)$, is really the average count for the outcome ($y$). We have several ways of modeling the Poisson count: 
+
+  * _Pure count model_ If each area has the same risk set, or population size, then we can model the mean as-is. This would lead to a model that looks like:
+  
+  $$log(y)= \beta_0 + \beta_1 x_1$$
+  
+When we see the $\beta_1$ parameter in this model in computer output, it is on the log-scale, since that is the scale of the outcome for the Poisson model. In order to interpret the $\beta_1$, we have to **_exponentiate_** it. When we do this, the parameter is interpreted as the percentage change in the mean of the outcome, for a 1 unit change in $x_1$. For instance if we estimate a model and see in the output that $\beta_1 = \text{.025}$, then $\exp(\beta_1) = \text{exp}(\text{.025}) = \text{1.025}$, or for a 1 unit increase in $x_1$, the mean of $y$ increases by 1.025. So if the mean of $y$ is 10, when $x_1$ = 0, then the mean is $10*(1.025*1)$ or $10.25$  when $x_1$ = 1.  
+
+  * _Rate model_ The second type of modeling strategy is a model for a rate of occurrence. This model includes an **_offset term_** in the model to incorporate unequal population sizes, this is the most common way the data are analyzed in demographic research. This offset term can be thought of as the numerator for the rate, and we can show how it is put into the model. 
+  
+  If $n$ is the population size for each place, then, we want to do a regression on the rate of occurrence of our outcome. The rate is typically expressed as a proportion, or probability $rate = \frac{y}{n}$:
+
+$$log(y/n)= \beta_0 + \beta_1 x_1$$
+$$log(y) - log(n)= \beta_0 + \beta_1 x_1$$
+
+$$log(y)= \beta_0 + \beta_1 x_1 + log(n)$$
+
+Similar to the example from before, when interpreting the effect of $\beta_1$ in this model, we also have to exponentiate it. In this case, the interpretation would not be related to the overall count, but to the rate of occurrence. So, if as before, the $\beta_1 = \text{.025}$, then $\exp(\beta_1) = \text{exp}(\text{.025}) = \text{1.025}$, or for a 1 unit increase in $x_1$, the **_rate_** of occurrence of $y$ increases by 1.025. If, in this case the average mortality rate was $10/500 = 0.02$ when $x_1$ = 0, then the rate is $0.02*(1.025*1)$ or $0.0205$  when $x_1$ = 1.  
+
+##  Relative risk analysis 
+
+The third type of model for the Poisson distribution focuses on the idea of the relative risk of an event, and uses the **_Standardized risk ratio_** as its currency. 
+
+  * The _Standardized risk ratio_ incorporates differential exposure due to population size as an **_expected count_** of the outcome in the offset term, and are typically seen in epidemiological studies. The expected count $E$, incorporates the different population sizes of each area by estimating the number of events that should occur, if the area followed a given rate of occurrence. 
+
+The expected count is calculated by multiplying the average rate of occurrence, $r$, by the population size, $n$:  $E_i = r * n_i$, where $r = \frac{\sum y_i}{\sum n_i}$, is the overall rate in the population. This method is commonly referred to as **_internal standaridization_** because we are using the data at hand to estimate the overall rate of occurrence, versus using a rate from some other published source. 
+
+
+The model for the mean of the outcome would look like this:
+
+$$log(y)= \beta_0 + \beta_1 x_1  + log(E)$$.
+
+
+
+##  Binomial model for counts 
+
+You have probably seen the binomial distribution in either a basic statistics course, remember the coin flips? Or in the context of a logistic regression model. 
+
+There are two ways the binomial distribution is typically used, the first is the context of logistic regression, where a special case of the binomial is used, called the **_Bernoulli_** distribution. This is the case of the binomial when there is basically a single coin flip, and you're trying to figure out the probability that it is heads (or tails). This is said to be a single **_trial_**, and the outcome is either 1 or 0 (heads or tails). 
+
+The second way the binomial is used is when you have multiple trials, and you're trying to estimate the probability of the event occurring over multiple trials. In this case, your number of trials, $n$ can be large, and your number of successes, $y$ is the random variable under consideration. This is the basic makeup of a demographic rate, the count-based binomial.
+
+The mean of the binomial distribution is a proportion or a probability, $\pi$, which tells you how likely it is that the event your interested in occurs. Any model using the binomial distributor will be geared towards estimating the probability. 
+
+When a variable is coded as binary, meaning either 1 or 0, the Bernoulli distribution is used, as in the logistic regression model. When coded like this, the model tries to use the other measured information to predict the 1 value versus the 0 value. So in the basic sense, we want to construct a model like:
+
+$$Pr(y=1) =\pi =  \text{some function of predictors}$$
+
+The good thing is that, when we have count data, not just 1's and 0's, the same thing happens. The ratio or successes ($y$) to trials ($n$) is used to estimate $\pi$ and we build a model for that rate:
+
+$$\text{Binomial} \binom{n}{y} = \frac{y}{n} = \pi = \text{some function of predictors}$$  
+
+
+##  Binomial regression models 
+
+The ratio  $\frac{y}{n}$ is a rate or probability, and as such has very strict bounds. Probabilities cannot be less than 0 or greater than 1, so again, we should not use the Normal distribution here, since it is valid for all real numbers. Instead, we are using the binomial, but we still run into the problem of having a strictly bounded value, $\pi$ that we are trying to estimate with a linear function. 
+
+Enter the link function again. 
+
+The binomial distribution typically uses either a [logit](https://en.wikipedia.org/wiki/Logit) or [probit](https://en.wikipedia.org/wiki/Probit) link function, but others such as the [complementary log-log link function](http://data.princeton.edu/wws509/notes/c3s7.html) are also used in certain circumstances. For now we will use the logit function. 
+
+The logit transforms the probability, $\pi$, which is bound on  the interval $[0,1]$ into a new limitless interval similar to the normal distribution of $[-\infty, \infty]$. The transformation is knows a the log-odds transformation, or logit for short. 
+
+The odds of an event happening are the probability that something happens, divided by the probability it does not happen, in this case:
+
+$$\text{odds }{\pi} = \frac{\pi}{(1-\pi)}$$
+
+Which is bound on the interval $[0, \infty]$, when we take the natural log of the odds, the value is transformed into the linear space, of $[-\infty, \infty]$.
+
+$$\text{log-odds }{\pi} = log  \left ( \frac{\pi}{(1-\pi)}  \right) $$
+
+This can be modeled using a linear function of covariates now, without worrying about the original boundary problem:
+
+$$log  \left ( \frac{\pi}{(1-\pi)}  \right) = \beta_0 +\beta_1 x_1$$
+or more compactly:
+
+$$log it(\pi)  = \beta_0 +\beta_1 x_1$$
+
+
+```{r "setup", include=FALSE}
+require("knitr")
+opts_knit$set(progress = FALSE)
+#opts_knit$set(root.dir = "~/Google Drive/classes/dem7283//class18/data/")
+```
+
+```{r, message=F, warning=F}
+#load brfss
+library(car)
+library(stargazer)
+library(survey)
+library(sjPlot)
+library(ggplot2)
+
+```
+
+Our outcome here is the number of days the respondent reported poor physical health in the past month:
+
+Q: Now thinking about your physical health, which includes physical illness and injury, for how many days during the past 30 days was your physical health not good?
+
+```{r}
+load(url("https://github.com/coreysparks/data/blob/master/brfss_2017.Rdata?raw=true"))
+
+
+brfss_17$healthdays<-Recode(brfss_17$physhlth, recodes = "88=0; 77=NA; 99=NA")
+hist(brfss_17$healthdays)
+summary(brfss_17$healthdays)
+```
+
+
+Other variables:
+
+```{r}
+#brfss_17$badhealth<-ifelse(brfss_17$genhlth %in% c(4,5),1,0)
+brfss_17$badhealth<-Recode(brfss_17$genhlth, recodes="4:5=1; 1:3=0; else=NA")
+#race/ethnicity
+brfss_17$black<-Recode(brfss_17$racegr3, recodes="2=1; 9=NA; else=0")
+brfss_17$white<-Recode(brfss_17$racegr3, recodes="1=1; 9=NA; else=0")
+brfss_17$other<-Recode(brfss_17$racegr3, recodes="3:4=1; 9=NA; else=0")
+brfss_17$hispanic<-Recode(brfss_17$racegr3, recodes="5=1; 9=NA; else=0")
+
+brfss_17$race_eth<-Recode(brfss_17$racegr3, 
+recodes="1='nhwhite'; 2='nh black'; 3='nh other';4='nh multirace'; 5='hispanic'; else=NA",
+as.factor = T)
+brfss_17$race_eth<-relevel(brfss_17$race_eth, ref = "nhwhite")
+
+#insurance
+brfss_17$ins<-Recode(brfss_17$hlthpln1, recodes ="7:9=NA; 1=1;2=0")
+
+#income grouping
+brfss_17$inc<-ifelse(brfss_17$incomg==9, NA, brfss_17$incomg)
+
+#education level
+brfss_17$educ<-Recode(brfss_17$educa,
+recodes="1:2='0Prim'; 3='1somehs'; 4='2hsgrad'; 5='3somecol'; 6='4colgrad';9=NA",
+as.factor=T)
+brfss_17$educ<-relevel(brfss_17$educ, ref='2hsgrad')
+
+#employment
+brfss_17$employ<-Recode(brfss_17$employ1,
+recodes="1:2='Employed'; 2:6='nilf'; 7='retired'; 8='unable'; else=NA",
+as.factor=T)
+brfss_17$employ<-relevel(brfss_17$employ, ref='Employed')
+
+#marital status
+brfss_17$marst<-Recode(brfss_17$marital,
+recodes="1='married'; 2='divorced'; 3='widowed'; 4='separated'; 5='nm';6='cohab'; else=NA",
+as.factor=T)
+brfss_17$marst<-relevel(brfss_17$marst, ref='married')
+
+#Age cut into intervals
+brfss_17$agec<-cut(brfss_17$age80, breaks=c(0,24,39,59,79,99))
+
+#BMI, in the brfss_17a the bmi variable has 2 implied decimal places,
+#so we must divide by 100 to get real bmi's
+
+brfss_17$bmi<-brfss_17$bmi5/100
+
+#smoking currently
+brfss_17$smoke<-Recode(brfss_17$smoker3, 
+recodes="1:2='Current'; 3='Former';4='NeverSmoked'; else=NA", 
+as.factor=T)
+brfss_17$smoke<-relevel(brfss_17$smoke, ref = "NeverSmoked")
+
+```
+
+##  Analysis
+First, we will subset our data to have complete cases for our variables in our model and make our survey design object
+
+```{r}
+#Here I keep complete cases on my key variables,
+#just for speed (the suvey procedures can run for a long time)
+library(dplyr)
+sub<-brfss_17%>%
+  select(healthdays, mmsaname, bmi,
+         agec,race_eth, marst, educ,white, black, hispanic,
+         other, smoke, ins, mmsawt, ststr) %>%
+  filter( complete.cases(.))
+
+#First we tell R our survey design
+options(survey.lonely.psu = "adjust")
+des<-svydesign(ids=~1, strata=~ststr, weights=~mmsawt, data =sub )
+#OR THE BRFSS, R GAVE ME A WARNING AND I NEEDED TO ADD:
+#YOU MAY NOT NEED TO DO THIS!!!!
+#First we tell R our survey design
+options(survey.lonely.psu = "adjust")
+des<-svydesign(ids=~1, strata=~ststr, 
+               weights=~mmsawt,
+               data = brfss_17[is.na(brfss_17$mmsawt)==F,])
+```
+
+## Poisson regression example
+
+To fit a Poisson GLM to survey data in R, we use the `svyglm` function in the survey library. 
+
+```{r}
+#First I do some simple descriptives
+svyhist(~healthdays, des)
+svyby(~healthdays, ~race_eth+educ, des, svymean, na.rm=T)
+svyby(~healthdays, ~agec, des, svymean, na.rm=T)
+
+#Poisson glm fit to survey data
+fit1<-svyglm(healthdays~factor(race_eth)+factor(educ)+factor(agec), design=des, family=poisson)
+summary(fit1)
+#here are the poisson model "risk ratios", which just show the change in the mean
+round(exp(summary(fit1)$coef[-1,1]), 3)
+```
+
+So, we interpret this as follows. NH Multirace respondents had higher mean counts of poor health days than NH Whites, while NH Others had a lower mean count of poor health days. As education increases, the mean count of poor health days decreases. Also, as age increase, the mean count of poor health days increases. 
+
+In terms of the risk ratios $exp(\beta)$ NH multirace respondents had 69.5% higher number of days when their health was poor, compared to NH whites. In practice, this translates into : `r test<-svyby(~healthdays, ~white, svymean, design =des ,na.rm=T); test[2,2]+.32*test[2,2]` days for NH multirace, and `r test<-svyby(~healthdays, ~white, svymean, design =des, na.rm=T); test[2,2]` for NH whites. 
+
+## Overdispersion
+When using the Poisson GLM, you often run into _overdispersion_ 
+* What's overdispersion? For the Poisson distribution, the mean and the variance are functions of one another (variance = mean for Poisson). So when you have more variability than you expect in your data, you have overdispersion. This basically says your data do not fit your model, and is a problem because overdispersion leads to standard errors for our model parameters that are too small. But, we can fit other models that do not make such assumptions, or allow there to be more variability. 
+
+**An easy check on this is to compare the residual deviance to the residual degrees of freedom. They ratio should be 1 if the model fits the data.**
+
+## NOTE
+
+The `svyglm()` function includes a scaling term for overdispersion, so this is already taken into account. But if you have data that aren't a complex survey, we can measure this ourselves using the residual deviance.
+
+```{r}
+fit2<-glm(healthdays~factor(race_eth)+factor(educ)+factor(agec), data=brfss_17, family=poisson)
+summary(fit2)
+scale<-sqrt(fit2$deviance/fit2$df.residual)
+scale
+```
+
+The deviance can also be a test of model fit, using a chi square distribution, with degrees of freedom equal to the residual d.f. (n-p):
+
+```{r}
+1-pchisq(fit2$deviance, df = fit2$df.residual)
+```
+
+So, this p value is 0, which means the model does not fit the data.
+
+
+##  Modeling Overdispersion via a Quasi distribution
+
+For the Poisson , we can fit a "quasi" distribution that adds an extra parameter to allow the mean-variance relationship to not be constant. 
+For Poisson we get:
+
+$$var(Y) = \lambda * \phi$$
+, instead of 
+
+$$var(Y) = \lambda $$
+
+This allows us to include a rough proxy for a dispersion parameter for the distribution. Naturally this is fixed at 1 for basic models, and estimated in the quasi models, we can look to see if is much bigger than 1. If overdispersion is present and not accounted for you could identify a relationship as being significant when it is not!
+
+```{r}
+fit3<-glm(healthdays~factor(race_eth)+factor(educ)+factor(agec), data=brfss_17, family=quasipoisson)
+summary(fit3)
+```
+
+## Other count models - Negative binomial
+
+* Of course, we could just fit other distributional models to our data, popular choices are:
+
+* Negative binomial
+-   Effectively adds a shape parameter to Poisson 
+
+$$Y \sim NB (\lambda, \lambda+\lambda^2/\theta),$$
+$$\text{   } E(Y) = \lambda,$$
+$$\text{   } var(Y) = \lambda+\lambda^2/\theta$$
+$$\lambda = log(\eta)$$
+$$\eta = \beta_0 + \beta_1 x_1+ log(n)$$
+
+Now, R will not fit negative binomial models using survey design, so, we will fit them using sample weights only, then calculate the robust standard errors. We standardize the weights to equal the sample size, as opposed to the population size by dividing each person's weight by the mean weight.
+
+We will also use [clustered standard errors](https://www.statisticshowto.datasciencecentral.com/wp-content/uploads/2017/06/Cameron_Miller_JHR_2015_February.pdf) to calculate the standard errors for the model, that account for homogeneity within strata.
+
+```{r}
+library(lmtest)
+library(sandwich)
+coeftest(fit2, vcov=vcovHC(fit2, type="HC1",cluster="ststr"))
+#same as survey!
+
+
+```
+
+
+
+##  Fit the Negative Binomial GLM
+
+```{r}
+library(MASS)
+fit.nb1<-glm.nb(healthdays~factor(race_eth),
+              data=sub,
+              weights=mmsawt/mean(mmsawt, na.rm=T))
+
+fit.nb2<-glm.nb(healthdays~factor(race_eth)+factor(educ)+factor(agec),
+              data=sub,
+              weights=mmsawt/mean(mmsawt, na.rm=T))
+#clx2(fit.nb2,cluster =sub$ststr)
+tests1<-coeftest(fit.nb1, vcov=vcovHC(fit.nb2, type="HC1",cluster="ststr"))
+tests<-coeftest(fit.nb2, vcov=vcovHC(fit.nb2, type="HC1",cluster="ststr"))
+library(stargazer)
+
+stargazer(fit.nb1, fit.nb2,style="demography", type = "text", t.auto=F,p.auto=F,coef=list(tests1[, 1],tests[,1]),  se =list(tests1[, 2], tests[, 2]), p=list(tests1[,4],tests[, 4])   )
+
+```
+
+
+## Aggregate data
+
+Data on areal units are very common in demographic research, and prior to the wide scale availability of individual-level microdata from surveys, were the standard data source available for demographic analysis. These are referred to as aggregate data because they represent the total number of events of a given type. For instance, the total number of deaths or total number of births. These are often not measured separately by other demographic characteristics, such as age, race or sex, although certain data sources do provide aggregate measures for specific demographic groups.
+
+- Typically when we get data with a spatial component, they are aggregated to some geography. examples of these are Census tracts
+
+- Census blocks
+
+- Counties
+
+- ZIP codes.
+
+## Calculating Rates
+
+Data measured on these areas are typically raw counts, such as a count of deaths, crimes, births, or people with some characteristic (e.g. people with incomes below the poverty line). These form the numerator for any rate that we might calculate. For the denominator, we hopefully have a population at risk of experiencing the event of interest, such as the total population for a crude death rate, or the number of women between a certain age, for an age specific fertility rate, for instance.
+Sources of Aggregate Data
+Examples of places where aggregate data can be obtained are the US Census Bureau's American Community Survey summary file, which we have been using throughout this course, and the CDC Wonder data portal, which allows for aggregate data on birth and death rates to be extracted.
+
+## Area Resource File
+
+While there are many sources of aggregate data, such as the CDC Wonder site, US Census and a plethora of state agencies, a good national level data resource, which focuses primarily on healthcare access, it the [Health Resource and Service Administration (HRSA)](https://www.hrsa.gov/) [Area Health Resource Files](https://data.hrsa.gov/topics/health-workforce/ahrf). 
+
+This data source is published each year, since the mid 1990's and is publicly available. It uses US Counties as its level of data availability. Google Scholar has more than [3,100 citations](https://scholar.google.com/scholar?q=%22area+resource+file%22&hl=en&as_sdt=0%2C44&as_ylo=2005&as_yhi=) of this data source since 2005, from a variety of disciplines. It has been used for many demographic studies of health and mortality as well. 
+
+The data contain a wealth of information on healthcare access and availability, but also large sets of information on basic population counts, Census data and data from the National Center for Health Statistics and the vital registration system. 
+
+We will use these data to provide examples of using count data models.
+
+## Applications of count data modeling 
+Below we will load the 2017-2018 Area Resource File from github and create rename some variables. The data have 7,277 variables for 3,230 county geographies. 
+
+```{r}
+arf<-"https://github.com/coreysparks/data/blob/master/arf2018.Rdata?raw=true"
+load(url(arf))
+
+```
+
+For this example, we will use the number of low-birth weight births for the three year period, 2014 to 2016. Generally the ARF does not provide annual measures of vital information, instead the provide period measures over 3 or 5 year periods. 
+
+For the names of the variables, consult the [data dictionary](https://data.hrsa.gov//DataDownload/AHRF/AHRF_USER_TECH_2017-2018.zip) for the file, which is an Excel spreadsheet with the variable names and descriptions. Descriptions of the original data sources and codes are also available. 
+
+For our analysis, we will use the number of low birth weight infants and the total number of births as our numerator and denominator. 
+
+
+We also rename several variables that we will use as predictors for the analysis: child poverty rate from 2010, the rural urban continuum code from USDA, the primary healthcare shortage area code from 2010, and the per capital number of OB-GYN's in the county. Then we filter to have non-missing cases, which reduces the number of counties from 3,230 to 2,292.
+
+```{r}
+library(dplyr)
+arf2018<-arf2018%>%
+  mutate(cofips=f00004, 
+         coname=f00010,
+         state = f00011,
+         births1416=f1254614,
+         births0608=f1254608,
+         lowbw1416=f1255314,
+         lowbw0608=f1255308,
+         childpov10= f1332210,
+         rucc= as.factor(f0002013),
+         hpsa10= as.factor(f0978710),
+         obgyn10_pc= 1000*(f1168410/ f0453010) )%>%
+  dplyr::select(births1416, lowbw1416,births0608, lowbw0608,state, cofips, coname, childpov10, rucc, hpsa10, obgyn10_pc)%>%
+  filter(complete.cases(.))%>%
+  as.data.frame()
+
+
+head(arf2018)
+summary(arf2018)
+
+
+```
+
+Here, we do a basic map of the outcome variable, and see the highest rates of low birth weight births in the southern US.
+
+```{r, results="hide"}
+
+library(tigris)
+library(sf)
+library(ggplot2)
+
+options(tigris_class="sf")
+usco<-counties(cb=T, year=2015, state = "TX")
+usco$cofips<-usco$GEOID
+sts<-states(cb = T, year=2015)
+sts<-st_boundary(sts)%>%
+  filter(!STATEFP %in% c("02", "15", "60", "66", "69", "72", "78"))
+
+arf2018_m<-geo_join(usco, arf2018, by_sp="cofips", by_df="cofips",how="left" )
+
+```
+
+```{r}
+arf2018_m%>%
+  filter(!STATEFP %in% c("02", "15", "60", "66", "69", "72", "78"))%>%
+  mutate(lbrate=lowbw1416/births1416)%>%
+  mutate(lb_group = cut(lbrate, breaks=quantile(lbrate, p=seq(0,1,length.out = 6), na.rm=T ), include.lowest=T ))%>%
+  ggplot()+
+  geom_sf(aes(fill=lb_group, color=NA))+
+  scale_color_brewer(palette = "Blues")+
+  scale_fill_brewer(palette = "Blues",na.value = "grey50")+
+  geom_sf(data=sts["STATEFP"=="48",], color="black")+
+  coord_sf(crs =3083)+
+  ggtitle(label = "Proportion of births that were low birthweight, 2014-2016")
+
+```
+
+
+## Applications of count data models 
+
+Now we use the two model, the Poisson and the Binomial to estimate regression models for our low birth weight outcome.
+
+First, we will us the Poisson model. To include the offset term for the number of births in each county, we use the `offset()` function within the model.
+
+In this model, we use the `hpsa10` variable as the independent variable. This variable indicates whether a county has a shortage of primary care doctors, it has three levels, 0 = not a shortage are, 1= the whole county is a shortage are, and 2= part of the county is a shortage area.
+
+
+The model indicates that counties that are either partial or total shortage areas have higher low birth weight rates. 
+```{r}
+
+arf2018sub<-filter(arf2018_m, is.na(lowbw1416)==F)
+
+
+fit_pois<- glm(lowbw1416 ~ offset(log(births1416)) + hpsa10, 
+               family=poisson, 
+               data=arf2018sub)
+summary(fit_pois)
+
+```
+
+
+If we exponentiate the coefficients from the model, we can get the risk ratios:
+
+```{r}
+
+exp(coef(fit_pois))
+
+```
+
+In this case, the `hpsa10, 1`, or whole shortage area counties, have a mean low birth-weight rate that is 5.8% higher than counties that are not shortage areas, and counties that are partial shortage areas, `hpsa10, 2` have a mean low birth weight rate that is .7% higher. 
+
+In practical terms, we can calculate these rates ourselves, after extracting the estimated counts of low birth weight births:
+
+```{r}
+arf2018sub$est_pois<- fitted(fit_pois)
+
+arf2018sub$est_rate<- arf2018sub$est_pois/ arf2018sub$births1416
+
+aggregate(est_rate ~ hpsa10, data=arf2018sub, FUN = mean)
+
+```
+
+We can show through arithmetic that the difference between `hpsa10` level 0 and `hpsa10` level 1 is 5.8% and the difference between the `hpsa10` level 0 and `hpsa10` level 2 is 0.7%
+
+```{r}
+(0.08444 - 0.07979)/0.07979
+(0.0804 - 0.07979)/0.07979
+```
+
+## Issues with the Poisson model 
+
+The Poisson distribution model has a strong assumption to it, the assumption is that the mean and variance of the Poisson model are the same. If the variance is greater than the mean, then the model has an **_overdispersion_** problem, meaning the variance is greater than the mean. 
+
+There is a general test to examine this in a Poisson model, and it relies on the model fit statistics generated by the`summary()` function.
+
+Two numbers in the model summary, the residual deviance and the residual degrees of freedom. If the Poisson model is fitting the data appropriately, then these two values will be the same, or very similar. As the residual deviance becomes larger than the residual degrees of freedom, the model becomes more over dispersed. 
+
+A check of this is to examine the ratio of these to values:
+
+```{r}
+scale<-sqrt(fit_pois$deviance/fit_pois$df.residual)
+scale
+
+```
+
+This value should be 1 if the mean and variance are equal, but in this case it is `r round (scale, 2)`. This suggests that the variance is twice as large as the mean. 
+
+There is also a test statistic that can be used, referred to as a **_goodness of fit statistic_**. This compares the model deviance to a $\chi^2$ distribution with degrees of freedom equal to the residual degrees of freedom. Small p-values for this test, suggest the model does not fit the data. 
+
+```{r}
+1-pchisq(fit_pois$deviance, df = fit_pois$df.residual)
+```
+
+In this case, the statistic has a p-value of .10, indicating the model fits the data ok. 
+
+If this statistical test was significant, then we would have evidence of overdispersion in the data. When overdispersion is present in a model, the model results cannot be trusted, because the test statistics of the model rely on the assumptions to be correct. 
+
+
+## Changing the model 
+When overdispersion is detected, the easiest thing to do is use a different model. One option is to use a **_quasi-Poisson_** model
+
+For the Poisson, the assumption of the basic model is :
+
+$$var(Y) = \lambda $$
+
+the quasi-Poisson model includes an **_overdispersion parameter_**, which scales the variance of the model, so the model assumption becomes
+
+$$var(Y) = \lambda * \phi$$
+
+This allows us to include a proxy for a dispersion parameter for the distribution. Naturally this is fixed at 1 for basic models, and estimated in the quasi models, we can look to see if is much bigger than 1.
+
+This can be done in R:
+
+```{r}
+fit_q_pois<- glm(lowbw1416 ~ offset(log(births1416)) + hpsa10, 
+               family=quasipoisson, 
+               data=arf2018sub)
+summary(fit_q_pois)
+
+
+```
+
+This output shows that the new test statistics are approximately half as large as they were under the Poisson assumptions, and the dispersion parameter is 4.3, in the regular Poisson model, it was assumed to be 1. 
+
+While the substantive differences of the two models are the same, the quasi-Poisson model should be used in this case. 
+
+## More alternatives to the Poisson 
+
+Another general option if the Poisson model shows overdispersion, is to use a different model!  In other words, if the Poisson distribution does not fit, then use a different distribution. A natural alternative to the Poisson distribution is the **_Negative Binomial distribution_**, not to be confused with the Binomial distribution we have already described. 
+
+The Negative Binomial distribution is also appropriate for count data, but unlike the Poisson distribution, it includes a second parameter in its distribution function that allows the variance to scale automatically with the mean, basically what the quasi-Poisson model was doing, but unlike the quasi distribution, the Negative Binomial distribution has a true likelihood function. 
+
+You can get the Negative Binomial distribution model in the `MASS` library that comes with R. It is used in the same way as the Poisson model, but using the `glm.nb()` function. 
+
+```{r}
+library(MASS)
+fit_nb<- glm.nb(lowbw1416 ~ offset(log(births1416)) + hpsa10, 
+               data=arf2018sub)
+summary(fit_nb)
+
+
+```
+
+Again, we see the same overall interpretation of the model effects, but the risk ratios are different compared to the Poisson model:
+
+```{r}
+
+exp(coef(fit_nb))
+
+```
+The Negative Binomial model shows even higher levels of relative risk in the undeserved areas, with a 4.9% increase in risk for counties are totally under-served, and 0.6% difference for counties that are partially under-served. 
+
+Compare to the poisson's estimates of risk
+```{r}
+
+exp(coef(fit_pois))
+
+```
+
+
+## Relative risk model
+
+Earlier in the lesson, the epidemiological concept of relative risk was introduced, as was the concept of the expected number of cases. To calculate the expected number of low birth weight births, we can calculate the national low birth weight rate and multiply it by the number of births in each county:
+
+```{r}
+
+lbrate<-(sum(arf2018sub$lowbw1416, na.rm=T)/sum(arf2018sub$births1416, na.rm=T)) 
+lbrate
+
+```
+
+Which estimates that on average, 8.07% of births should be low birth weight. We can apply this rate to each county's births by:
+
+```{r}
+arf2018sub$E <- lbrate* arf2018sub$births1416
+
+head(arf2018sub[, c("coname", "births1416", "lowbw1416", "E")])
+```
+
+This shows us the observed number of low birth weight births, and the expected number. These are usually pretty similar. You can calculate the **_relative risk_** as $RR = \frac{y}{E}$, below we compare the observed number of births to the standardized number. 
+
+The first plot basically shows that the distribution is very right- skewed, and is conflated with the overall number of births in the county. While the second plot control for the number of births in the county through the expected value, and the distribution is centered around 1. 
+
+We see that some counties have higher than expected risk $\frac{y}{E} >1$  and some counties have lower risk, $\frac{y}{E} <1$. Often times, the goal of population epidemiology is to identify factors that are related to patterns of excess risk. 
+
+```{r}
+
+arf2018sub%>%
+  ggplot( aes(lowbw1416))+geom_histogram()+ggtitle("Distribution of low birthweight births", "y")
+
+arf2018sub%>%
+  ggplot( aes(lowbw1416/E))+geom_histogram()+ggtitle("Distribution of standardized low birthweight births", "y/E")
+
+
+```
+
+In order to estimate the model with the expected counts, you change the offset term in the model, otherwise everything is the same:
+```{r}
+
+fit_pois_E<-glm(lowbw1416 ~ offset(log(E+.000001)) + hpsa10, 
+               family=poisson, 
+               data=arf2018sub)
+summary(fit_pois_E)
+```
+
+In fact, these results are identical to those from the Poisson model with the births as the offset term.
+
+## Binomial count model 
+
+The binomial model described earlier in the lesson can also be fit with the `glm()` function. In order to identify the numerator and the denominator, we have to specify the outcome in the model a little differently:
+
+```{r}
+
+fit_bin<-glm(cbind(lowbw1416 , births1416)~  hpsa10, 
+               family=binomial, 
+               data=arf2018sub)
+summary(fit_bin)
+
+```
+
+In this model, we see the exact same results compared to the Poisson model. The only difference is the AIC for the binomial model is substantially lower, suggesting that that distribution is preferred in this analysis. 
+
+
+## Another aggregate example - state suicide levels
+
+```{r}
+library(readr)
+cmf<-read_delim(file = "~/Google Drive/classes/dem7283/class_20_7283/data/cmf_sui.txt",delim = "\t",quote = "\"", col_names = c("Notes","AgeGroup",	"AgeGroupCode",	"Race",	"RaceCode",	"State",	"StateCode","Deaths","Population","Crude.Rate", "Age.Adjusted.Rate"),skip = 1,
+               col_types=list(Notes=col_character(),
+                              AgeGroup=col_character(),
+                              AGeGroupCode=col_character(),
+                              Race=col_character(),
+                              RaceCode=col_character(),
+                              State=col_character(),
+                              StateCode=col_character(),
+                              Deaths=col_integer(),
+                              Population=col_integer(),
+                              Crude.Rate=col_double()
+               ) )
+cmf<-cmf%>%
+  arrange(State)
+
+head(cmf[, c("State", "AgeGroup", "Race", "Deaths", "Population")], n=20)
+```
+
+
+```{r}
+sui_fit<-glm.nb(Deaths ~ offset(log(Population))+ Race, data=cmf)
+summary(sui_fit)
+1-pchisq(sui_fit$deviance, df = sui_fit$df.residual)
+
+```
+
+White excess risk is `r exp(coef(sui_fit)[2])` that of blacks, but what if the two groups do not have the same age distribution, then we need to age-standardize our estimate of risk. This can either be done arithmetically or via regression.  To do it via regression, we include a covariate for the age category for each death count.
+
+```{r}
+sui_fit2<-glm.nb(Deaths ~ offset(log(Population))+ Race + AgeGroup , data=cmf)
+summary(sui_fit2)
+
+
+```
+Once we age-standardize the data via regression the risk for whites is now `r exp(coef(sui_fit2)[2])` times that of blacks. This suggests that by age standardizing the rates, we see a higher relative risk.
