@@ -18,7 +18,7 @@ For this example I am using 2016 CDC Behavioral Risk Factor Surveillance System 
 We will also use data from the HRSA [Area Resource File](https://data.hrsa.gov/topics/health-workforce/ahrf) on mortality in US counties. 
 
 
-##  Poisson disribution for counts or rates
+##  Poisson distribution for counts or rates
 A model that is used commonly for the analysis of count data, meaning integer data, such as the number of deaths, number of crimes or number of cases of a disease, is the **_Poisson Distribution_**. 
 
 For the Poisson model, you observe a count of events in a small area or time period (crimes, deaths, etc). Unlike the Normal distribution, the Poisson is defined strictly for positive integer values.
@@ -46,7 +46,7 @@ The mean of the Poisson distribution, $(\lambda)$, is really the average count f
   
 When we see the $\beta_1$ parameter in this model in computer output, it is on the log-scale, since that is the scale of the outcome for the Poisson model. In order to interpret the $\beta_1$, we have to **_exponentiate_** it. When we do this, the parameter is interpreted as the percentage change in the mean of the outcome, for a 1 unit change in $x_1$. For instance if we estimate a model and see in the output that $\beta_1 = \text{.025}$, then $\exp(\beta_1) = \text{exp}(\text{.025}) = \text{1.025}$, or for a 1 unit increase in $x_1$, the mean of $y$ increases by 1.025. So if the mean of $y$ is 10, when $x_1$ = 0, then the mean is $10*(1.025*1)$ or $10.25$  when $x_1$ = 1.  
 
-  * _Rate model_ The second type of modeling strategy is a model for a rate of occurrence. This model includes an **_offset term_** in the model to incorporate unequal population sizes, this is the most common way the data are analyzed in demographic research. This offset term can be thought of as the numerator for the rate, and we can show how it is put into the model. 
+  * _Rate model_ The second type of modeling strategy is a model for a rate of occurrence. This model includes an **_offset term_** in the model to incorporate unequal population sizes, this is the most common way the data are analyzed in demographic research. This offset term can be thought of as the denominator for the rate, and we can show how it is put into the model. 
   
   If $n$ is the population size for each place, then, we want to do a regression on the rate of occurrence of our outcome. The rate is typically expressed as a proportion, or probability $rate = \frac{y}{n}$:
 
@@ -336,6 +336,12 @@ tests1<-coeftest(fit.nb1, vcov=vcovHC(fit.nb2, type="HC1",cluster="ststr"))
 tests<-coeftest(fit.nb2, vcov=vcovHC(fit.nb2, type="HC1",cluster="ststr"))
 library(stargazer)
 
+tests1
+tests
+```
+
+
+```{r}
 stargazer(fit.nb1, fit.nb2,style="demography", type = "text", t.auto=F,p.auto=F,coef=list(tests1[, 1],tests[,1]),  se =list(tests1[, 2], tests[, 2]), p=list(tests1[,4],tests[, 4])   )
 
 ```

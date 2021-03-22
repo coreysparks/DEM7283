@@ -1,0 +1,353 @@
+---
+title: "DEM 7283 - Principal Components Analysis"
+author: "Corey Sparks, PhD"
+date:  "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+   html_document:
+    df_print: paged
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    toc_float: yes
+---
+
+This example illustrates the use of the method of *Principal Components Analysis* to form an index of overall health using data from the 2017 CDC Behavioral Risk Factor Surveillance System (BRFSS) SMART MSA data [Link](https://www.cdc.gov/brfss/smart/smart_2016.html) and an example of calcuating a place-based index of area deprivation. 
+
+
+Principal Components is a mathematical technique (not a statistical one!) based off the eigenvalue decomposition/singular value decomposition of a data matrix (or correlation/covariance matrix) [Link](http://en.wikipedia.org/wiki/Singular_value_decomposition). This technique re-represents a complicated data set (set of variables) in a simpler form, where the information in the original variables is now represented by fewer *components*, which represent the majority (we hope!!) of the variance in the original data. 
+
+This is known as a variable reduction strategy.  It is also used commonly to form indices in the behavioral/social sciences. It is closely related to factor analysis [Link](http://en.wikipedia.org/wiki/Factor_analysis), and indeed the initial solution of factor analysis is often the exact same as the PCA solution. PCA preserves the orthogonal nature of the components, while factor analysis can violate this assumption. 
+
+### PCA in formulas
+
+If we have a series of variables, called $$ X$$, with $$X = \left [ x_1, x_2, ..., x_k \right ]$$, and we have the Pearson correlation matrix between these variables, $$ R$$, with 
+
+$$ R = \begin{bmatrix}
+r_{11} & r_{12}  & \cdots & r_{1k} \\ 
+r_{21}& r_{22} & \ddots  & r_{2k}\\ 
+\vdots & \cdots  &  \vdots & \vdots \\
+r_{k1} & \cdots & \cdots & r_{kk}\\
+\end{bmatrix}$$
+
+The singular value decomposition of $$R$$ is $${R a} = \lambda a$$
+
+where $\lambda$'s are the **_eigenvalues_** of **R** and *a* are the **_eigenvectors_** of R. 
+
+These values are found by solving this equation for the eigenvalues and corresponding vectors of **R**, by :
+
+$$( R - \lambda I )a = 0$$
+
+if the determinant of $R-\lambda I$ is not 0, then there will be k solutions (for each of the k original variables) to the equation, or k eigenvalues, and k accompanying eigenvectors.
+
+The eigenvalues of R are ranked, with the first being the largest and the kth being the smallest. So, we will have $\lambda_1 >\lambda_2 > \cdots >\lambda_k$
+
+Each eigenvalue accounts for a proportion of all the variation within the matrix, and we can see this proportion by:
+
+% variance explained= $\frac{\lambda_i}{\sum_i \lambda_i}$ 
+
+The eigenvectors **a** will each be *orthogonal*, or uncorrelated with each other, and will be linear combinations of the original k variables. 
+
+These two items form what is known as the singular value (or eigenvalue) decomposition of a square matrix, and when that matrix is a correlation matrix, this is called **Principal Components Analysis** or PCA. The idea is that we have a new set of uncorrelated variables (due to the orthogonal nature of the eigenvectors), or *components* that summarize the information in the original k variables in a smaller number of components. For example, we may have had 10 variables originally, that we thought measured "health", but after doing a PCA, we may have three components that summarize 75% of the information in these original 10 variables, so we have a simpler set of variables. Moreover, each component now corresponds to a unique and independent subset of the information in the original 10 variables. 
+
+### Variable loadings
+Each new component has an eigenvector, that we call a *loading vector*. We can see how each variable is related to the new component by examining the loading for each component. These can be thought of in a very similar way as standardized regression coefficients. Large positive values indicate positive association of that variable with the component, large negative values, the opposite, and values close to 0 indicate that a particular variable doesn't contribute to that component. There are no tests, and this can be **very subjective** in terms of interpretations.
+
+
+### Using this in research
+So, this formalism is nice, but what does this boil down to in terms of research. Well, that depends on what you're looking for. Many people will use PCA to summarize information on lots of variables that may be correlated, in the hopes of finding a smaller subset of variables that represent some underlying latent trait that you want to measure. Often times, people will use this method to construct an *index* for something. While there are lots of ways to do an index, PCA is advantageous, because it acknowledges the correlation among variables. 
+
+For example [Sharkey and Horel, 2008](http://jn.nutrition.org/content/138/3/620.full.pdf+html) use this method to construct an index of socioeconomic deprivation for census tracts, and [Messer et al, 2006](https://link.springer.com/article/10.1007/s11524-006-9094-x) also use this method for a deprivation index in the context of low birth weight outcomes.
+
+### General rules
+1) Always use z-scored variables when doing a PCA -> scale is very important, as we want correlations going in, not covariances.
+
+2) If the first eigenvalue is less than 1, your PCA isn't doing anything for you, it isn't finding any correlated information among your variables
+
+3) Have a look at how much variation your component is summarizing, in aggregate data it will tend to be more than in individual level survey data
+
+4) Doing scatter plots of the first few PC's can often be informative for finding underlying groups in your data, as people tend to cluster together in multidimensional space
+
+5) You can use the PCs in a regression model if you've had problems with multicollinearity among variables. This is called Principal component regression. 
+
+
+
+```{r "setup", include=FALSE}
+require("knitr")
+#opts_knit$set(root.dir = "~/Google Drive/classes/dem7283/")
+```
+
+
+```{r, message=FALSE,warning=FALSE}
+library(car)
+library(stargazer)
+library(survey)
+library(ggplot2)
+library(pander)
+library(dplyr)
+library(knitr)
+```
+
+```{r}
+
+load(url("https://github.com/coreysparks/data/blob/master/brfss_2017.Rdata?raw=true"))
+
+
+```
+### Recode variables
+```{r}
+#Healthy days
+brfss_17$healthdays<-Recode(brfss_17$physhlth, recodes = "88=0; 77=NA; 99=NA")
+
+#Healthy mental health days
+brfss_17$healthmdays<-Recode(brfss_17$menthlth, recodes = "88=0; 77=NA; 99=NA")
+
+brfss_17$badhealth<-Recode(brfss_17$genhlth, recodes="4:5=1; 1:3=0; else=NA")
+#race/ethnicity
+brfss_17$black<-Recode(brfss_17$racegr3, recodes="2=1; 9=NA; else=0")
+brfss_17$white<-Recode(brfss_17$racegr3, recodes="1=1; 9=NA; else=0")
+brfss_17$other<-Recode(brfss_17$racegr3, recodes="3:4=1; 9=NA; else=0")
+brfss_17$hispanic<-Recode(brfss_17$racegr3, recodes="5=1; 9=NA; else=0")
+
+brfss_17$race_eth<-Recode(brfss_17$racegr3, 
+recodes="1='nhwhite'; 2='nh black'; 3='nh other';4='nh multirace'; 5='hispanic'; else=NA",
+as.factor = T)
+brfss_17$race_eth<-relevel(brfss_17$race_eth, ref = "nhwhite")
+
+#insurance
+brfss_17$ins<-Recode(brfss_17$hlthpln1, recodes ="7:9=NA; 1=1;2=0")
+
+#income grouping
+brfss_17$inc<-ifelse(brfss_17$incomg==9, NA, brfss_17$incomg)
+
+#education level
+brfss_17$educ<-Recode(brfss_17$educa,
+recodes="1:2='0Prim'; 3='1somehs'; 4='2hsgrad'; 5='3somecol'; 6='4colgrad';9=NA",
+as.factor=T)
+brfss_17$educ<-relevel(brfss_17$educ, ref='2hsgrad')
+
+#employment
+brfss_17$employ<-Recode(brfss_17$employ1,
+recodes="1:2='Employed'; 2:6='nilf'; 7='retired'; 8='unable'; else=NA",
+as.factor=T)
+brfss_17$employ<-relevel(brfss_17$employ, ref='Employed')
+
+#marital status
+brfss_17$marst<-Recode(brfss_17$marital,
+recodes="1='married'; 2='divorced'; 3='widowed'; 4='separated'; 5='nm';6='cohab'; else=NA",
+as.factor=T)
+brfss_17$marst<-relevel(brfss_17$marst, ref='married')
+
+#Age cut into intervals
+brfss_17$agec<-cut(brfss_17$age80, breaks=c(0,24,39,59,79,99))
+
+#BMI, in the brfss_17a the bmi variable has 2 implied decimal places,
+#so we must divide by 100 to get real bmi's
+
+brfss_17$bmi<-brfss_17$bmi5/100
+
+#smoking currently
+brfss_17$smoke<-Recode(brfss_17$smoker3, 
+recodes="1:2=1; 3:4=0; else=NA")
+
+brfss_17$checkup<-Recode(brfss_17$checkup1, recodes = "1:2 = 1; 3:4=0; 8=0; else=NA")
+brfss_17$hbp<-Recode(brfss_17$bphigh4, recodes = "1= 1; 2:4=0; else=NA")
+brfss_17$hchol<-Recode(brfss_17$toldhi2, recodes = "1= 1; 2:4=0; else=NA")
+brfss_17$heart<-Recode(brfss_17$cvdcrhd4, recodes = "1= 1; 2=0; else=NA")
+brfss_17$ast<-Recode(brfss_17$asthma3, recodes = "1= 1; 2:4=0; else=NA")
+
+```
+
+
+### Analysis
+Now we prepare to fit the survey corrected model. Here I just get the names of the variables that i will use, this keeps the size of things down, in terms of memory used
+
+We use the `prcomp()` function to do the pca, we specify our variables we want in our index using a formula, the name of the data, we also specify R to z-score the data (`center=T` removes the mean, `scale=T` divides by the standard deviation for each variable), and the `retx=T` will calculate the PC scores for each individual for each component.
+
+```{r}
+brfss_17b<-brfss_17%>%
+  filter(complete.cases(mmsawt, ststr, agec, race_eth,educ,healthdays, healthmdays, smoke, bmi, badhealth,ins, checkup, hbp, hchol, heart, ast))%>%
+  select(mmsawt, ststr, agec, race_eth,educ, healthdays, healthmdays, smoke, bmi, badhealth,ins, checkup, hbp, hchol, heart, ast)%>%
+  mutate_at(vars(healthdays, healthmdays, smoke, bmi, badhealth,ins, checkup, hbp, hchol, heart, ast), scale)
+
+```
+
+
+```{r}
+
+brfss.pc<-princomp(~healthdays+healthmdays+smoke+bmi+badhealth+hbp+ hchol+ heart+ ast,
+                   data=brfss_17b,
+                   scores=T)
+
+#Screeplot
+screeplot(brfss.pc,
+          type = "l",
+          main = "Scree Plot")
+abline(h=1)
+```
+
+Summary of eignevalues and variance explained
+```{r}
+#Request some basic summaries of the PCA analysis option(digits=3)
+summary(brfss.pc)
+```
+The first four components account for 52% of the variation in the input variables, that isn't bad. Also, we see 4 eigenvalues of at least 1, which suggests there are 4 real components among these variables (remember, we are looking for eigenvalues > 1 when using z-scored data). 
+
+
+Examine eignevectors/loading vectors
+```{r}
+loadings(brfss.pc )
+
+```
+In terms of the loadings for PC1, we see positive  associations with everything except insurance status and checkup. We may interpret this component as an index for overall health status, since all health variables are loading in the same direction.  
+
+For PC2 we see a mixture of loadings, some positive, some negative, and the only two variables that are loading with large coefficients on this one are smoking and insurance status. 
+
+Of course, interpreting components is more art than science...
+
+
+```{r}
+#then I plot the first 2 components
+
+scores<-data.frame(brfss.pc$scores)
+hist(scores$Comp.1)
+hist(scores$Comp.2)
+```
+
+
+
+
+Next, I calculate the correlation between the first 2 components to show they are orthogonal, i.e. correlation == 0
+
+```{r}
+
+cor(scores[,1:2])
+
+brfss_17c<-cbind(brfss_17b, scores)
+names(brfss_17c)
+```
+
+Here we examine correlation among our health variables
+
+```{r}
+names(brfss_17c)
+round(cor(brfss_17c[,c(-1:-5, -17:-27)]), 3)
+```
+
+
+Sometimes it's easier to look at the correlations among the original variables and the first 3 components
+```{r}
+round(cor(brfss_17c[,c(-1:-5, -19:-27)]),3)
+
+```
+
+This allows us to see the correlations among the original health variables and the new components. This is important for interpreting the direction of the component. In this case, the PC1 suggests that higher PC1 scores have better health, because PC1 has negative correlations with all of the health variables.
+
+### Using the Principal Components
+
+Next, I will use the PC's we just generated in an analysis
+```{r}
+#Make the survey design object
+options(survey.lonely.psu = "adjust")
+brfss_17c$pc1q<-cut(brfss_17c$Comp.1,
+                    breaks = quantile(brfss_17c$Comp.1,
+                                      probs = c(0,.25,.5,.75,1) ,
+                                      na.rm=T), 
+                    include.lowest=T)
+des<-svydesign(ids=~1,
+               strata=~ststr,
+               weights=~mmsawt,
+               data=brfss_17c)
+
+```
+
+The first analysis will look at variation in my health index across age, and education level:
+```{r}
+library(ggplot2)
+ggplot(aes(x=agec, y=Comp.1),
+       data=brfss_17c)+
+  geom_boxplot()
+
+brfss_17c$educ<-factor(brfss_17c$educ, levels(brfss_17c$educ)[c(1,3,2,4,5)])
+
+ggplot(aes(x=educ, y=Comp.1),
+       data=brfss_17c)+
+  geom_boxplot()
+
+```
+
+The age plot is nice, and really shows that older ages have higher values for our health index variable, which confirms our interpretation that higher values of the index are "not good"
+
+Now we do some hypothesis testing. This model will examine variation in my health index across age, education, race and two healthcare access variables:
+
+```{r, fig.height=7, fig.width=9}
+fit.1<-svyglm(Comp.1~agec+educ+(race_eth),
+              des,
+              family=gaussian)
+summary(fit.1)
+```
+
+So, overall, the index increases across age, and decreases with higher education. Hispanics and other race/ethnic groups have lower indices on average than whites, while NH blacks and multiple race respondents have higher values.
+
+
+### Aggregate data example
+
+This is an example from a paper some former students and I did at the 2014 Applied Demography conference entitled "Spatial accessibility to food sources in Alamo Area Council of Governments (AACOG)" where, we examined factors influencing whether or not a census tract was a food desert in the area surrounding San Antonio.  We used the index from the Sharkey paper above
+
+In this case, we had to do some reverse coding of the index to make it work out the way it should
+
+```{r, fig.width=8, fig.height=10}
+
+library(sf)
+sp<-st_read(dsn = "~/OneDrive - University of Texas at San Antonio//classes/dem7283/class_21_7283/data", layer = "shp2_nm")
+
+pcshark<-prcomp(~punemp+pprsnsp+(-1*p25plsl)+gt1prrm+pubasst+phwoveh+phwophn, center=T, scale=T, data=sp, retx=T)
+pcshark
+summary(pcshark)
+
+#Here I reverse the direction of the index by multiplying by -1
+sp$sharkeyindex<- -1*prcomp(~punemp+pprsnsp+(-1*p25plsl)+gt1prrm+pubasst+phwoveh+phwophn, center=T, scale=T, data=sp, retx=T)$x[,1]
+
+```
+
+
+```{r}
+fit<-glm(LILAT_1A1~scale(plingis)+scale(interct)+Rural+sharkeyindex,family=binomial, sp)
+summary(fit)
+
+```
+
+Map estimates of fitted probability
+```{r}
+sp$fitted<-fit$fitted.values
+
+library(tmap)
+library(tmaptools)
+
+m0<-tm_shape(sp)+
+  tm_polygons("LILAT_1A1", title="Food Desert", palette="Accent",  border.col = NULL)+
+  tm_format("World", title="AACOG Tract - Food Desert", legend.outside=T)+
+  tm_scale_bar()+
+  tm_compass()
+
+
+m1<-tm_shape(sp)+
+  tm_polygons("fitted", title="Pr Food Desert", palette="Blues", style="quantile", border.col = NULL)+
+  tm_format("World", title="AACOG Tract - Probability of Food Desert", legend.outside=T)+
+  tm_scale_bar()+
+  tm_compass()
+
+m2<-tm_shape(sp)+
+  tm_polygons("sharkeyindex", title="Risk Index", palette="Greens", style="quantile",border.col = NULL)+
+  tm_format("World", title="AACOG Tract - Risk Index", legend.outside=T)+
+   tm_scale_bar()+
+  tm_compass()
+
+m0
+m1
+
+m2
+
+```
+
+So, in areas that had higher values of the index, the odds of being a food desert were also higher. This was offset by being in a rural area, where the odds of being a food desert were lower.
+
