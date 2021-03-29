@@ -349,8 +349,10 @@ knitr::kable(sv.table,
 #Make a survey design that is random sampling - no survey information
 nodes<-svydesign(ids = ~1,  weights = ~1, data = brfss_17)
 
-sv.table<-svyby(formula = ~badhealth, by = ~educ, design = nodes, FUN = svymean, na.rm=T)
+sv.table<-svyby(formula = ~factor(badhealth), by = ~educ, design = nodes, FUN = svymean, na.rm=T)
 
+
+prop.table(table(brfss_17$sex, brfss_17$badhealth))
 
 knitr::kable(sv.table,
       caption = "Estimates of Poor SRH by Education - No survey design",
@@ -368,12 +370,15 @@ There's this great R package, `tableone` that does this stuff very nicely and in
 ```{r}
 library(tableone)
 #not using survey design
-t1<-CreateTableOne(vars = c("educ", "marst", "male"), strata = "badhealth", test = T, data = brfss_17)
-#t1<-print(t1, format="p")
-print(t1,format="p")
+t1<-CreateTableOne(vars = c("educ", "marst", "male", "badhealth"),strata="race_eth", data = brfss_17)
 
+
+
+#t1<-print(t1, format="p")
+print(t1,format="p" )
+#, strata = "badhealth", test = T,
 #using survey design
-st1<-svyCreateTableOne(vars = c("educ", "marst", "male"), strata = "badhealth", test = T, data = des)
+st1<-svyCreateTableOne(vars = c("educ", "marst", "male", "badhealth"), strata = "race_eth", test = T, data = des)
 #st1<-print(st1, format="p")
 print(st1, format="p")
 ```

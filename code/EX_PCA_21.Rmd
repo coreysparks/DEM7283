@@ -190,7 +190,7 @@ Summary of eignevalues and variance explained
 #Request some basic summaries of the PCA analysis option(digits=3)
 summary(brfss.pc)
 ```
-The first four components account for 52% of the variation in the input variables, that isn't bad. Also, we see 4 eigenvalues of at least 1, which suggests there are 4 real components among these variables (remember, we are looking for eigenvalues > 1 when using z-scored data). 
+The first four components account for 52% of the variation in the input variables, that isn't bad. Also, we see 3 eigenvalues of at least 1, which suggests there are 3  real components among these variables (remember, we are looking for eigenvalues > 1 when using z-scored data). 
 
 
 Examine eignevectors/loading vectors
@@ -198,7 +198,7 @@ Examine eignevectors/loading vectors
 loadings(brfss.pc )
 
 ```
-In terms of the loadings for PC1, we see positive  associations with everything except insurance status and checkup. We may interpret this component as an index for overall health status, since all health variables are loading in the same direction.  
+In terms of the loadings for PC1, we see positive  associations with everything. We may interpret this component as an index for overall health status, since all health variables are loading in the same direction.  
 
 For PC2 we see a mixture of loadings, some positive, some negative, and the only two variables that are loading with large coefficients on this one are smoking and insurance status. 
 

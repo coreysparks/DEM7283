@@ -332,7 +332,7 @@ dog%>%
 
 ### Calculate race by education by health cross tabulation, and plot it
 
-```{r, fig.width=8, fig.height=12}
+```{r, fig.width=8, fig.height=}
 catdog<-svyby(formula = ~badhealth,
               by = ~race_eth+educ,
               design = des,
@@ -343,11 +343,11 @@ catdog<-svyby(formula = ~badhealth,
 
 catdog%>%
   ggplot()+
-  geom_point(aes(x=educ, y = badhealth))+ 
-  geom_errorbar(aes(x=educ, ymin = badhealth-1.96*se, 
-                    ymax= badhealth+1.96*se),
-                width=.25)+
-  facet_wrap(~ race_eth, nrow = 3)+
+  #geom_point(aes(x=educ, y = badhealth, color=race_eth, group=race_eth), position="dodge")+ 
+  geom_errorbar(aes(x=educ,y = badhealth, ymin = badhealth-1.96*se, 
+                   ymax= badhealth+1.96*se,color=race_eth, group=race_eth),
+                width=.25, position="dodge")+
+  #facet_wrap(~ race_eth, nrow = 3)+
   labs(title = "Percent % of US  with Fair/Poor Health by Race/Ethnicity and Education", 
         caption = "Source: CDC BRFSS - SMART Data, 2017 \n Calculations by Corey S. Sparks, Ph.D.",
        x = "Education",
