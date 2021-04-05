@@ -325,7 +325,9 @@ Which shows how dramatically we alter the distribution of the variable by imputi
 We can construct a flag variable. This is a useful exercise to see whether we have missing at random within the data:
 
 ```{r}
-fit1<-lm(bmi~agec+educ+race_eth+is.na(inc), data=brfss_17)
+fit1<-lm(bmi~is.na(inc), data=brfss_17)
+fit1<-lm(bmi~is.na(educ), data=brfss_17)
+fit1<-lm(bmi~is.na(race_eth), data=brfss_17)
 summary(fit1)
 
 ```
