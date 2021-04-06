@@ -344,7 +344,7 @@ I have used these in practice in publications and generally like the framework t
 To begin, I explore the various patterns of missingness in the data. The `md.pattern` function in `mice` does this nicely. Here, each row corresponds to a particular pattern of missingness (1 = observed, 0=missing)
 ```{r}
 #look at the patterns of missingness
-md.pattern(brfss_17[,c("bmi", "inc", "agec","educ","race_eth")])
+md.pattern(brfss_17[,c("ins", "smoke",  "bmi", "badhealth", "race_eth",  "educ", "employ", "marst", "inc")])
 ```
 
 The first row shows the number of observations in the data that are complete (first row). 
@@ -375,9 +375,11 @@ dat2$bmiknock<-dat2$bmi
 dat2$bmiknock[samp2]<-NA
 
 head(dat2[, c("bmiknock","bmi")])
-imp<-mice(data = dat2[,c("bmi", "inc", "agec","educ","race_eth")], seed = 22, m = 5)
+imp<-mice(data = dat2[,c("ins", "smoke","agec",  "bmi", "badhealth", "race_eth",  "educ", "employ", "marst", "inc")], seed = 22, m = 10)
 
 print(imp)
+
+plot(imp)
 ```
 
 Shows how many imputations were done. It also shows total missingness, which imputation method was used for each variable (because you wouldn't want to use a normal distribution for a categorical variable!!).
@@ -387,8 +389,8 @@ It also shows the sequence of how each variable is visited (or imputed, the defa
 We may want to make sure imputed values are plausible by having a look. For instance, are the BMI values outside of the range of the data.
 
 ```{r}
-head(imp$imp$bmi)
-summary(imp$imp$bmi)
+head(imp$imp$badhealth)
+summary(imp$imp$badhealth)
 summary(brfss_17$bmi)
 ```
 
@@ -404,6 +406,7 @@ We can also do some plotting. For instance if we want to see how the observed an
 ```{r, fig.height=7, fig.width=8}
 library(lattice)
 stripplot(imp,bmi~race_eth|.imp, pch=20)
+stripplot(imp, badhealth~agec|.imp, pch=20)
 ```
 
 and we see the distribution of the original data (blue dots), the imputed data (red dots) across the levels of race, for each of the five different imputation runs(the number at the top shows which run, and the first plot is the original data).
