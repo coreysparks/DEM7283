@@ -260,48 +260,50 @@ I have to make the repeated measures of each of my longitudinal variables. These
 ```{r}
 #Longitudinal variables
 #recode our outcomes, the  first is the child's math standardized test score  in Kindergarten
-eclsk.sub$math1<-ifelse(eclsk.sub$x1mscalk5<0, NA, eclsk.sub$x1mscalk5)
-eclsk.sub$math2<-ifelse(eclsk.sub$x2mscalk5<0, NA, eclsk.sub$x2mscalk5)
+eclsk.sub$math_1<-ifelse(eclsk.sub$x1mscalk5<0, NA, eclsk.sub$x1mscalk5)
+eclsk.sub$math_2<-ifelse(eclsk.sub$x2mscalk5<0, NA, eclsk.sub$x2mscalk5)
 #eclsk.sub$math3<-ifelse(eclsk.sub$x3mscalk1<0, NA, eclsk.sub$x3mscalk1)
-eclsk.sub$math4<-ifelse(eclsk.sub$x4mscalk5<0, NA, eclsk.sub$x4mscalk5)
+eclsk.sub$math_4<-ifelse(eclsk.sub$x4mscalk5<0, NA, eclsk.sub$x4mscalk5)
 
 #Second outcome is child's height for age, continuous outcome
-eclsk.sub$height1<-ifelse(eclsk.sub$x1height<=-7, NA, eclsk.sub$x1height)
-eclsk.sub$height2<-ifelse(eclsk.sub$x2height<=-7, NA, eclsk.sub$x2height)
+eclsk.sub$height_1<-ifelse(eclsk.sub$x1height<=-7, NA, eclsk.sub$x1height)
+eclsk.sub$height_2<-ifelse(eclsk.sub$x2height<=-7, NA, eclsk.sub$x2height)
 #eclsk.sub$height3<-ifelse(eclsk.sub$x3height<=-7, NA, eclsk.sub$x3height)
-eclsk.sub$height4<-ifelse(eclsk.sub$x4height<=-7, NA, eclsk.sub$x4height)
+eclsk.sub$height_4<-ifelse(eclsk.sub$x4height<=-7, NA, eclsk.sub$x4height)
 
 #Age at each wave
-eclsk.sub$age_yrs1<-ifelse(eclsk.sub$x1kage_r<0, NA, eclsk.sub$x1kage_r/12)
-eclsk.sub$age_yrs2<-ifelse(eclsk.sub$x2kage_r<0, NA, eclsk.sub$x2kage_r/12)
+eclsk.sub$ageyrs_1<-ifelse(eclsk.sub$x1kage_r<0, NA, eclsk.sub$x1kage_r/12)
+eclsk.sub$ageyrs_2<-ifelse(eclsk.sub$x2kage_r<0, NA, eclsk.sub$x2kage_r/12)
 #eclsk.sub$age_yrs3<-ifelse(eclsk.sub$x3age<0, NA, eclsk.sub$x3age/12)
-eclsk.sub$age_yrs4<-ifelse(eclsk.sub$x4age<0, NA, eclsk.sub$x4age/12)
+eclsk.sub$ageyrs_4<-ifelse(eclsk.sub$x4age<0, NA, eclsk.sub$x4age/12)
 
-eclsk.sub<- eclsk.sub[is.na(eclsk.sub$age_yrs1)==F, ]
+eclsk.sub<- eclsk.sub[is.na(eclsk.sub$ageyrs_1)==F, ]
 
 #Height for age z score standardized by sex and age
-eclsk.sub$height_z1<-ave(eclsk.sub$height1, as.factor(paste(round(eclsk.sub$age_yrs1, 1.5), eclsk.sub$male)), FUN=scale)
-eclsk.sub$height_z2<-ave(eclsk.sub$height2, as.factor(paste(round(eclsk.sub$age_yrs2, 1.5), eclsk.sub$male)), FUN=scale)
+eclsk.sub$heightz_1<-ave(eclsk.sub$height_1, as.factor(paste(round(eclsk.sub$ageyrs_1, 1.5), eclsk.sub$male)), FUN=scale)
+eclsk.sub$heightz_2<-ave(eclsk.sub$height_2, as.factor(paste(round(eclsk.sub$ageyrs_2, 1.5), eclsk.sub$male)), FUN=scale)
 #eclsk.sub$height_z3<-ave(eclsk.sub$height3, as.factor(paste(round(eclsk.sub$age_yrs3, 1.5), eclsk.sub$male)), FUN=scale)
-eclsk.sub$height_z4<-ave(eclsk.sub$height4, as.factor(paste(round(eclsk.sub$age_yrs4, 1.5), eclsk.sub$male)), FUN=scale)
+eclsk.sub$heightz_4<-ave(eclsk.sub$height_4, as.factor(paste(round(eclsk.sub$ageyrs_4, 1.5), eclsk.sub$male)), FUN=scale)
 
 
 #Household food insecurity, dichotomous outcome
 #This outcome is only present at two waves
-eclsk.sub$foodinsec1<-Recode(eclsk.sub$x2fsstat2, recodes="2:3=1; 1=0; else=NA")
-eclsk.sub$foodinsec2<-Recode(eclsk.sub$x4fsstat2, recodes="2:3=1; 1=0; else=NA")
+
+eclsk.sub$foodinsec_1<-Recode(eclsk.sub$x2fsstat2, recodes="2:3=1; 1=0; else=NA")
+eclsk.sub$foodinsec_2<-Recode(eclsk.sub$x2fsstat2, recodes="2:3=1; 1=0; else=NA")
+eclsk.sub$foodinsec_4<-Recode(eclsk.sub$x4fsstat2, recodes="2:3=1; 1=0; else=NA")
 
 
 #Child health assessment Excellent to poor , ordinal outcome
-eclsk.sub$chhealth1<-ifelse(eclsk.sub$p1hscale<0, NA, eclsk.sub$p1hscale)
-eclsk.sub$chhealth2<-ifelse(eclsk.sub$p2hscale<0, NA, eclsk.sub$p2hscale)
-eclsk.sub$chhealth4<-ifelse(eclsk.sub$p4hscale<0, NA, eclsk.sub$p4hscale)
+eclsk.sub$chhealth_1<-ifelse(eclsk.sub$p1hscale<0, NA, eclsk.sub$p1hscale)
+eclsk.sub$chhealth_2<-ifelse(eclsk.sub$p2hscale<0, NA, eclsk.sub$p2hscale)
+eclsk.sub$chhealth_4<-ifelse(eclsk.sub$p4hscale<0, NA, eclsk.sub$p4hscale)
 
 #SES
-eclsk.sub$hhses1<-ifelse(eclsk.sub$x12sesl==-9, NA, scale(eclsk.sub$x12sesl))
-eclsk.sub$hhses2<-ifelse(eclsk.sub$x12sesl==-9, NA, scale(eclsk.sub$x12sesl))
+eclsk.sub$hhses_1<-ifelse(eclsk.sub$x12sesl==-9, NA, scale(eclsk.sub$x12sesl))
+eclsk.sub$hhses_2<-ifelse(eclsk.sub$x12sesl==-9, NA, scale(eclsk.sub$x12sesl))
 
-eclsk.sub$hhses4<-ifelse(eclsk.sub$x4sesl_i==-9, NA, scale(eclsk.sub$x4sesl_i))
+eclsk.sub$hhses_4<-ifelse(eclsk.sub$x4sesl_i==-9, NA, scale(eclsk.sub$x4sesl_i))
 ```
 
 ## Reshaping data into longitudinal format
@@ -309,6 +311,27 @@ To analyze data longitudinally, we must reshape the data from its current "wide"
 
 The `reshape()` function will do this for us, but below I use a tidy method, using a combination of the `data.table` and `dplyr` packages. I first make a long data set of the height, age, math, child health and household SES measures, then I left join it to the time invariant variables i'll use in my models below. 
 ```{r}
+library(tidyr)
+e.long.comp<-eclsk.sub%>%
+  rename(wt = w4c4p_40,strata= w4c4p_4str, psu = w4c4p_4psu)%>%
+  select(childid,male, hisp, black, asian, nahn, other,wt, strata, psu, #time constant
+         height_1, height_2, height_4, #t-varying variables
+         ageyrs_1, ageyrs_2, ageyrs_4,
+         chhealth_1, chhealth_2, chhealth_4,
+         foodinsec_1, foodinsec_2, foodinsec_4,
+         hhses_1, hhses_2, hhses_4,
+         math_1,math_2, math_4)%>%
+  pivot_longer(cols = c(-childid, -male, -hisp, -black, -asian,-nahn, -other, -wt, -strata, -psu), #time constant variables go here
+               names_to  = c(".value", "wave"), #make wave variable and put t-v vars into columns
+               names_sep = "_")%>% #all t-v variables have _ between name and time, like age_1, age_2
+  filter(complete.cases(.))%>%
+  arrange(childid, wave)
+
+
+head(e.long.comp)
+```
+### useing data.table
+```{r, eval=FALSE}
 
 library(data.table)
 library(magrittr)
@@ -323,6 +346,7 @@ out<-melt(setDT(eclsk.sub), id = "childid",
 
 head(out, n=20)
 
+#merge back to other data
 e.long<-eclsk.sub%>%
   select(childid, hisp, black,asian, nahn, other,male, unsafe, s1_id, pov, hhsize, urban, w4c4p_40, w4c4p_4str, w4c4p_4psu)%>%
   left_join(., out, "childid")
@@ -348,7 +372,12 @@ first10<-unique(e.long.comp$childid)[1:10]
 sub<-e.long.comp%>%
   filter(childid%in%first10)
 
-ggplot(sub, aes(x=age, y=math))+geom_point()+ geom_smooth(method='lm',formula=y~x)+facet_wrap(~childid,nrow = 3)+ggtitle(label = "Change in Math score across age", subtitle = "First 10 children in ECLS-K 2011")
+ggplot(sub, aes(x=ageyrs, y=math))+
+  geom_point()+
+  geom_smooth(method='lm',formula=y~x)+
+  facet_wrap(~childid,nrow = 3)+
+  ggtitle(label = "Change in Math score across age", 
+          subtitle = "First 10 children in ECLS-K 2011")
 
 ```
 
@@ -357,22 +386,27 @@ ggplot(sub, aes(x=age, y=math))+geom_point()+ geom_smooth(method='lm',formula=y~
 ### Longitudinal Models using GEE's
 
 The GEE is used here  
-```{r, echo=FALSE, results='hide'}
+```{r,  results='hide'}
 
 #basic linear model
-fit.1<-glm(scale(math)~scale(age)+male+black+hisp+asian+nahn+other+hhses, data=e.long.comp, weights=w4c4p_40/mean(w4c4p_40))
+fit.1<-glm(scale(math)~scale(ageyrs)+male+black+hisp+asian+nahn+other+hhses, data=e.long.comp, weights=wt/mean(wt))
 summary(fit.1)
 
 #Get residuals and put them in a data frame
 e.long.comp$resid<- residuals(fit.1)
 
-test<-reshape(e.long.comp, idvar = "childid", v.names = "resid", timevar = "wave", direction = "wide", drop = names(e.long.comp)[2:21])
-head(test[order(test$childid),], n=12)
+e.res<-e.long.comp%>%
+  select(childid, wave,resid)%>%
+  pivot_wider(id_cols=c(childid),
+              names_from = wave,
+               values_from=resid )
+
+head(e.res)
 ```
 
 Here is our actual correlation matrix in the residuals between waves: 
 ```{r}
-cor(test[,-1], use="pairwise.complete")
+cor(e.res[,-1], use="pairwise.complete")
 ```
 
 This is certainly not independence, and looks more like an AR(1), because the correlation decreases as the *difference* between wave number increases.
@@ -382,7 +416,12 @@ Now we fit the GEE:
 Meaning ZERO correlation between waves
 ```{r}
 
-fit.1<-geeglm(scale(math)~scale(age)+male+black+hisp+asian+nahn+other+hhses,id=childid , wave = wave, corstr ="independence",   data=e.long.comp, weights=w4c4p_40/mean(w4c4p_40))
+fit.1<-geeglm(scale(math)~scale(ageyrs)+male+black+hisp+asian+nahn+other+hhses,
+              id=childid ,
+              wave = wave,
+              corstr ="independence",
+              data=e.long.comp,
+              weights=wt/mean(wt))
 summary(fit.1)
 ```
 
@@ -391,18 +430,29 @@ summary(fit.1)
 Meaning correlation between waves, but the correlation is the same for each pair waves 
 ```{r}
 
-fit.2<-geeglm(scale(math)~scale(age)+male+black+hisp+asian+nahn+other+hhses,id=childid , wave = wave, corstr ="exchangeable",  data=e.long.comp, weights=w4c4p_40/mean(w4c4p_40))
+fit.2<-geeglm(scale(math)~scale(ageyrs)+male+black+hisp+asian+nahn+other+hhses ,
+              id = childid,
+              wave = wave,
+              corstr ="exchangeable",
+              data=e.long.comp, 
+              weights=wt/mean(wt))
   
 summary(fit.2)
 
 ```
 
-The second model shows the exchangeable correlation to be `r fit.2$geese$alpha`, which is not very different from our measured correlations above 
-`r knitr::kable(cor(test[, -1], use="pairwise.complete"))`
+The second model shows the exchangeable correlation to be `r fit.2$geese$alpha`, which is not very different from our measured correlations from above
+
+`r knitr::kable(cor(e.res[,-1], use="pairwise.complete"))`
 
 Now we examine the AR1 correlation types:
 ```{r}
-fit.3<-geeglm(scale(math)~scale(age)+male+black+hisp+asian+nahn+other+hhses, id=childid , wave = wave, corstr ="ar1",  data=e.long.comp, weights=w4c4p_40/mean(w4c4p_40))
+fit.3<-geeglm(scale(math)~scale(ageyrs)+male+black+hisp+asian+nahn+other+hhses ,
+              id = childid,
+              wave = wave,
+              corstr ="ar(1)",
+              data=e.long.comp, 
+              weights=wt/mean(wt))
   
 summary(fit.3)
 
@@ -432,34 +482,53 @@ binomial_smooth <- function(...) {
   geom_smooth(method = "glm", method.args = list(family = "binomial"), ...)
 }
 
-sub$poorhealth<-Recode(sub$health, recodes="2:3=1; else=0")
+e.long.comp$poorhealth<-Recode(e.long.comp$chhealth, recodes="2:3=1; else=0")
 
-ggplot(sub, aes(x=age, y=poorhealth))+geom_point()+ binomial_smooth()+ggtitle(label = "Change in Math score across age", subtitle = "First 10 children in ECLS-K 2011 - All children")
+ggplot(e.long.comp, aes(x=ageyrs, y=poorhealth))+
+  geom_point()+
+  binomial_smooth()+
+  ggtitle(label = "Change in Math score across age",
+          subtitle = "First 10 children in ECLS-K 2011 - All children")
 
-ggplot(sub, aes(x=age, y=poorhealth))+geom_point()+ binomial_smooth()+facet_wrap(~childid,nrow=3)+ggtitle(label = "Change in Math score across age", subtitle = "First 10 children in ECLS-K 2011 - Invidivual Children")
+ids<-unique(e.long.comp$childid)[1:10]
+
+e.long.comp%>%
+  filter(childid %in% ids)%>%
+  ggplot( aes(x=ageyrs, y=poorhealth))+
+  geom_point()+ binomial_smooth()+
+  facet_wrap(~childid,nrow=3)+
+  ggtitle(label = "Change in Math score across age",
+          subtitle = "First 10 children in ECLS-K 2011 - Invidivual Children")
 
 ```
 
 
 ```{r}
-btest<-glm(I(health>2)~age+male+black+hisp+asian+nahn+other+hhses+factor(wave) , family=binomial, data=e.long.comp, weights=w4c4p_40/mean(w4c4p_40))
+btest<-glm(I(chhealth>2)~scale(ageyrs)+male+black+hisp+asian+nahn+other+hhses+factor(wave) , family=binomial, data=e.long.comp, weights=wt/mean(wt))
 
-e.long.comp$binomresid<- residuals(btest)
-test2<-reshape(e.long.comp, idvar = "childid", v.names = "binomresid", timevar = "wave", direction = "wide", drop = names(e.long.comp)[c(2:21, 23)])
+e.long.comp$residb<- residuals(btest)
 
-head(test2[order(test$childid),], n=12)
+e.res3<-e.long.comp%>%
+  select(childid, wave,residb)%>%
+  pivot_wider(id_cols=c(childid),
+              names_from = wave,
+               values_from=residb )
 
-#empirical correlations between waves in the residuals
-cor(test2[, -1], use="pairwise.complete", method = "spearman")
-
-
+head(e.res3)
+cor(e.res3[, -1], use = "pairwise")
 ```
-These look like a constant correlation, or AR(1)
+These look like a constant correlation, or AR(1) perhaps because the correlation decreases between waves 1 and 4, but is pretty similar between 1 and 2.
 
 ### Logistic GEE with independent correlation
 ```{r}
 
-fitb.1<-geeglm(I(health>2)~age+male+black+hisp+asian+nahn+other+hhses, waves = wave,id=childid ,corstr ="independence", family=binomial, data=e.long.comp, weights=w4c4p_40/mean(w4c4p_40))
+fitb.1<-geeglm(poorhealth~scale(ageyrs)+male+black+hisp+asian+nahn+other+hhses,
+               waves = wave,
+               id=childid ,
+               corstr ="independence",
+               family=binomial,
+               data=e.long.comp,
+               weights=wt/mean(wt))
 summary(fitb.1)
 
 
@@ -468,7 +537,13 @@ summary(fitb.1)
 ### Logistic GEE with exchangeable correlations
 ```{r}
 
-fitb.2<-geeglm(I(health>2)~age+male+black+hisp+asian+nahn+other+hhses, waves = wave,id=childid, family=binomial, data=e.long.comp, corstr="exchangeable", weights=w4c4p_40/mean(w4c4p_40))
+fitb.2<-geeglm(poorhealth~scale(ageyrs)+male+black+hisp+asian+nahn+other+hhses,
+               waves = wave,
+               id=childid ,
+               corstr ="exch",
+               family=binomial,
+               data=e.long.comp,
+               weights=wt/mean(wt))
 summary(fitb.2)
 
 
@@ -476,7 +551,12 @@ summary(fitb.2)
 
 ### Logistic GEE with AR(1) correlation
 ```{r}
-fitb.3<-geeglm(I(health>2)~age+male+black+hisp+asian+nahn+other+hhses, waves = wave,id=childid, family=binomial, data=e.long.comp, corstr="ar1", weights=w4c4p_40/mean(w4c4p_40))
+fitb.3<-geeglm(poorhealth~scale(ageyrs)+male+black+hisp+asian+nahn+other+hhses,
+               waves = wave,
+               id=childid ,
+               corstr ="ar(1)",
+               family=binomial,
+               data=e.long.comp, weights=wt/mean(wt))
 summary(fitb.3)
 ```
 
