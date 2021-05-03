@@ -1,0 +1,380 @@
+---
+title: "DEM 5293/7283 - Multi-level Models 2 - GLMMs and Contextual Effects"
+author: "Corey Sparks, PhD"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+   html_document:
+    df_print: paged
+    fig_height: 7
+    fig_width: 7
+    toc: yes
+    toc_float: yes
+    code_download: true
+---
+
+## Generalized Linear Mixed Models
+
+I will illustrate how to fit [Generalized Linear Mixed models](http://glmm.wikidot.com/) to outcomes that are not continuous. I will illustrate the Laplace approximation using the `glmer()` [function](http://search.r-project.org/R/library/lme4/html/glmer.html) in the `lme4` library.
+
+
+**NOTE** GLMM's can take much longer to estimate than LMM's, don't be surprised if your model takes a long time to run. Also don't be surprised if you see warning messages like:
+
+```Warning message:```
+```In checkConv(attr(opt, "derivs"), opt$par, ctrl = control$checkConv,  :```
+```  Model failed to converge with max|grad| = somenumber (tol = 0.001)```
+
+This is a warning message that the computer did not reach a satisfactory numerical solution for your model. This just means we may have to tweak your model a little to get R to converge. [This](https://rstudio-pubs-static.s3.amazonaws.com/33653_57fc7b8e5d484c909b615d8633c01d51.html) Rpubs document provides an excellent section on the technical matters involved in fitting the models in R.
+
+You may have to `refit` the model, meaning restart the optimization process where it stopped. This can be done using the `refit()` function in `lme4`. 
+
+Alternatively, you can chnage the type of model optimizer to have different ones for the fixed effects and the random effects. I have had good luck with this combination:
+
+```{r, eval=F}
+glmer(y~ x+ (1|group), 
+              family=binomial, 
+              data=yourdat, 
+              control = glmerControl(optimizer = c("Nelder_Mead","bobyqa"),
+                                     optCtrl=list(maxfun=2e9)))
+```
+
+
+
+
+
+## Higher level predictors
+
+## Obtaining data for higher level units  
+Sources of information for contextual units come from many sources. They type of information that is required for a particular analysis is determined by the processes involved in the study's design and conceptualization. For example, if a study is focusing on how residential segregation affects the health of minority group members, we would obviously need to measure the dimension of residential segregation that we are hypothesizing plays a role in the outcome. A valuable tool when beginning a multilevel study is a conceptual map of how we think our outcome is impacted by both the individual and contextual level variables we are discussing. Even a simple map, such as the onion model shown below can allow us to see the various levels of analysis that are being considered in a given project. 
+
+In this model, we consider how factors operating at four levels can combine to influence a person-level outcome. These levels are: person, family, neighborhood, and society. Heise and colleagues (1999) use this simple diagram to explain the factors that lead to partner violence in developing countries. In their model, which they refer to as an ecological model, violence is affected by woman-centric factors such as education and age, family or couple-level factors such as differences in education or work between couples, neighborhood level factor, which they identify as related to social institutions such as local customs and gender roles, and the outermost layer could reflect societal norms and women's power dynamics within a society. 
+
+![Onion Model](C:/Users/ozd504/Documents/GitHub/DEM7283/images/onion.png)
+
+In terms of measurement of the various levels within a given multilevel modeling framework, as we saw in the previous section of this lesson, the outcome variable is measured on the individual, and typically comes from some sort of survey mechanism. Depending on the survey, it can ask questions that solely relate to the focal-person, or the respondent, or the survey could ask other questions about other members of the household or questions about how the respondent views the neighborhood in which they live. Many surveys ask such questions about how a respondent views their neighborhood. An example of this is that in recent years, the National Health Interview Survey asked questions about a respondent's neighborhood, including questions about how much they can depend on their neighbors, how much people in their neighborhood help each other, and how much trust they have of their neighbors. This allows us to ask questions related to ideas of collective efficacy, without having any sort of geographic identifier in the public-use version of that data.
+
+If we do not get information about a respondent's neighborhood directly from the survey, we often rely on some other proxy measure of neighborhood conditions that we can obtain from a tertiary source, which we can then join to our outcome using some geographic identifier, such as a tract or metropolitan area. The literature in demography is rich with studies that have followed this route, and we have discussed many of these types of ideas in previous lessons, from a conceptual point of view. 
+
+In practical terms, finding measures of social capital or community integration at appropriate geographic scales largely falls on using Census data or data measured on some other administrative level of geography, such as census tracts, public health areas, ZIP codes, counties or metropolitan areas. These would typically be estimates or characteristics generated by a governmental agency (such as the Area Resource File or American Community Survey) or by another set of researchers, such as the [Social captial index](https://aese.psu.edu/nercrd/community/social-capital-resources) for US counties published by Rupasingha et al (2006), the [County health rankings](http://www.countyhealthrankings.org/) published by the [Robert Wood Johnson Foundation](https://www.rwjf.org/) or the [Area deprivation index](https://www.hipxchange.org/ADI) originally published by Singh (2003). Indeed many of these resources published by researchers use Census data at various levels, in addition to other data sources to measure their various indices. 
+
+
+We will often be interested in factors at both the individual *AND* contextual levels. To illustrate this, I will use data from the American Community Survey measured at the MSA level. Specifically, I use the DP3 table, which provides economic characteristics of places, from the 2010 5 year ACS [Link](http://www.census.gov/acs/www/data_documentation/special_data_release/).
+
+To measure macro level variables, I will include some Census variables from the ACS 2011 5 Year estimates load in ACS data from **_tidycensus_**.
+The first set of variables includes information on the economic conditions of the county, specifically poverty and unemployment.
+### Higher level predictors
+We will often be interested in factors at both the individual *AND* contextual levels. To illustrate this, I will use data from the American Community Survey measured at the MSA level. Specifically, I use the DP3 table, which provides economic characteristics of places, from the 2010 5 year ACS [Link](http://www.census.gov/acs/www/data_documentation/special_data_release/).
+
+To measure macro level variables, I will include some Census variables from the ACS 2011 5 Year estimates load in ACS data from **_tidycensus_**.
+The first set of variables includes information on the economic conditions of the MSA, specifically poverty and unemployment.
+```{r load data&recode, message=FALSE, warning=FALSE}
+#load brfss
+library(car)
+library(stargazer)
+library(survey)
+library(sjPlot)
+library(ggplot2)
+library(pander)
+library(knitr)
+library(tidycensus)
+library(dplyr)
+```
+
+
+```{r}
+
+usacs<-get_acs(geography = "metropolitan statistical area/micropolitan statistical area", year = 2015,
+                variables=c( "DP05_0001E",
+                             "DP03_0062E",
+                             "DP04_0003PE") ,
+                summary_var = "B01001_001",
+                geometry = F,
+               output = "wide")
+
+usacs<-usacs%>%
+  mutate(totpop= DP05_0001E,
+         medhhinc=DP03_0062E,
+         pvacant=DP04_0003PE/100)%>%
+  dplyr::select(GEOID,NAME, totpop, medhhinc, pvacant)
+
+
+head(usacs)
+```
+
+## BRFSS data
+```{r}
+load(url("https://github.com/coreysparks/data/blob/master/brfss_2017.Rdata?raw=true"))
+
+set.seed(12345)
+#samps<-sample(1:nrow(brfss_17), size = 40000, replace=F)
+#brfss_17<-brfss_17[samps,]
+#The names in the data are very ugly, so I make them less ugly
+nams<-names(brfss_17)
+#we see some names are lower case, some are upper and some have a little _ in the first position. This is a nightmare.
+
+newnames<-gsub(pattern = "_",
+               replacement =  "",
+               x =  nams)
+
+names(brfss_17)<-tolower(newnames)
+
+```
+
+### Recode variables
+```{r}
+#sex
+brfss_17$male<-ifelse(brfss_17$sex==1, 1, 0)
+
+#BMI
+brfss_17$bmi<-ifelse(is.na(brfss_17$bmi5)==T, NA, brfss_17$bmi5/100)
+
+#Healthy days
+brfss_17$healthdays<-Recode(brfss_17$physhlth, recodes = "88=0; 77=NA; 99=NA")
+
+#Healthy mental health days
+brfss_17$healthmdays<-Recode(brfss_17$menthlth, recodes = "88=0; 77=NA; 99=NA")
+
+brfss_17$badhealth<-Recode(brfss_17$genhlth, recodes="4:5=1; 1:3=0; else=NA")
+#race/ethnicity
+brfss_17$black<-Recode(brfss_17$racegr3, recodes="2=1; 9=NA; else=0")
+brfss_17$white<-Recode(brfss_17$racegr3, recodes="1=1; 9=NA; else=0")
+brfss_17$other<-Recode(brfss_17$racegr3, recodes="3:4=1; 9=NA; else=0")
+brfss_17$hispanic<-Recode(brfss_17$racegr3, recodes="5=1; 9=NA; else=0")
+
+brfss_17$race_eth<-Recode(brfss_17$racegr3, 
+recodes="1='nhwhite'; 2='nh black'; 3='nh other';4='nh multirace'; 5='hispanic'; else=NA",
+as.factor = T)
+brfss_17$race_eth<-relevel(brfss_17$race_eth, ref = "nhwhite")
+
+#insurance
+brfss_17$ins<-Recode(brfss_17$hlthpln1, recodes ="7:9=NA; 1=1;2=0")
+
+#income grouping
+brfss_17$inc<-Recode(brfss_17$incomg, recodes = "9= NA;1='1_lt15k'; 2='2_15-25k';3='3_25-35k';4='4_35-50k';5='5_50kplus'", as.factor = T)
+brfss_17$inc<-as.ordered(brfss_17$inc)
+#education level
+brfss_17$educ<-Recode(brfss_17$educa,
+recodes="1:2='0Prim'; 3='1somehs'; 4='2hsgrad'; 5='3somecol'; 6='4colgrad';9=NA",
+as.factor=T)
+brfss_17$educ<-relevel(brfss_17$educ, ref='2hsgrad')
+
+#employment
+brfss_17$employ<-Recode(brfss_17$employ1,
+recodes="1:2='employloyed'; 2:6='nilf'; 7='retired'; 8='unable'; else=NA",
+as.factor=T)
+brfss_17$employ<-relevel(brfss_17$employ, ref='employloyed')
+
+#marital status
+brfss_17$marst<-Recode(brfss_17$marital,
+recodes="1='married'; 2='divorced'; 3='widowed'; 4='separated'; 5='nm';6='cohab'; else=NA",
+as.factor=T)
+brfss_17$marst<-relevel(brfss_17$marst,
+                        ref='married')
+
+#Age cut into intervals
+brfss_17$agec<-cut(brfss_17$age80,
+                   breaks=c(0,24,39,59,79,99))
+
+#BMI, in the brfss_17a the bmi variable has 2 implied decimal places,
+#so we must divide by 100 to get real bmi's
+
+brfss_17$bmi<-brfss_17$bmi5/100
+
+#smoking currently
+brfss_17$smoke<-Recode(brfss_17$smoker3, 
+recodes="1:2=1; 3:4=0; else=NA")
+#brfss_17$smoke<-relevel(brfss_17$smoke, ref = "NeverSmoked")
+
+brfss_17$obese<-ifelse(is.na(brfss_17$bmi)==T, NA, 
+                       ifelse(brfss_17$bmi>30,1,0))
+
+```
+
+
+
+## Scaling of variables
+In the previous lesson, we briefly discussed the use of standardized, or z-scored variables in the multilevel modeling context, and we mentioned that this is usually done to either aid in interpretation or to ease computation. In the context of this lesson, we are going to focus on the former, interpretation, especially in the context of higher level predictors. 
+
+Typically in regression models when we interpret the effects of a predictor $x$ on our outcome $y$, we use the $\beta$ parameter, and conclude that $y$ changes by the amount $\beta$ when $x$ increases by 1 unit. This interpretation is fine, when $x$ is binary, we basically compare the mean of $y$ when $x=1$ to the mean of $y$ when $x=0$. If $x$ is continuous, let's say it's a percentage that goes between 0 and 100, then we compare the value of $y$ when $x=0$ to when $x=1\text{%}$, so we are saying that a 1 percentage point change is interesting somehow, or if $x$ was measuring income, that a change in 1 dollar would be interesting; but is it? Often these 1 unit changes are either not interesting (e.g. a 1 dollar change) or even non-sensical. To illustrate the latter idea of nonsensical changes, consider a variable $x$ that is measured as a proportion, between 0 and 1. If we were interpreting the $\beta$ as a 1 unit change in $x$, this would translate into comparing the mean of $y$ when $x$ is 0 to the mean of $y$ when $x$ is 1, which implies a change from 0% to 100% in $x$, which is nonsensical, as many demographic proportions may not ever take such extreme values. For example, the poverty rate may be 0 in some places , but no place in the US has a poverty rate of 100%. 
+
+When such cases present themselves, we would commonly scale the variables in question, notably the $x$'s so that a 1 unit change is more interpretable. A standard way of doing this is to z-score the variable. The z-score formula is :
+
+$$z = \frac{x - \bar x}{\text{sd}(x)}$$
+which "centers" the variable by subtracting the mean mean and "scales" the variable by dividing by the standard deviation. We do this so that a value of 0 would be an average value for the variable and a value of 1 would be 1 standard deviation higher than average. Likewise a value of -1 would be 1 standard deviation lower than average. You may have seen the idea of a **_standardized_** $\beta$ in the regression context before, when variables are measured on different scales. If we z-score continuous variables before we do an analysis, we get standardized $\beta$'s automatically. 
+
+## Scaling higher level variables
+We have downloaded our ACS data on MSAs to merge to the BRFSS, but before we merge the data, we must scale the higher level variables. In this situation, we will z-score the variables in the analysis. 
+ 
+We are scaling the data now, because we want to scale at the level of observation, MSAs in this case. 
+
+```{r}
+myscale<-function(x){as.numeric(scale(x))}
+
+usacs<-usacs %>%
+  mutate_at(c( "medhhinc", "pvacant")
+            ,.funs = myscale)
+
+```
+
+Next, we merge the data. This process would be the same for any type of contextual data we are joining, you have your individual level data, and your data on your higher level units. Both need to have the same linking field in them, in this case, the BRFSS has the field `mmsa` and the ACS data has the field `GEOID`. These indicate which MSA is which in each dataset. 
+
+
+## Interpretation of higher-level variable effects 
+
+For multilevel models, when we incorporate variables at the higher level unit, it is generally advised that they be scaled so that our interpretation of them makes sense. Consider a model where we have a binary outcome $y$, measuring good health status (0) versus poor health status (1),  so our model is a logistic regression. Then we have a single individual level predictor $x$ that is also binary, gender for example (male = 1, female = 0). Then we also have information on where each respondent lives, their neighborhood for example, and a characteristic of their neighborhood, $Z$, that measures the median household income in the neighborhood. Our model would look like:
+
+$$
+ln \left ( \frac {Pr(y = 1)}{1-Pr(y = 1)} \right )= \beta_0 +\beta_1*\text{Gender}_i+\beta_2*\text{Median Income}_j
+$$
+
+The interpretation of $\beta_1$ is easy enough, it measures the difference in the odds of males having poor health, compared to females. If the median income is measured in dollars, then $\beta_2$ will measure how a 1 dollar change in median incomes in neighborhoods affects the odds of someone reporting poor health. You may have seen this before, and in this case, the $\beta_2$ parameter will be very, very small, say -0.00001 or so, which implies that a 1 dollar change decreases the odds of poor health by 0.00001 percent, an odds ratio of 0.99999. While this may be fine to some, it may not be a particularly interesting comparison. Instead, consider scaling the income variable to a more meaningful range. Options for doing this include the z-score method, so a change in 1 unit would be equivalent to comparing a neighborhood with a median income 1 standard deviation above average to a an average income neighborhood. Another option would be to divide the income by say 10,000, so a 1 unit change would be equivalent to a 10,000 change in neighborhood income, which will be substantially more interpretable than a 1 dollar change. In this case either option would be acceptable. 
+
+If the higher level variable is not income, then the division by a constant is less interpretable, and what you see in the literature is the z-score method as a standard of practice. 
+
+## Cross-level interactions 
+As we described in the previous lesson, one of the key types of multilevel analyses is the cross-level interaction model. This allows us to ask questions that address the interaction between individual level characteristics and higher level characteristics, or allowing us to place contextual constraints on an individual level variable. A general type of question that we could ask with a cross level interaction model would be: 
+
+"People with $x$ attribute, and who live in $z$ type of place are more likely to do $y$"
+
+The model that these type of statements imply considers the interaction between the individual level characteristic and the higher level characteristic, like so:
+
+$$
+ln \left ( \frac {Pr(y = 1)}{1-Pr(y = 1)} \right )= \beta_0 +\beta_1*\text{Gender}_i+\beta_2*\text{Median Income}_j + \gamma*(\text{Gender}_i*\text{Median Income}_j)
+$$
+
+where the $\gamma$ parameter measures the strength of interaction between gender and neighborhood income.
+
+A good example of this type of analysis is Yang et al.'s (2014) article on the effects of residential segregation on maternal smoking risk. In this analysis, the authors tested the cross level interaction where race/ethnic minorities were contextualized by the level of residential segregation where they lived. 
+
+The authors found that black mothers were less likely to smoke in areas that had higher levels of black-white interaction, while Hispanic and Non-Hispanic Asian mothers were more likely to smoke in areas that had higher level of interaction with whites. 
+
+## Interpreting cross-level interactions
+To illustrate the cross-level interaction analysis, we consider the merged BRFSS-ACS data. We consider the outcome of obesity status (0 = BMI< 30; 1= BMI>= 30 ), and we control for difference by gender, age and socioeconomic status (educational attainment). 
+
+At the higher level, we look to see how minority concentration and MSA level economic variables impact obesity within cities. We will then test the interaction between individual level race/ethnicity and the MSA level variables. 
+
+This will allow us to see if, in areas that have higher minority concentration, we see the same health differences within the different race/ethnic groups. 
+
+To make our example dataset, we filter to only have have observations that are complete for our outcome, our predictor variables. 
+
+
+Now, I merge the data back to the individual level data:
+
+```{r}
+
+
+merged<-merge(x=brfss_17,
+              y=usacs,
+              by.x="mmsa",
+              by.y="GEOID",
+              all.x=F)%>%
+  dplyr::select(bmi, obese, mmsa, agec, educ, race_eth,smoke, healthmdays, badhealth,bmi,medhhinc,pvacant, male, mmsawt, mmsaname )%>%
+  filter(complete.cases(.))
+
+```
+
+Here are the first few observations and a few of their characteristics in a few of the MSAs in the data. We see the outcome `badhealth`, gender, age, educational attainment, as well as the z-scored proportion black and z-scored median income, as well as the MSA name. You can see that within a given MSA, the `pblack` and `medhhinc` variables are constant, but they vary between MSAs. 
+
+```{r,  results='asis'}
+
+obs<-which(merged$mmsa%in%c(12420, 40900, 17790,48660, 31080))
+
+stargazer::stargazer(head(merged[sample(obs, size = 10,replace = F), c("obese", "male", "agec", "educ", "pvacant","medhhinc",  "mmsaname")], n = 10),
+                     type = "html",
+                     title = "Multilevel Data Set - BRFSS & ACS",
+                     style = "demography",
+                     out = "table1.html",
+                     summary = F )
+
+```
+
+### Building the multilevel model in R 
+We will use the `glmer` function in the `lme4` library in this analysis. 
+
+We will consider two models, one that is the multilevel model with both individual and higher level characteristics.
+The model below is a multilevel logistic regression model, it can be written as:
+
+$$ln \left ( \frac {p_{ij}}{1-p{ij}} \right )  = \beta_{0j} + \sum {\beta_k x_{ik}} + \sum \gamma_l z_j$$
+
+
+$$\beta_{0j} = \beta_0 + u_j$$
+
+$$u_j \sim N(0, \sigma^2_u)$$
+
+```{r, message=FALSE, warning=FALSE}
+library(lme4)
+library(lmerTest)
+
+set.seed(1115)
+samp<-sample(dim(merged)[1], size = 100000, replace=F)
+
+model1<-glmer(obese ~ agec + male + educ + race_eth + medhhinc + pvacant+ (1|mmsaname), 
+              family=binomial, 
+              data=merged[samp,], 
+              control = glmerControl(optimizer = c("Nelder_Mead","bobyqa"),
+                                     optCtrl=list(maxfun=2e9)))
+
+```
+```{r}
+library(gtsummary)
+model1%>%
+  tbl_regression(exponentiate=T)
+```
+
+
+
+We see in the model that there are significant variations in obesity status across age and education, with older people being more likely than younger people to be obese. Also, those with college are less likely to be obese compared to those with only a high school education. 
+
+Males are also more likely to be obese than females. 
+
+We also see significant variation by race/ethnicy, with blacks and hispanics are more likely to be obese compared to NH whites, while multirace/other ethicities are less likely to be obese. 
+
+The median household income and vacancy rate both show negative association with obesity, indicating that people living in cities with higher incomes are less likely to be obese. The same association is found for the vacancy rate
+
+## Cross level interaction model
+In the cross-level interaction model,  we interact the individual level race/ethnicity variables with the MSA level racial composition and economic variables
+
+```{r}
+model2<-glmer(obese~ agec + male + educ + race_eth +  race_eth*medhhinc+race_eth*pvacant+ (1|mmsaname), 
+              family=binomial, 
+              data=merged[samp,], 
+              control = glmerControl(optimizer = c("Nelder_Mead","bobyqa"),
+                                     optCtrl=list(maxfun=2e9)))
+
+model2%>%
+  tbl_regression(exponentiate=T)
+#ss <- getME(model2,c("theta","fixef"))
+#m2 <- update(model2,start=ss,control=glmerControl(optCtrl=list(maxfun=2e4)))
+#model2<-refit(model2)
+
+```
+
+
+Here, we see significant cross level interactions for individual race/ethnicity and the higher level variables. For Non-Hispanic blacks living in cities with higher vacancy rates, and for Hispanics living in cities that have a higher incomes, there is a positive association that is significant. The interaction between Hispanic ethnicity and city-level income is also significant, with Hispanics who live in cities with higher incomes facing a disadvantage, compared to whites in average income cities (ALWAYS REMEMBER WHO YOUR REFERENCE GROUP IS!)
+
+
+We can compare these two models using a likelihood ratio test, to see if, in a global fashion, is the cross-level interaction model fitting the data better than the multilevel model.
+
+We do see evidence that the cross-level interaction model is performing better, 
+
+```{r}
+anova(model1, model2)
+```
+
+We can extract odds ratios for the fixed effects:
+
+```{r, fig.height=10, fig.width=6}
+
+#odds ratios
+exp(fixef(model1)[-1])
+exp(confint(model1, method="Wald"))
+
+library(sjPlot)
+plot_model(model2,
+           axis.lim = c(.5, 4),
+           facet.grid = F)
+
+
+```
+
+
+
