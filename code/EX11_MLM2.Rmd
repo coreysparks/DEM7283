@@ -317,7 +317,8 @@ model1<-glmer(obese ~ agec + male + educ + race_eth + medhhinc + pvacant+ (1|mms
 ```{r}
 library(gtsummary)
 model1%>%
-  tbl_regression(exponentiate=T)
+  tbl_regression(exponentiate=T,
+                 tidy_fun = broom.mixed::tidy)
 ```
 
 
@@ -334,14 +335,15 @@ The median household income and vacancy rate both show negative association with
 In the cross-level interaction model,  we interact the individual level race/ethnicity variables with the MSA level racial composition and economic variables
 
 ```{r}
-model2<-glmer(obese~ agec + male + educ + race_eth +  race_eth*medhhinc+race_eth*pvacant+ (1|mmsaname), 
+model2<-glmer(obese~ agec + male + educ + race_eth +  race_eth*(medhhinc+pvacant)+ (1|mmsaname), 
               family=binomial, 
               data=merged[samp,], 
               control = glmerControl(optimizer = c("Nelder_Mead","bobyqa"),
                                      optCtrl=list(maxfun=2e9)))
 
 model2%>%
-  tbl_regression(exponentiate=T)
+  tbl_regression(exponentiate=T, 
+                 tidy_fun = broom.mixed::tidy)
 #ss <- getME(model2,c("theta","fixef"))
 #m2 <- update(model2,start=ss,control=glmerControl(optCtrl=list(maxfun=2e4)))
 #model2<-refit(model2)
@@ -377,4 +379,88 @@ plot_model(model2,
 ```
 
 
+## Other GLMM models
+### Age - period - cohort model
+In this example, we use data from the [Integrated Health Interview Series](https://www.ihis.us/ihis/index.shtml) to fit an *Age-Period-Cohort* model. Discussion of these models can be found in the recent [text](http://www.crcnetbase.com/isbn/978-1-4665-0753-1) on the subject. In addition to the APC model, hierarchical models could consider county or city of residence, or some other geography. 
+
+Here, we load the IHIS data and do some recodes.
+
+```{r}
+library(ipumsr)
+library(haven)
+ddi<- read_ipums_ddi("C:/Users/ozd504/OneDrive - University of Texas at San Antonio//classes/dem7473/nhis_00011.xml")
+dat<-read_ipums_micro(ddi)
+dat<-zap_labels(dat)
+#names(dat)
+names(dat)<-tolower(names(dat))
+dat<-dat[dat$age>=18,]
+
+dat$goodhealth<-car::recode(dat$health, recodes="1:3=0; 4:5=1; else=NA")
+dat$bmi_clean<-ifelse(dat$bmicalc%in%c(0,996),NA, dat$bmicalc)
+dat$obese<-ifelse(dat$bmi_clean>=30,1,0)
+dat$hisp<-ifelse(dat$hispeth==10, 0, ifelse(dat$hispeth %in%c(90:93), NA, 1))
+dat$race<-car::recode(dat$racea, recodes="100=1; 200=2; 300:340=3; 400:434=4; 500:600=5; else=NA")
+dat$race_eth<-factor(ifelse(dat$hisp==1, "Hispanic",
+                     ifelse(dat$hisp==0&dat$race==1, "NHWhite", 
+                            ifelse(dat$hisp==0&dat$race==2, "NHBlack",
+                                   ifelse(dat$hisp==0&dat$race==3, "NHNAHN",
+                                          ifelse(dat$hisp==0&dat$race==4, "NHAsian", 
+                                                 ifelse(dat$hisp==0&dat$race==5, "NHAsian", NA)))))))
+
+dat$educ<-car::recode(dat$educrec2, recodes="10:41='lths'; 42='hs';50:53='somecoll'; 54:60='colledu'; else=NA", as.factor=T, levels = c("lths", "hs", "somecoll", "colledu"))
+
+dat$male<-car::recode(dat$sex, recodes="1=1;2=0")
+dat$agec<-cut(dat$age, breaks =seq(15, 100, 5))
+dat$currsmoke<-car::recode(dat$smokestatus2, recodes="0=NA;90=NA; 10:13=1; else=0", as.factor = F)
+dat$currdrink<-car::recode(dat$alcstat1, recodes="3=1; 1:2=0; else=NA")
+dat$birth_year<-ifelse(dat$birthyr>=9997, NA, dat$birthyr)
+dat$age2<-dat$age^2
+dat<-subset(dat, complete.cases(goodhealth,bmi_clean, educ, currsmoke, currdrink, birth_year))
+dat$bmiz<- scale(dat$bmi_clean)
+dat$cohort<- cut(dat$birth_year, breaks=seq(1915, 2005, 10))
+set.seed(1115)
+samps<-sample(1:nrow(dat), size = 75000, replace = F) #take a sample of subjects, because the NHIS is huge.
+dat<- dat[samps,]
+```
+
+Below we fit the model using INLA. The APC model basically has three random effects, one for Age, one for period (year of survey) and a third random effect for cohort (birth year). If we have a continuous outcome, our model structure would be :
+
+ $$ y_{ijk} = \mu_{jk} + Age  +\sum_c \beta_c x_{ik} + e_{ij}$$
+  
+ $$\mu_{jk} = \mu + u_j + v_k + \tau_l$$
+  
+  $$u_j \sim N(0, \sigma^2_u)$$
+  
+  $$v_k \sim N(0, \sigma^2_v)$$
+
+  
+```{r}
+library(lme4)
+#user lmer to find good starting values for INLA
+fit_in1.mer0<- lmer(bmiz~ race_eth+educ+male+currsmoke+currdrink+agec+(1|year)+(1|cohort),
+                    data=dat)
+
+lmerTest::rand(fit_in1.mer0)
+
+summary(fit_in1.mer0)
+```
+
+
+```{r}
+test<-data.frame(ranef(fit_in1.mer0))
+
+test%>%
+  dplyr::filter(grpvar=="year")%>%
+  ggplot()+
+  geom_point(aes(x=grp, y=condval))
+
+
+test%>%
+  dplyr::filter(grpvar=="cohort")%>%
+  mutate(coh = as.numeric(grp))%>%
+  arrange(coh)%>%
+  ggplot()+
+  geom_point(aes(x=coh, y=condval))
+
+```
 
