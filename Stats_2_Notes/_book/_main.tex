@@ -1,0 +1,2754 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{book}
+\title{Course Introduction}
+\author{Corey Sparks, PhD}
+\date{2021-11-19}
+
+\usepackage{amsmath,amssymb}
+\usepackage{lmodern}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\hypersetup{
+  pdftitle={Course Introduction},
+  pdfauthor={Corey Sparks, PhD},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+\urlstyle{same} % disable monospaced font for URLs
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.94,0.16,0.16}{#1}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.77,0.63,0.00}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.64,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\usepackage{graphicx}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+% Set default figure placement to htbp
+\makeatletter
+\def\fps@figure{htbp}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{5}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{longtable}
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\usepackage[]{natbib}
+\bibliographystyle{plainnat}
+
+\begin{document}
+\maketitle
+
+{
+\setcounter{tocdepth}{1}
+\tableofcontents
+}
+\hypertarget{introduction-to-r-and-demography}{%
+\chapter{Introduction to R and Demography}\label{introduction-to-r-and-demography}}
+
+\hypertarget{why-r}{%
+\section{Why R?}\label{why-r}}
+
+I've used R for twenty years. I was also trained in SPSS and SAS along
+the way, by various mentors. Some tried to get me to learn more general
+purpose languages like Delphi (of all things) or Perl, or Basic, and
+I've been chastised for not knowing the depths of Python, but R presents
+a nimble and rigorous platform to \emph{do} demography. My top three reasons
+for teaching and using R are:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  It's free - This is important, because, why should we pass along
+  more costs to people, especially our students? This also make R code
+  accessible to people, worldwide.
+\item
+  It's the hotbed of methodological development. The R ecosystem has
+  thousands of packages that represent the bleeding edge of data
+  analysis, visualization and data science. This makes R attractive
+  because it can pivot quickly to adopt new methods, which often lag
+  in their development in other environments.
+\item
+  It has a supportive community of users. While there are some debates
+  over how friendly some R users are to new users, overall, after
+  spending 20 years in the R community, I've personally assisted
+  hundreds of users, and been personally helped by many others. The
+  open source nature of R lends itself to sharing of ideas and
+  collaboration between users.
+\end{enumerate}
+
+\hypertarget{my-assumptions-in-this-book}{%
+\subsection{My assumptions in this book}\label{my-assumptions-in-this-book}}
+
+In statistics we always make assumptions, often these are wrong, but we
+adapt to our mistakes daily. My assumptions about who is reading this
+book are:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  You are interested in learning more about R.
+\item
+  You are likely a student or professional interested in demography or
+  population research.
+\item
+  You have likely been exposed to other statistical platforms and are
+  curious about R, in conjunction with 1 and 2 above.
+\item
+  You may be an avid R user from another strange and exotic
+  discipline, but are interested in how demographers do research.
+\item
+  You want to see \emph{how} to do things instead of being bombarded with
+  theoretical and often unnecessary gate-keeping mathematical
+  treatments of statistical models.
+\end{enumerate}
+
+I think if any of these assumptions are true, you're in the right place.
+That being said, this book \emph{is not} a review of all of statistics, nor
+is it an encyclopedic coverage of the R language and ecosystem. I image
+the latter being on the same scale of hopelessness as the search for the
+Holy Grail or the fountain of youth. People have died for such fool
+hearty quests, I'm not falling on my sword here folks.
+
+\hypertarget{who-is-this-book-for}{%
+\section{Who is this book for?}\label{who-is-this-book-for}}
+
+This book has come from several courses that I teach in our Applied Demography program at the University of Texas at San Antonio. \textbf{MORE NEEDED}
+
+\hypertarget{hello-bookdown}{%
+\chapter{Hello bookdown}\label{hello-bookdown}}
+
+All chapters start with a first-level heading followed by your chapter title, like the line above. There should be only one first-level heading (\texttt{\#}) per .Rmd file.
+
+\hypertarget{a-section}{%
+\section{A section}\label{a-section}}
+
+All chapter sections start with a second-level (\texttt{\#\#}) or higher heading followed by your section title, like the sections above and below here. You can have as many as you want within a chapter.
+
+\hypertarget{an-unnumbered-section}{%
+\subsection*{An unnumbered section}\label{an-unnumbered-section}}
+\addcontentsline{toc}{subsection}{An unnumbered section}
+
+Chapters and sections are numbered by default. To un-number a heading, add a \texttt{\{.unnumbered\}} or the shorter \texttt{\{-\}} at the end of the heading, like in this section.
+
+\hypertarget{cross}{%
+\chapter{Cross-references}\label{cross}}
+
+Cross-references make it easier for your readers to find and link to elements in your book.
+
+\hypertarget{chapters-and-sub-chapters}{%
+\section{Chapters and sub-chapters}\label{chapters-and-sub-chapters}}
+
+There are two steps to cross-reference any heading:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\tightlist
+\item
+  Label the heading: \texttt{\#\ Hello\ world\ \{\#nice-label\}}.
+
+  \begin{itemize}
+  \tightlist
+  \item
+    Leave the label off if you like the automated heading generated based on your heading title: for example, \texttt{\#\ Hello\ world} = \texttt{\#\ Hello\ world\ \{\#hello-world\}}.
+  \item
+    To label an un-numbered heading, use: \texttt{\#\ Hello\ world\ \{-\#nice-label\}} or \texttt{\{\#\ Hello\ world\ .unnumbered\}}.
+  \end{itemize}
+\item
+  Next, reference the labeled heading anywhere in the text using \texttt{\textbackslash{}@ref(nice-label)}; for example, please see Chapter \ref{cross}.
+
+  \begin{itemize}
+  \tightlist
+  \item
+    If you prefer text as the link instead of a numbered reference use: \protect\hyperlink{cross}{any text you want can go here}.
+  \end{itemize}
+\end{enumerate}
+
+\hypertarget{captioned-figures-and-tables}{%
+\section{Captioned figures and tables}\label{captioned-figures-and-tables}}
+
+Figures and tables \emph{with captions} can also be cross-referenced from elsewhere in your book using \texttt{\textbackslash{}@ref(fig:chunk-label)} and \texttt{\textbackslash{}@ref(tab:chunk-label)}, respectively.
+
+See Figure \ref{fig:nice-fig}.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{par}\NormalTok{(}\AttributeTok{mar =} \FunctionTok{c}\NormalTok{(}\DecValTok{4}\NormalTok{, }\DecValTok{4}\NormalTok{, .}\DecValTok{1}\NormalTok{, .}\DecValTok{1}\NormalTok{))}
+\FunctionTok{plot}\NormalTok{(pressure, }\AttributeTok{type =} \StringTok{\textquotesingle{}b\textquotesingle{}}\NormalTok{, }\AttributeTok{pch =} \DecValTok{19}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{figure}
+
+{\centering \includegraphics[width=0.8\linewidth]{_main_files/figure-latex/nice-fig-1} 
+
+}
+
+\caption{Here is a nice figure!}\label{fig:nice-fig}
+\end{figure}
+
+Don't miss Table \ref{tab:nice-tab}.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{knitr}\SpecialCharTok{::}\FunctionTok{kable}\NormalTok{(}
+  \FunctionTok{head}\NormalTok{(pressure, }\DecValTok{10}\NormalTok{), }\AttributeTok{caption =} \StringTok{\textquotesingle{}Here is a nice table!\textquotesingle{}}\NormalTok{,}
+  \AttributeTok{booktabs =} \ConstantTok{TRUE}
+\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{table}
+
+\caption{\label{tab:nice-tab}Here is a nice table!}
+\centering
+\begin{tabular}[t]{rr}
+\toprule
+temperature & pressure\\
+\midrule
+0 & 0.0002\\
+20 & 0.0012\\
+40 & 0.0060\\
+60 & 0.0300\\
+80 & 0.0900\\
+\addlinespace
+100 & 0.2700\\
+120 & 0.7500\\
+140 & 1.8500\\
+160 & 4.2000\\
+180 & 8.8000\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\hypertarget{introduction-to-r}{%
+\chapter{Introduction to R}\label{introduction-to-r}}
+
+This chapter is devoted to introducing R to new users. R was first implemented in the early 1990's by Robert Gentleman and Ross Ihaka, both faculty members at the University of Auckland. It is an open source software system that specializes in statistical analysis and graphics. R is its own programming language and the R ecosystem includes over 18,000 user-contributed additions to the software, known as packages.
+
+\hypertarget{welcome-to-r.}{%
+\section{Welcome to R.}\label{welcome-to-r.}}
+
+If you're coming to R from SAS, there is no data step. There are no
+procs. The \href{https://www.amazon.com/gp/product/1466584491/ref=as_li_tl?ie=UTF8\&camp=1789\&creative=390957\&creativeASIN=1466584491\&linkCode=as2\&tag=sasandrblog-20}{SAS and R
+book}
+\citet{kleinman} is very useful for going between the two programs.
+
+If you're coming from SPSS and you've been using the button clicking
+method, be prepared for a steep learning curve. If you've been writing
+syntax in SPSS, you're at least used to having to code. There's a good
+book for SAS and SPSS users by Bob Meunchen at the Univ. of Tennessee
+\href{https://www.amazon.com/SAS-SPSS-Users-Statistics-Computing/dp/1461406846}{here},
+which may be of some help.
+
+Stata users have fewer official publications at their fingertips to ease
+the transition to R, but I have always thought that the two were very
+similar. If you search the internet for information related to R and
+Stata, you will find a myriad of (somewhat dated) blog posts on which
+one is better for ``data science'', how to ``get started'' with either and
+so forth. What is really needed is a text similar to \citet{kleinman} which
+acts as a crosswalk between the two programs.
+
+\hypertarget{r-and-rstudio}{%
+\section{R and Rstudio}\label{r-and-rstudio}}
+
+The Rgui is the base version of R, but is not very good to program in.
+Rstudio is much better, as it gives you a true integrated development
+environment (IDE), where you can write code in one window, see results
+in others, see locations of files, and see objects you've created. To
+get started, you should download the R installer for your operating
+system. Windows and Mac have installer files, and Linux users will
+install R using their preferred package manager.
+
+Download R from \href{https://cran.r-project.org/}{CRAN}. If you're on
+Windows, I would also highly recommend you install
+\href{https://cran.r-project.org/}{Rtools}, because it gives you c++ and
+Fortran compilers, which many packages need to be installed.
+
+Rstudio can be downloaded for free
+\href{https://rstudio.com/products/rstudio/download/}{here}.
+
+I would recommend installing the base R program from CRAN first then
+(for Windows users) install Rtools, then install Rstudio, in that order.
+
+\hypertarget{introduction-to-rstudio}{%
+\section{Introduction to Rstudio}\label{introduction-to-rstudio}}
+
+Again, each operating system has its own binary for Rstudio, so pick the one that matches your operating system. Rstudio typically has 4 sub-windows open at any given time.
+
+Rstudio is an open source Integrated Development Environment (IDE) for R. It is a much better interface for using R because it allows you to write code in multiple languages, navigate your computer's files, and see your output in a very nice single place. The Rstudio IDE has several components that we will explore.
+
+\includegraphics{./images/rstudio.png}
+
+\hypertarget{code-windowsource-editor-pane}{%
+\subsection{Code window/Source editor pane}\label{code-windowsource-editor-pane}}
+
+\begin{itemize}
+\item
+  This is where you write your R code. You can write R code in a few different file types (more on this later), but the basic one is an R script, with file extension .R
+\item
+  The code window allows you to write and execute your code one line at a time, or to run an entire script at once. I use this to develop new code and when I want to test if things work (a VERY common exercise when writing any code).
+\item
+  To run a single line of code, put your cursor on the line and hit Ctrl-Enter (on Mac CMD-Enter also does this)
+\item
+  To run multiple lines of code, highlight the lines you want to run and do the same thing
+\end{itemize}
+
+\hypertarget{console-pane}{%
+\subsection{Console Pane}\label{console-pane}}
+
+\begin{itemize}
+\item
+  This is where most of your non-graphical output will be shown. Any numeric output will appear here, as well as any warnings or error messages. In R a warning doesn't necessarily mean something went wrong, its just R's polite way of telling you to pay attention.
+\item
+  An Error means something did go wrong. This is often because you left off a ) or a, sometimes because you misspelled something. I routinely spell \texttt{length} as \texttt{lenght} which causes R to print an error message. If you see an error, don't worry, R will print some kind of message telling you what went wrong.
+\item
+  R's output is in plain text, although we can produce much prettier output using other output methods, and we'll talk more about that later.
+\item
+  You can type commands or code into the console as well, and you'll immediately get the result, versus if you write it in the Source/Code window, you have to run it to see the result. I will often work in the console when I want to get ``fast'' answers, meaning little checks that I will often do to see the value of something.
+\end{itemize}
+
+\hypertarget{environment-or-workspace-browser-pane}{%
+\subsection{Environment or Workspace browser pane}\label{environment-or-workspace-browser-pane}}
+
+\begin{itemize}
+\item
+  The R environment is where any object you create is stored. In R, anything you read in or create with your code is called an object, and R is said to be an object oriented programming language.
+\item
+  Depending on the type of object something is, you may be able to click on the object in the environment and see more about it.
+\item
+  For instance if the object is a data frame, R will open it in a viewer where you can explore it like a spreadsheet, and sort and filter it as well.
+\item
+  Other objects may not do anything when you click on them.
+\item
+  There is also a useful History tab here that shows you recently executed lines of code from the console or the code pane.
+\end{itemize}
+
+\hypertarget{filesoutputhelp-pane}{%
+\subsection{Files/Output/Help pane}\label{filesoutputhelp-pane}}
+
+\begin{itemize}
+\item
+  The files and output area is where you can interact with files on your local computer, such as data files or code files, or images that R can open.
+\item
+  This area also has a plots window that will display plots you create in R either via typing directly into the console or by running a line(s) of code from the source/code pane.
+\item
+  There is also a very valuable part of this pane that lets you access the help system in R. If you are either looking for something, or you just want to explore the functions, you can get access to all of this here.
+\end{itemize}
+
+\hypertarget{r-file-types}{%
+\subsection{R file types}\label{r-file-types}}
+
+\emph{.R files} R uses a basic text file with the .R extension. This type of
+file is useful if you're going to write a function or do some analysis
+and don't want to have formatted output or text. You can use these files
+for everything, but they are limited in their ability to produce reports
+and formatted output, so I recommend people work with R Markdown files
+instead.
+
+\emph{.Rmd files} Rstudio uses a form of the markdown formatting language,
+called R Markdown, for creating formatted documents that include code,
+tables, figures and statistical output. \textbf{This book is written in R
+Markdown!}
+
+R Markdown is nice for lots of reasons, such as the ability to insert
+latex equations into documents.
+
+\[
+{y_i \sim Normal (x'\beta, \sigma_2)}
+\]
+
+or to include output tables directly into a document:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(broom)}
+\FunctionTok{library}\NormalTok{(pander)}
+\NormalTok{fit }\OtherTok{\textless{}{-}} \FunctionTok{lm}\NormalTok{(imr}\SpecialCharTok{\textasciitilde{}}\NormalTok{tfr}\SpecialCharTok{+}\NormalTok{pcturban}\SpecialCharTok{+}\NormalTok{pctlt15\_2018}\SpecialCharTok{+}\NormalTok{pctwomcontra\_all, }
+          \AttributeTok{data =}\NormalTok{ prb)}
+\FunctionTok{pander}\NormalTok{(broom}\SpecialCharTok{::}\FunctionTok{tidy}\NormalTok{(fit))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{longtable}[]{@{}
+  >{\centering\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.26}}
+  >{\centering\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.15}}
+  >{\centering\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.17}}
+  >{\centering\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.17}}
+  >{\centering\arraybackslash}p{(\columnwidth - 8\tabcolsep) * \real{0.17}}@{}}
+\toprule
+\begin{minipage}[b]{\linewidth}\centering
+term
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+estimate
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+std.error
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+statistic
+\end{minipage} & \begin{minipage}[b]{\linewidth}\centering
+p.value
+\end{minipage} \\
+\midrule
+\endhead
+(Intercept) & 6.209 & 6.551 & 0.9478 & 0.3446 \\
+tfr & 3.392 & 2.006 & 1.691 & 0.09274 \\
+pcturban & -0.0923 & 0.04553 & -2.028 & 0.04425 \\
+pctlt15\_2018 & 0.8699 & 0.2441 & 3.564 & 0.0004798 \\
+pctwomcontra\_all & -0.2114 & 0.06018 & -3.512 & 0.0005757 \\
+\bottomrule
+\end{longtable}
+
+This allows you to make tables in Rmarkdown without having to do
+non-repeatable tasks in Word or some other program. You can basically do
+your entire analysis, or a sideshow for a presentation, or an entire
+paper, including bibliography, in Rstudio.
+
+\hypertarget{r-projects}{%
+\subsection{R projects}\label{r-projects}}
+
+Rstudio allows you to create a R project, which basically sets up a
+specific location to store R code for a given project you may be doing.
+For instance, this book is a single R project, which helps me organize
+all the chapters, bibliographies, figures, etc.
+
+R projects also allow you to use version control, including Git and SVN,
+to collaborate and share code and data with others.
+
+\hypertarget{r-data-files}{%
+\subsection{R data files}\label{r-data-files}}
+
+R allows you to read and write its own \emph{native} data formats, as well as
+read and write text formatted files and data files from other
+statistical software packages. Two native R data formats are \texttt{.rds} and
+\texttt{.rdata} formats. \texttt{.rds} files allow you to save a single R object to an
+external files, while \texttt{.rdata} files allow you to save one or more
+objects to a file.
+
+Here is a short example of doing this, where I create 2 vectors, \texttt{x} and
+\texttt{y} and save them.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{x }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{, }\DecValTok{2}\NormalTok{,}\DecValTok{3}\NormalTok{)}
+
+\NormalTok{y }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\DecValTok{4}\NormalTok{, }\DecValTok{5}\NormalTok{, }\DecValTok{6}\NormalTok{)}
+
+\FunctionTok{saveRDS}\NormalTok{(x, }
+        \AttributeTok{file=}\StringTok{"\textasciitilde{}/x.rds"}\NormalTok{)}
+
+\FunctionTok{save}\NormalTok{(}\AttributeTok{list=}\FunctionTok{c}\NormalTok{(}\StringTok{"x"}\NormalTok{,}\StringTok{"y"}\NormalTok{),}
+     \AttributeTok{file=}\StringTok{"xy.rdata"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+I can also load these into R again:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{readRDS}\NormalTok{(}\AttributeTok{file =} \StringTok{"\textasciitilde{}/x.rds"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 1 2 3
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{load}\NormalTok{(}\StringTok{"xy.rdata"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+Standard methods for importing text data such as comma separated value
+or tab delimited files can be read into R using \texttt{read.csv()} or
+\texttt{read.table()} and similar writing functions are available.
+
+To read in a dataset from another statistical package, I recommend using
+the \texttt{haven} package. It allows you to read and write SAS (both sas7bdat
+and xpt files), Stata, SPSS (both .por and .sav files).
+
+For example, here I write out a dataframe containing \texttt{x} and \texttt{y} from
+above to a SAS version 7 file:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{xy }\OtherTok{\textless{}{-}} \FunctionTok{data.frame}\NormalTok{(}\AttributeTok{x =}\NormalTok{ x, }\AttributeTok{y =}\NormalTok{ y)}
+\NormalTok{xy}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##   x y
+## 1 1 4
+## 2 2 5
+## 3 3 6
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(haven)}
+
+\FunctionTok{write\_sas}\NormalTok{(}\AttributeTok{data =}\NormalTok{ xy,}
+          \AttributeTok{path =} \StringTok{"\textasciitilde{}/xy.sas7bdat"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+I will describe dataframes more later in the chapter.
+
+R also has packages for reading/writing such data formats as JSON, ESRI
+Shapefiles, Excel spreadsheets, Google Spreadsheets, DBF files, in
+addition to tools for connecting to SQL databases, and for interfacing
+with other statistics packages, such as Mplus, OpenBUGS, WinBUGS and
+various Geographic Information Systems.
+
+\hypertarget{getting-help-in-r}{%
+\section{Getting help in R}\label{getting-help-in-r}}
+
+I wish I had a nickel for every time I ran into a problem trying to do
+something in R, that would be a lot of nickles. Here are some good tips
+for finding help in R:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi})}
+\tightlist
+\item
+  If you know the name of a function you want to use, but just need
+  help using it, try \texttt{?}
+\end{enumerate}
+
+\texttt{?lm}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi})}
+\setcounter{enumi}{1}
+\tightlist
+\item
+  If you need to find a function to do something, try \texttt{??}
+\end{enumerate}
+
+\texttt{??"linear\ model"}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi})}
+\setcounter{enumi}{2}
+\tightlist
+\item
+  You can also search the history of other R users questions by
+  tapping into the
+  \href{http://finzi.psych.upenn.edu/search.html}{RSiteSearch} website,
+  which is an archive of user questions to the R list serve. This can
+  be used by tying \texttt{RSiteSearch()}
+\end{enumerate}
+
+\texttt{RSiteSearch("heteroskedasticity")}
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi})}
+\setcounter{enumi}{3}
+\item
+  Speaking of which, there are multiple \href{https://www.r-project.org/mail.html}{R user email list
+  serves} that you can ask
+  questions to, or subscribe to daily digests from. These typically
+  want an example of what you're trying to do, referred to as a
+  \emph{reproducible example}. I wish I also had nickles for each question
+  I've asked and answered on these forums.
+\item
+  A good source for all things programming is the statistics branch of
+  \href{https://stats.stackexchange.com}{Stack Exchange}, which has lots of
+  contributed questions and answers, although many answers are either
+  very snarky or wrong or for an old version of a library, so \emph{caveat
+  emptor}.
+\item
+  Your local R guru or R user group. You would be surprised at how
+  many people are R users, there may be one just down the hall, or in
+  the cubicle next door. I relish the opportunity to talk to other R
+  users, mostly because, even though I've used R for more than 20
+  years, I still learn so much by talking to others about how they
+  use R.
+\end{enumerate}
+
+Lastly, I want to be clear that there are often \textbf{more than one way to
+do everything} in R. Simple things like reading and writing a CSV data
+file can be accomplished by any of a handful of different functions
+found in different packages. If someone tells you that there is only one
+way to do something, they are usually wrong in such a statement,
+regarding R at least.
+
+\hypertarget{r-packages}{%
+\section{R packages}\label{r-packages}}
+
+R uses packages to store functions that do different types of analysis,
+so we will need to install lots of different packages to do different
+things. There are over 20,000 different packages currently for R. These
+are hosted on one of a number of \emph{repositories}, such as the
+Comprehensive R Archive Network, or CRAN, which is the official
+repository for R packages. Other locations where authors store packages
+include \href{\%22https://r-forge.r-project.org/\%22}{R-Forge} and
+\href{\%22https://www.bioconductor.org/\%22}{BioconductoR}. Many authors host
+packages in \href{\%22https://github.com\%22}{Github} repositories, especially
+for development purposes.
+
+Packages are often organized into \emph{Task Views}, which CRAN uses to
+organize packages into thematic areas. You can find a list of these Task
+Views \href{\%22https://cran.r-project.org/web/views/\%22}{here}. There is not
+a task view for Demography, but there are ones for the \href{\%22https://cran.r-project.org/web/views/SocialSciences.html\%22}{Social
+Sciences},
+\href{\%22https://cran.r-project.org/web/views/Econometrics.html\%22}{Econometrics},
+and \href{\%22https://cran.r-project.org/web/views/Spatial.html\%22}{Spatial
+Data} to name a
+few. Task views allow users to download a lot of thematically linked
+packages in a single command, through the package \texttt{ctv}, or Cran Task
+Views. You can install this package by typing:
+
+\texttt{install.packages("ctv")}
+
+into Rstudio. Then you have to load the package by using the \texttt{library()}
+command:
+
+\texttt{library(ctv)}
+
+which gives you access to the functions in that package. You don't need
+to install the package again, unless you update your R software, but
+each time you start a new session (i.e.~open Rstudio), you will have to
+load the library again. If you want to install all of the packages in
+the Social Science task view, you would type:
+
+\texttt{install.views("SocialSciences")}
+
+into R and it will install all of the packages under that task view, as
+of the writing of this sentence, include over 80 packages.
+
+I strongly recommend you install several packages prior to us beginning
+to use R, so you will not be distracted by this later. I've written a
+short script on my Github repository and you can use it by running:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{source}\NormalTok{(}\StringTok{"https://raw.githubusercontent.com/coreysparks/Rcode/master/install\_first\_short.R"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+This will install a few dozen R packages that are commonly used for
+social science analysis and some other packages I find of use.
+
+You only have to install a package once, but each time you start a R
+session, you must load the package to use its functions. You should also
+routinely update your installed packages using
+\texttt{update.packages(ask\ =\ FALSE)}. This will update any packages that have
+new versions on CRAN. These often will contain bug fixes and new
+features. On CRAN, each package will have a README file that tells what
+has changed in the various versions. Here is one for one of my favorite
+packages
+\href{https://cran.r-project.org/web/packages/tidycensus/readme/README.html}{\texttt{tidycensus}}.
+
+\hypertarget{functions-within-packages}{%
+\subsection{Functions within packages}\label{functions-within-packages}}
+
+Each package will have one or more functions within it, each doing a
+specific task. The default way to access all functions within a given
+package is to use the command \texttt{library(packagename)} to access the
+functions. Once loaded, all the functions will be accessible to you.
+Sometimes, different packages have functions with the same name, for
+example the base R library has the function \texttt{lag()}, which lag's a time
+series, the \texttt{dplyr} library also has a function \texttt{lag()}, which does a
+similar task, but with different function arguments. If you have the
+\texttt{dplyr} library loaded, R will default to use its \texttt{lag()} function. If
+you want to access a specific function within a specific library,
+sometimes it is safest to use the \texttt{library::function()} syntax. So if I
+want to use base R's \texttt{lag()} function, I could do
+
+\texttt{stats::lag()}
+
+to access that function specifically. How do you know when this happens?
+When you load a library, you will often see messages from R that
+functions have conflicts. For example, if I load \texttt{dplyr}, I see:
+
+\begin{figure}
+\centering
+\includegraphics{C:/Users/ozd504/Documents/Github/dem-stats-book/images/dplyrconflict.png}
+\caption{Conflict
+messages}
+\end{figure}
+
+As you use R more, you will learn which packages have conflicts, and
+often the developers of the packages will do this and rename the
+commonly conflicting functions. For example, the function to recode
+variables in the \texttt{car} package, \texttt{car::recode()} was renamed to
+\texttt{car::Recode()} to avoid conflicts with the \texttt{dplyr::recode()} function,
+as both are often used in the same analysis.
+
+\hypertarget{more-notes-on-functions}{%
+\subsubsection{More notes on functions}\label{more-notes-on-functions}}
+
+Functions in R are bits of code that do something, what they do depends
+on the code within them. For instance, the \texttt{median()} function's
+underlying code can be seen by:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{getAnywhere}\NormalTok{(}\FunctionTok{median.default}\NormalTok{())}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## A single object matching 'median.default' was found
+## It was found in the following places
+##   package:stats
+##   registered S3 method for median from namespace stats
+##   namespace:stats
+## with value
+## 
+## function (x, na.rm = FALSE, ...) 
+## {
+##     if (is.factor(x) || is.data.frame(x)) 
+##         stop("need numeric data")
+##     if (length(names(x))) 
+##         names(x) <- NULL
+##     if (na.rm) 
+##         x <- x[!is.na(x)]
+##     else if (any(is.na(x))) 
+##         return(x[FALSE][NA])
+##     n <- length(x)
+##     if (n == 0L) 
+##         return(x[FALSE][NA])
+##     half <- (n + 1L)%/%2L
+##     if (n%%2L == 1L) 
+##         sort(x, partial = half)[half]
+##     else mean(sort(x, partial = half + 0L:1L)[half + 0L:1L])
+## }
+## <bytecode: 0x000000001d323720>
+## <environment: namespace:stats>
+\end{verbatim}
+
+This seems like a lot, I know, but it allows you to see all of the code
+under the hood of any function. Obviously, the more complicated the
+function, the more complicated the code. For instance, I can write my
+own simple function to find the mean of a sample:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{mymean }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(x,}
+                   \AttributeTok{na.rm =} \ConstantTok{FALSE}\NormalTok{)\{}
+\NormalTok{  sx }\OtherTok{\textless{}{-}} \FunctionTok{sum}\NormalTok{(x, }
+            \AttributeTok{na.rm =} \ConstantTok{FALSE}\NormalTok{)}
+\NormalTok{  nx }\OtherTok{\textless{}{-}} \FunctionTok{length}\NormalTok{(x)}
+\NormalTok{  mu }\OtherTok{\textless{}{-}}\NormalTok{ sx}\SpecialCharTok{/}\NormalTok{nx}
+\NormalTok{  mu}
+\NormalTok{\}}
+
+\FunctionTok{mymean}\NormalTok{(}\AttributeTok{x =} \FunctionTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{,}\DecValTok{2}\NormalTok{,}\DecValTok{3}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 2
+\end{verbatim}
+
+This function only includes the basic machinery to calculate the
+arithmetic mean of a vector \(x\). The function has 2 \textbf{arguments}, \texttt{x}
+and \texttt{na.rm}. All R functions have one or more arguments that users must
+enter for the function to operate. Some arguments are required, while
+some are optional, also some arguments, such as the \texttt{na.rm\ =\ FALSE},
+have default values. As mentioned earlier, to see all the information
+for a function's arguments, use the help operator, \texttt{?}. For example
+\texttt{?mean} will show you the help documents for the \texttt{mean()} function
+
+\begin{figure}
+\centering
+\includegraphics{C:/Users/ozd504/Documents/Github/dem-stats-book/images/meandoc.png}
+\caption{Mean Function
+Help}
+\end{figure}
+
+When using a new function, it's always advised to check out the help
+file to see all the arguments the function can take, because this is
+where you can choose alternative specifications for models and methods.
+These help files also contain the original citations for methods, so you
+can immediately check the source of the algorithms. The help files also
+contain a working example of how to use the function on data contained
+in R.
+
+\hypertarget{your-r-user-environment}{%
+\section{Your R user environment}\label{your-r-user-environment}}
+
+When you begin an R session (generally by opening Rstudio) you will
+begin in your home directory. This is traditionally, on Windows, at
+\texttt{\textquotesingle{}C:/Users/yourusername/Documents\textquotesingle{}} on Mac at \texttt{\textquotesingle{}/Users/yourusername\textquotesingle{}},
+and on Linux at \texttt{\textquotesingle{}/users/yourusername\textquotesingle{}}. There are files you can add to
+your home directory to specify starting options for R.
+
+You can find information on setting up \texttt{.Rprofile} and \texttt{.Renviron} files
+on \href{https://cran.r-project.org/web/packages/startup/vignettes/startup-intro.html}{CRAN's
+website}.
+This allows you to setup packages that load every time R starts, to save
+API keys and other various options. These are completely optional and
+many R users never touch these.
+
+If you're not sure where you are you can type \texttt{getwd()}, for get working
+directory, and R will tell you:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{getwd}\NormalTok{()}
+\end{Highlighting}
+\end{Shaded}
+
+If you don't like where you start, you can change it, by using
+\texttt{setwd()}, to set your working directory to a new location.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{setwd}\NormalTok{(}\StringTok{"\textasciitilde{}"}\NormalTok{)}
+\FunctionTok{getwd}\NormalTok{()}
+\end{Highlighting}
+\end{Shaded}
+
+R projects will typically set the home folder for the project at the
+directory location of the project, so files associate with the project
+will always be in the same place. You can set this at the beginning of
+your R code file to ensure the code will look for data in a specific
+location.
+
+\hypertarget{some-simple-r-examples}{%
+\section{Some Simple R examples}\label{some-simple-r-examples}}
+
+Below we will go through a simple R session where we introduce some
+concepts that are important for R. I'm running these in an Rstudio
+session, in the
+
+\hypertarget{r-is-a-calculator}{%
+\subsection{R is a calculator}\label{r-is-a-calculator}}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#addition and subtraction}
+\DecValTok{3}\SpecialCharTok{+}\DecValTok{7}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 10
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\DecValTok{3{-}7}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] -4
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#multiplication and division}
+\DecValTok{3}\SpecialCharTok{*}\DecValTok{7}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 21
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\DecValTok{3}\SpecialCharTok{/}\DecValTok{7}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4285714
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#powers}
+\DecValTok{3}\SpecialCharTok{\^{}}\DecValTok{2}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 9
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\DecValTok{3}\SpecialCharTok{\^{}}\DecValTok{3}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 27
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#common math functions}
+\FunctionTok{log}\NormalTok{(}\DecValTok{3}\SpecialCharTok{/}\DecValTok{7}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] -0.8472979
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{exp}\NormalTok{(}\DecValTok{3}\SpecialCharTok{/}\DecValTok{7}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 1.535063
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sin}\NormalTok{(}\DecValTok{3}\SpecialCharTok{/}\DecValTok{7}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.4155719
+\end{verbatim}
+
+R allows users to write custom functions as well. In general, if you
+find yourself writing the same code over and over again, you should
+probably just write a function and save it to your local user
+environment.
+
+For example a very simple function is given below, it takes a variable
+\(x\) as an argument, and then exponentiates the value of the variable.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#custom functions}
+\NormalTok{myfun }\OtherTok{\textless{}{-}} \ControlFlowTok{function}\NormalTok{(x)\{}
+  \FunctionTok{exp}\NormalTok{(x)}
+\NormalTok{\}}
+
+\FunctionTok{myfun}\NormalTok{(.}\DecValTok{5}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 1.648721
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{myfun}\NormalTok{(}\SpecialCharTok{{-}}\NormalTok{.}\DecValTok{1}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 0.9048374
+\end{verbatim}
+
+You may want to save this function for future use, so you don't have to
+write it over again. In general, this is why people write R packages, to
+store custom functions, but you can also save the function to an R
+script. One such way to do this is to use the \texttt{dump()} command.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{dump}\NormalTok{(}\StringTok{"myfun"}\NormalTok{, }
+     \AttributeTok{file=}\StringTok{"myfun1.R"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+One way to load this function when you want to use it is to use the
+\texttt{source()} command, which loads any code in a given R script.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{source}\NormalTok{(}\StringTok{"myfun1.R"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+Which will load this function into your local environment and you can
+use it. If you are interested in writing your own packages, I would
+highly recommend reading \citet{Wickham}.
+
+\hypertarget{variables-and-objects}{%
+\section{Variables and objects}\label{variables-and-objects}}
+
+In R we assign values to objects (object-oriented programming). These
+can generally have any name, but some names are reserved for R. For
+instance you probably wouldn't want to call something `mean' because
+there's a `mean()' function already in R. For instance:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{x }\OtherTok{\textless{}{-}} \DecValTok{3}
+\NormalTok{y }\OtherTok{\textless{}{-}} \DecValTok{7}
+\NormalTok{x}\SpecialCharTok{+}\NormalTok{y}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 10
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{x}\SpecialCharTok{*}\NormalTok{y}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 21
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{log}\NormalTok{(x}\SpecialCharTok{*}\NormalTok{y)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 3.044522
+\end{verbatim}
+
+The \texttt{{[}1{]}} in the answer refers to the first element of a \emph{vector}, which
+brings us to\ldots{}
+
+\hypertarget{vectors}{%
+\subsection{Vectors}\label{vectors}}
+
+R thinks many objects are like a matrix, or a vector, meaning a row or
+column that contains either numbers or characters. One of R's big
+selling points is that much of it is completely vectorized. Meaning, I
+can apply an operation along all elements of a vector without having to
+write a \emph{loop}.
+
+For example, if I want to multiply a vector of numbers by a constant, in
+SAS, I could do:
+
+\texttt{for\ (i\ in\ 1\ to\ 5)} \texttt{x{[}i{]}\ \textless{}-\ y{[}i{]}*5} \texttt{end;}
+
+but in R, I can just do:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{x }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\DecValTok{3}\NormalTok{, }\DecValTok{4}\NormalTok{, }\DecValTok{5}\NormalTok{, }\DecValTok{6}\NormalTok{, }\DecValTok{7}\NormalTok{)}
+\CommentTok{\#c() makes a vector}
+\NormalTok{y }\OtherTok{\textless{}{-}} \DecValTok{7}
+
+\NormalTok{x}\SpecialCharTok{*}\NormalTok{y}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 21 28 35 42 49
+\end{verbatim}
+
+R is also very good about using vectors, let's say I wanted to find the
+third element of x:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{x[}\DecValTok{3}\NormalTok{]}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 5
+\end{verbatim}
+
+or if I want to test if this element is 10
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{x[}\DecValTok{3}\NormalTok{] }\SpecialCharTok{==} \DecValTok{10}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] FALSE
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{x[}\DecValTok{3}\NormalTok{] }\SpecialCharTok{!=} \DecValTok{10}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] TRUE
+\end{verbatim}
+
+or is it larger than another number:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{x[}\DecValTok{3}\NormalTok{] }\SpecialCharTok{\textgreater{}} \DecValTok{3}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] TRUE
+\end{verbatim}
+
+or is any element of the whole vector greater than 3
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{x }\SpecialCharTok{\textgreater{}} \DecValTok{3}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] FALSE  TRUE  TRUE  TRUE  TRUE
+\end{verbatim}
+
+If you want to see what's in an object, use \texttt{str()}, for \texttt{str}ucture
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{str}\NormalTok{(x)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##  num [1:5] 3 4 5 6 7
+\end{verbatim}
+
+and we see that x is numeric, and has the values that we made.
+
+We can also see different characteristics of x
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#how long is x?}
+\FunctionTok{length}\NormalTok{(x)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 5
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#is x numeric?}
+\FunctionTok{is.numeric}\NormalTok{(x)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] TRUE
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#is x full of characters?}
+\FunctionTok{is.character}\NormalTok{(x)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] FALSE
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#is any element of x missing?}
+\FunctionTok{is.na}\NormalTok{(x)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] FALSE FALSE FALSE FALSE FALSE
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#now i\textquotesingle{}ll modify x}
+\NormalTok{x }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(x, }\ConstantTok{NA}\NormalTok{) }\CommentTok{\#combine x and a missing value ==NA}
+\NormalTok{x}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1]  3  4  5  6  7 NA
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#Now ask if any x\textquotesingle{}s are missing}
+\FunctionTok{is.na}\NormalTok{(x)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] FALSE FALSE FALSE FALSE FALSE  TRUE
+\end{verbatim}
+
+\hypertarget{replacing-elements-of-vectors}{%
+\subsubsection{Replacing elements of vectors}\label{replacing-elements-of-vectors}}
+
+Above, we had a missing value in X, let's say we want to replace it with
+another value. He we will use basic conditional logic, which exists in
+any programming language. The \texttt{ifelse()} function will evaluate a \texttt{test}
+statement, and depending on if that statement is true, it will assign a
+value, if the statement is false, R will assign another value. Here, we
+replace the missing value with \(\sqrt{7.2}\), and leave the other values
+as they are.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{x }\OtherTok{\textless{}{-}} \FunctionTok{ifelse}\NormalTok{(}\AttributeTok{test =} \FunctionTok{is.na}\NormalTok{(x) }\SpecialCharTok{==} \ConstantTok{TRUE}\NormalTok{,}
+            \AttributeTok{yes =}  \FunctionTok{sqrt}\NormalTok{(}\FloatTok{7.2}\NormalTok{),}
+            \AttributeTok{no =}\NormalTok{  x)}
+\NormalTok{x}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 3.000000 4.000000 5.000000 6.000000 7.000000 2.683282
+\end{verbatim}
+
+\hypertarget{variable-types}{%
+\section{Variable types}\label{variable-types}}
+
+R stores data differently depending on the type of information
+contained. Common variables types in R are numeric, character, integer
+and factor.
+
+Numeric variables are just that, numbers. They can be whole numbers or
+decimal values. The best way to see if a variable is numeric is to use
+\texttt{is.numeric(x)}, and R will return TRUE if the variable is numeric and
+FALSE if it is not.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{is.numeric}\NormalTok{(x)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] TRUE
+\end{verbatim}
+
+Likewise, you can use \texttt{is.character()}, \texttt{is.integer()}, and \texttt{is.factor}
+to identify if a variable is of a given type. The \texttt{class()} function
+will also do this more generally:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{class}\NormalTok{(x)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "numeric"
+\end{verbatim}
+
+Character and factor variables often store the same kind of information,
+and R (until recently) would always convert character variables to
+factors when data were read into R. This is the option
+\texttt{getOption("stringsAsFactors")}, which used to default to True, but has
+recently changed. What's the difference you ask? Character variables
+store information on strings, or text. This is one way to code
+categorical variables that are strings. Factors, on the other hand can
+store strings OR numbers as categorical variables, and can be ordered or
+unordered. Factors also allow for specific categories of the variable to
+be considered as reference categories, as are often used in many
+statistical procedures. Factor variables have ``levels'' which are the
+different values of the categorical variable, this implied a more
+complicated structure than simple character variables, which lack these
+qualities.
+
+You can manipulate variables of one type into another, with some notable
+things to watch out for.
+
+Here are some examples:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#create at numeric vector}
+
+\NormalTok{z }\OtherTok{\textless{}{-}}  \FunctionTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{,}\DecValTok{2}\NormalTok{,}\DecValTok{3}\NormalTok{,}\DecValTok{4}\NormalTok{)}
+\FunctionTok{class}\NormalTok{(z)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "numeric"
+\end{verbatim}
+
+We can convert this to a character vector using \texttt{as.character()}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{zc }\OtherTok{\textless{}{-}}  \FunctionTok{as.character}\NormalTok{(z)}
+\NormalTok{zc}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "1" "2" "3" "4"
+\end{verbatim}
+
+Likewise, we can convert it to a factor type:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{zf }\OtherTok{\textless{}{-}} \FunctionTok{as.factor}\NormalTok{(z)}
+\NormalTok{zf}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 1 2 3 4
+## Levels: 1 2 3 4
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{class}\NormalTok{(zf)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "factor"
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{is.ordered}\NormalTok{(zf)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] FALSE
+\end{verbatim}
+
+and as an ordered factor:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{zfo }\OtherTok{\textless{}{-}} \FunctionTok{factor}\NormalTok{(zf, }
+              \AttributeTok{ordered =} \ConstantTok{TRUE}\NormalTok{)}
+\NormalTok{zfo}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 1 2 3 4
+## Levels: 1 < 2 < 3 < 4
+\end{verbatim}
+
+Another very useful variable type is the \emph{logical} type. In R a logical
+variable is either a \texttt{TRUE} or \texttt{FALSE} value. I personally use this a
+lot in my work in both preliminary data analysis and data checking. We
+saw this used above, when we did \texttt{is.na(x)\ ==\ TRUE} to check if the \texttt{x}
+variable was missing. We can see how this translates into a logical
+variable here:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{x }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\DecValTok{3}\NormalTok{, }\DecValTok{4}\NormalTok{, }\DecValTok{5}\NormalTok{, }\DecValTok{6}\NormalTok{, }\DecValTok{7}\NormalTok{, }\ConstantTok{NA}\NormalTok{)}
+
+\NormalTok{z}\OtherTok{\textless{}{-}}\FunctionTok{is.na}\NormalTok{(x) }\CommentTok{\#check if x is missing}
+
+\NormalTok{z}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] FALSE FALSE FALSE FALSE FALSE  TRUE
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{class}\NormalTok{(z)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "logical"
+\end{verbatim}
+
+In practice, I use this with the \texttt{I()} function (more on this below) to
+do quick binary codes of a value:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{x }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\DecValTok{3}\NormalTok{, }\DecValTok{4}\NormalTok{, }\DecValTok{5}\NormalTok{, }\DecValTok{6}\NormalTok{, }\DecValTok{7}\NormalTok{)}
+
+\FunctionTok{table}\NormalTok{( }\FunctionTok{I}\NormalTok{(x }\SpecialCharTok{\textgreater{}=} \DecValTok{5}\NormalTok{) )}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## FALSE  TRUE 
+##     2     3
+\end{verbatim}
+
+\hypertarget{dataframes}{%
+\section{Dataframes}\label{dataframes}}
+
+Traditionally, R organizes variables into data frames, these are like a
+spreadsheet. The columns can have names, and the \emph{dataframe} itself can
+have data of different types.
+
+Here we make a short data frame with three columns, two numeric and one
+factor:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{mydat }\OtherTok{\textless{}{-}} \FunctionTok{data.frame}\NormalTok{(}
+  \AttributeTok{x =} \FunctionTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{,}\DecValTok{2}\NormalTok{,}\DecValTok{3}\NormalTok{,}\DecValTok{4}\NormalTok{,}\DecValTok{5}\NormalTok{, }\DecValTok{6}\NormalTok{, }\DecValTok{7}\NormalTok{, }\DecValTok{8}\NormalTok{),}
+  \AttributeTok{y =} \FunctionTok{c}\NormalTok{(}\DecValTok{10}\NormalTok{, }\DecValTok{20}\NormalTok{, }\DecValTok{35}\NormalTok{, }\DecValTok{57}\NormalTok{, }\DecValTok{37}\NormalTok{, }\DecValTok{21}\NormalTok{, }\DecValTok{23}\NormalTok{, }\DecValTok{25}\NormalTok{),}
+  \AttributeTok{group =} \FunctionTok{factor}\NormalTok{(}\FunctionTok{c}\NormalTok{(}\StringTok{"A"}\NormalTok{, }\StringTok{"A"}\NormalTok{ ,}\StringTok{"A"}\NormalTok{, }\StringTok{"B"}\NormalTok{, }\StringTok{"B"}\NormalTok{, }\StringTok{"C"}\NormalTok{,}\StringTok{"C"}\NormalTok{,}\StringTok{"C"}\NormalTok{))}
+\NormalTok{)}
+
+\CommentTok{\#See the size of the dataframe}
+\FunctionTok{dim}\NormalTok{(mydat)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 8 3
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#Open the dataframe in a viewer and just print it}
+\FunctionTok{print}\NormalTok{(mydat)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##   x  y group
+## 1 1 10     A
+## 2 2 20     A
+## 3 3 35     A
+## 4 4 57     B
+## 5 5 37     B
+## 6 6 21     C
+## 7 7 23     C
+## 8 8 25     C
+\end{verbatim}
+
+\hypertarget{accessing-variables-in-dataframes}{%
+\subsection{Accessing variables in dataframes}\label{accessing-variables-in-dataframes}}
+
+R has a few different ways to get a variable from a data set. One way is
+the \texttt{\$} notation, used like \texttt{dataset\$variable}, and another is to
+provide the column index or name of the variable. These three methods
+are illustrated below. The first tells R to get the variable named
+\texttt{group} from the data. The second tells R to get the column named
+\texttt{group} from the data, and the third tells R to get the third column
+from the data.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{mydat}\SpecialCharTok{$}\NormalTok{group}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] A A A B B C C C
+## Levels: A B C
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{mydat[}\StringTok{\textquotesingle{}group\textquotesingle{}}\NormalTok{] }
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##   group
+## 1     A
+## 2     A
+## 3     A
+## 4     B
+## 5     B
+## 6     C
+## 7     C
+## 8     C
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{mydat[,}\DecValTok{3}\NormalTok{]}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] A A A B B C C C
+## Levels: A B C
+\end{verbatim}
+
+The \texttt{names()} function is very useful for seeing all the column names of
+a dataset, without having to print any of the data.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{names}\NormalTok{(mydat)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "x"     "y"     "group"
+\end{verbatim}
+
+R has several useful function for previewing the contents of a dataframe
+or variable. The \texttt{head()} function shows the first 6 observations of a
+dataframe or variable, and \texttt{tail()} shows the last 6 observations. You
+can also show a custom number of observations by using the \texttt{n=} argument
+in either function. These are illustrated below:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{head}\NormalTok{(mydat)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##   x  y group
+## 1 1 10     A
+## 2 2 20     A
+## 3 3 35     A
+## 4 4 57     B
+## 5 5 37     B
+## 6 6 21     C
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{head}\NormalTok{(mydat, }\AttributeTok{n =} \DecValTok{2}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##   x  y group
+## 1 1 10     A
+## 2 2 20     A
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{head}\NormalTok{(mydat}\SpecialCharTok{$}\NormalTok{group)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] A A A B B C
+## Levels: A B C
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{tail}\NormalTok{(mydat)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##   x  y group
+## 3 3 35     A
+## 4 4 57     B
+## 5 5 37     B
+## 6 6 21     C
+## 7 7 23     C
+## 8 8 25     C
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{tail}\NormalTok{(mydat, }\AttributeTok{n =} \DecValTok{2}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##   x  y group
+## 7 7 23     C
+## 8 8 25     C
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{tail}\NormalTok{(mydat}\SpecialCharTok{$}\NormalTok{group)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] A B B C C C
+## Levels: A B C
+\end{verbatim}
+
+\hypertarget{nicer-looking-tables}{%
+\subsection{Nicer looking tables}\label{nicer-looking-tables}}
+
+R can also produce nicely formatted HTML and LaTeX tables. There are
+several packages that do this, but the \texttt{knitr} package has some basic
+table creation functions that do a good job for simple tables.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(knitr)}
+
+\FunctionTok{kable}\NormalTok{(mydat,}
+      \AttributeTok{caption =} \StringTok{"My basic table"}\NormalTok{,}
+      \AttributeTok{align =} \StringTok{\textquotesingle{}c\textquotesingle{}}\NormalTok{,  }
+      \AttributeTok{format =} \StringTok{"html"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(knitr)}
+\FunctionTok{kable}\NormalTok{(mydat,}
+      \AttributeTok{caption =} \StringTok{"My basic table"}\NormalTok{,}
+      \AttributeTok{align =} \StringTok{\textquotesingle{}c\textquotesingle{}}\NormalTok{,  }
+      \AttributeTok{format=}\StringTok{"latex"}\NormalTok{  )}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{table}
+
+\caption{\label{tab:unnamed-chunk-46}My basic table}
+\centering
+\begin{tabular}[t]{c|c|c}
+\hline
+x & y & group\\
+\hline
+1 & 10 & A\\
+\hline
+2 & 20 & A\\
+\hline
+3 & 35 & A\\
+\hline
+4 & 57 & B\\
+\hline
+5 & 37 & B\\
+\hline
+6 & 21 & C\\
+\hline
+7 & 23 & C\\
+\hline
+8 & 25 & C\\
+\hline
+\end{tabular}
+\end{table}
+
+Much more advanced tables can be created using the \texttt{gt} package \citet{GT},
+which allows for highly customized tables.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(gt, }
+        \AttributeTok{quietly =} \ConstantTok{TRUE}\NormalTok{)}
+\FunctionTok{library}\NormalTok{(dplyr,}
+        \AttributeTok{quietly =} \ConstantTok{TRUE}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## Attaching package: 'dplyr'
+\end{verbatim}
+
+\begin{verbatim}
+## The following objects are masked from 'package:stats':
+## 
+##     filter, lag
+\end{verbatim}
+
+\begin{verbatim}
+## The following objects are masked from 'package:base':
+## 
+##     intersect, setdiff, setequal, union
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{mydat}\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{gt}\NormalTok{()}\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{tab\_header}\NormalTok{(}\AttributeTok{title=} \StringTok{"My simple gt table"}\NormalTok{,}
+             \AttributeTok{subtitle =} \StringTok{"With a subtitle"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\captionsetup[table]{labelformat=empty,skip=1pt}
+\begin{longtable}{rrc}
+\caption*{
+{\large My simple gt table} \\ 
+{\small With a subtitle}
+} \\ 
+\toprule
+x & y & group \\ 
+\midrule
+1 & 10 & A \\ 
+2 & 20 & A \\ 
+3 & 35 & A \\ 
+4 & 57 & B \\ 
+5 & 37 & B \\ 
+6 & 21 & C \\ 
+7 & 23 & C \\ 
+8 & 25 & C \\ 
+ \bottomrule
+\end{longtable}
+
+\hypertarget{real-data-example}{%
+\section{Real data example}\label{real-data-example}}
+
+Now let's open a `real' data file. This is the \href{https://www.prb.org/2018-world-population-data-sheet-with-focus-on-changing-age-structures/}{2018 World population
+data
+sheet}
+from the \href{http://www.prb.org}{Population Reference Bureau}. It contains
+summary information on many demographic and population level
+characteristics of nations around the world in 2018.
+
+I've had this entered into a \textbf{Comma Separated Values} file by some
+poor previous research assistant of mine and it lives happily on Github
+now for all the world to see. CSV files are a good way to store data
+coming out of a spreadsheet, because R can read them without any other
+packages. R can also read Excel files, but it requires external packages
+to do so, such as \texttt{readxl}.
+
+I can read it from Github directly by using a function in the \texttt{readr}
+library, or with the base R function \texttt{read.csv()}, both accomplish the
+same task.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{prb }\OtherTok{\textless{}{-}} \FunctionTok{read.csv}\NormalTok{(}
+  \AttributeTok{file =} \StringTok{"https://raw.githubusercontent.com/coreysparks/r\_courses/master/2018\_WPDS\_Data\_Table\_FINAL.csv"}\NormalTok{, }
+  \AttributeTok{stringsAsFactors =} \ConstantTok{TRUE}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+That's handy. If the file lived on our computer in your working
+directory, I could read it in like so:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{prb }\OtherTok{\textless{}{-}} \FunctionTok{read\_csv}\NormalTok{(}\StringTok{"path/to/file/2018\_WPDS\_Data\_Table\_FINAL.csv"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+Same result.
+
+The \texttt{haven} library \citet{haven} can read files from other statistical
+packages easily, so if you have data in Stata, SAS or SPSS, you can read
+it into R using those functions, for example, the \texttt{read\_dta()} function
+reads Stata files, \texttt{read\_sav()} to read SPSS data files.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(haven)}
+\NormalTok{prb\_stata }\OtherTok{\textless{}{-}} \FunctionTok{read\_dta}\NormalTok{(}\StringTok{"path/to/file/prb2018.dta"}\NormalTok{)}
+
+\NormalTok{prb\_spss }\OtherTok{\textless{}{-}} \FunctionTok{read\_sav}\NormalTok{(}\StringTok{"path/to/file/prb\_2018.sav"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{basic-descriptive-analysis-of-data}{%
+\section{Basic Descriptive analysis of data}\label{basic-descriptive-analysis-of-data}}
+
+One of the key elements of analyzing data is the initial descriptive
+analysis of it. In subsequent chapters, I will go into more depth about
+this process, but for now, I want to illustrate some simple but
+effective commands for summarizing data.
+
+\hypertarget{dataframe-summaries}{%
+\subsection{Dataframe summaries}\label{dataframe-summaries}}
+
+The \texttt{summary()} function is very useful both in terms of producing
+numerical summaries of individual variables, but also for shows
+summaries of entire dataframes. Its output differs based on the type of
+variable you give it, for character variables it does not return any
+summary. For factor variables, it returns a frequency table, and for
+numeric variables, it returns the five number summary plus the mean.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{summary}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{region)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##        CARIBBEAN  CENTRAL AMERICA     CENTRAL ASIA        EAST ASIA 
+##               17                8                5                8 
+##   EASTERN AFRICA   EASTERN EUROPE    MIDDLE AFRICA  NORTHERN AFRICA 
+##               20               10                9                7 
+## NORTHERN AMERICA  NORTHERN EUROPE          OCEANIA    SOUTH AMERICA 
+##                2               11               17               13 
+##       SOUTH ASIA   SOUTHEAST ASIA  SOUTHERN AFRICA  SOUTHERN EUROPE 
+##                9               11                5               15 
+##   WESTERN AFRICA     WESTERN ASIA   WESTERN EUROPE 
+##               16               18                9
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{summary}\NormalTok{(}\FunctionTok{as.factor}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{continent))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##           AFRICA             ASIA           EUROPE NORTHERN AMERICA 
+##               57               51               45               27 
+##          OCEANIA    SOUTH AMERICA 
+##               17               13
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{summary}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{tfr)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##   1.000   1.600   2.300   2.709   3.750   7.200
+\end{verbatim}
+
+I find this function to be very useful when I'm initially exploring a
+data set, so I can easily see the min/max values of a variable. There
+are many alternatives to this base function, including
+\texttt{psych::describe()}, \texttt{Hmisc::describe()}, and \texttt{skimr::skim()}, all of
+which produce summaries of dataframes or variables
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{desc1  }\OtherTok{\textless{}{-}}\NormalTok{  psych}\SpecialCharTok{::}\FunctionTok{describe}\NormalTok{(prb[, }\DecValTok{1}\SpecialCharTok{:}\DecValTok{8}\NormalTok{],}
+                           \AttributeTok{fast =} \ConstantTok{FALSE}\NormalTok{)}
+\FunctionTok{print}\NormalTok{(desc1,}
+      \AttributeTok{short =} \ConstantTok{TRUE}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##      vars n mean sd median trimmed mad min max range skew kurtosis se
+##  [ reached 'max' / getOption("max.print") -- omitted 8 rows ]
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{desc2 }\OtherTok{\textless{}{-}}\NormalTok{  Hmisc}\SpecialCharTok{::}\FunctionTok{describe}\NormalTok{(prb[, }\DecValTok{1}\SpecialCharTok{:}\DecValTok{8}\NormalTok{],}
+                          \AttributeTok{tabular=} \ConstantTok{FALSE}\NormalTok{)}
+\FunctionTok{head}\NormalTok{(desc2)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## prb[, 1:8] 
+## 
+##  6  Variables      210  Observations
+## --------------------------------------------------------------------------------
+## continent 
+##        n  missing distinct 
+##      210        0        6 
+## 
+## lowest : AFRICA           ASIA             EUROPE           NORTHERN AMERICA OCEANIA         
+## highest: ASIA             EUROPE           NORTHERN AMERICA OCEANIA          SOUTH AMERICA   
+##                                                                               
+## Value                AFRICA             ASIA           EUROPE NORTHERN AMERICA
+## Frequency                57               51               45               27
+## Proportion            0.271            0.243            0.214            0.129
+##                                             
+## Value               OCEANIA    SOUTH AMERICA
+## Frequency                17               13
+## Proportion            0.081            0.062
+## --------------------------------------------------------------------------------
+## region 
+##        n  missing distinct 
+##      210        0       19 
+## 
+## lowest : CARIBBEAN       CENTRAL AMERICA CENTRAL ASIA    EAST ASIA       EASTERN AFRICA 
+## highest: SOUTHERN AFRICA SOUTHERN EUROPE WESTERN AFRICA  WESTERN ASIA    WESTERN EUROPE 
+## --------------------------------------------------------------------------------
+## country 
+##        n  missing distinct 
+##      210        0      210 
+## 
+## lowest : Afghanistan    Albania        Algeria        Andorra        Angola        
+## highest: Vietnam        Western Sahara Yemen          Zambia         Zimbabwe      
+## --------------------------------------------------------------------------------
+## pop2018 
+##        n  missing distinct     Info     Mean      Gmd      .05      .10 
+##      210        0      142        1    36.29    59.09     0.10     0.20 
+##      .25      .50      .75      .90      .95 
+##     1.30     7.00    25.43    65.21   117.95 
+## 
+## lowest :    0.0    0.1    0.2    0.3    0.4, highest:  209.4  265.2  328.0 1371.3 1393.8
+## --------------------------------------------------------------------------------
+## cbr 
+##        n  missing distinct     Info     Mean      Gmd      .05      .10 
+##      210        0       37    0.998    20.34    11.47      9.0      9.0 
+##      .25      .50      .75      .90      .95 
+##     11.0     18.5     28.0     35.1     39.0 
+## 
+## lowest :  7  8  9 10 11, highest: 40 41 43 45 48
+## --------------------------------------------------------------------------------
+## cdr 
+##        n  missing distinct     Info     Mean      Gmd      .05      .10 
+##      210        0       16    0.986    7.676    3.061        4        5 
+##      .25      .50      .75      .90      .95 
+##        6        7        9       11       13 
+## 
+## lowest :  1  2  3  4  5, highest: 12 13 14 15 16
+##                                                                             
+## Value          1     2     3     4     5     6     7     8     9    10    11
+## Frequency      1     4     5     8    25    37    29    26    25    18    14
+## Proportion 0.005 0.019 0.024 0.038 0.119 0.176 0.138 0.124 0.119 0.086 0.067
+##                                         
+## Value         12    13    14    15    16
+## Frequency      5     6     5     1     1
+## Proportion 0.024 0.029 0.024 0.005 0.005
+## --------------------------------------------------------------------------------
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{desc3 }\OtherTok{\textless{}{-}}\NormalTok{ skimr}\SpecialCharTok{::}\FunctionTok{skim}\NormalTok{(prb[, }\DecValTok{1}\SpecialCharTok{:}\DecValTok{8}\NormalTok{])}
+\NormalTok{desc3}
+\end{Highlighting}
+\end{Shaded}
+
+The \texttt{skimr::skim()} function is very good at doing summaries of both
+numeric and categorical data, while the other functions are perhaps best
+suited to numeric data.
+
+The \texttt{summary()} function, as well as the other three functions in other
+packages can be used on a single variable within a dataframe as well, or
+on a simple vector:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{summary}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{tfr)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##   1.000   1.600   2.300   2.709   3.750   7.200
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{summary}\NormalTok{(zf)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 1 2 3 4 
+## 1 1 1 1
+\end{verbatim}
+
+From this summary, we see that the mean is
+2.7085714, there is one country missing the Total
+fertility rate variable. The minimum is 1 and the maximum is 7.2
+children per woman.
+
+\hypertarget{frequency-tables}{%
+\subsection{Frequency tables}\label{frequency-tables}}
+
+A basic exploration of data, especially if your data have categorical or
+nominal variables, includes the extensive use of frequency tables. If
+you're simply looking at the number of observations in each level of a
+categorical variable, or using frequency tables to aggregate data, they
+are some of the most useful basic statistical summaries around. The
+basic function for constructing simple tables is \texttt{table()} in base R.
+More sophisticated table construction is allowed in \texttt{xtabs()}
+
+Let's have a look at some descriptive information about the data:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\#Frequency Table of \# of Countries by Continent}
+\FunctionTok{table}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{continent)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+##           AFRICA             ASIA           EUROPE NORTHERN AMERICA 
+##               57               51               45               27 
+##          OCEANIA    SOUTH AMERICA 
+##               17               13
+\end{verbatim}
+
+Frequency of TFR over 3 by continent:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{table}\NormalTok{(}\FunctionTok{I}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{tfr }\SpecialCharTok{\textgreater{}} \DecValTok{3}\NormalTok{),}
+\NormalTok{      prb}\SpecialCharTok{$}\NormalTok{continent)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##        
+##         AFRICA ASIA EUROPE NORTHERN AMERICA OCEANIA SOUTH AMERICA
+##   FALSE     11   40     45               27       7            12
+##   TRUE      46   11      0                0      10             1
+\end{verbatim}
+
+Two things to notice in the above code, first we have to use the \texttt{\$}
+operator to extract each variable from the \texttt{prb} dataframe. Second, the
+\texttt{I()} operator is used. This is honestly one of my favorite things in
+base R. \texttt{I()} is the indicator function, it evaluates to \texttt{TRUE} or
+\texttt{FALSE} depending on the argument inside of it. This also allows for
+fast construction of binary variables on the fly in any function. Here's
+another example:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{x }\OtherTok{\textless{}{-}} \FunctionTok{c}\NormalTok{(}\DecValTok{1}\NormalTok{, }\DecValTok{3}\NormalTok{, }\DecValTok{4}\NormalTok{, }\DecValTok{5}\NormalTok{, }\DecValTok{7}\NormalTok{, }\DecValTok{19}\NormalTok{)}
+\FunctionTok{I}\NormalTok{(x }\SpecialCharTok{\textgreater{}} \DecValTok{5}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] FALSE FALSE FALSE FALSE  TRUE  TRUE
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{table}\NormalTok{(}\FunctionTok{I}\NormalTok{(x }\SpecialCharTok{\textgreater{}} \DecValTok{5}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## 
+## FALSE  TRUE 
+##     4     2
+\end{verbatim}
+
+So we see how this works, I checks if \texttt{x} is greater than 5, if it is,
+\texttt{I()} returns \texttt{TRUE}. When we feed this to \texttt{table()}, we can count up
+the \texttt{TRUE} and \texttt{FALSE} responses.
+
+Later in the book, we will see how to employ the \texttt{xtabs()} function to
+quickly aggregate data from individual level to aggregate level.
+
+\hypertarget{more-basic-statistical-summaries}{%
+\subsection{More basic statistical summaries}\label{more-basic-statistical-summaries}}
+
+Now, we will cover some basic descriptive statistical analysis including
+basic measures of central tendency and variability.
+
+\hypertarget{measures-of-central-tendency}{%
+\subsection{Measures of central tendency}\label{measures-of-central-tendency}}
+
+We can use graphical methods to describe what data `look like' in a
+visual sense, but graphical methods are rarely useful for comparative
+purposes. In order to make comparisons, you need to rely on a numerical
+summary of data vs.~a graphical one.
+
+Numerical measures tell us a lot about the form of a distribution
+without resorting to graphical methods. The first kind of summary
+statistics we will see are those related to the measure of \emph{central
+tendency}. Measures of central tendency tell us about the central part
+of the distribution
+
+\hypertarget{mean-and-median}{%
+\subsection{Mean and median}\label{mean-and-median}}
+
+Here is an example from the PRB data.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{mean}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{tfr)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 2.708571
+\end{verbatim}
+
+Whoops! What happened? This means that R can't calculate the mean
+because there's a missing value, which we saw before. We can tell R to
+automatically remove missing values by:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{mean}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{tfr,}
+     \AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 2.708571
+\end{verbatim}
+
+Which works without an error. Many R functions will fail, or do listwise
+deletion of observations when \texttt{NA}s are present, so it's best to look at
+the documentation for the function you're wanting to use to see what
+it's default na action is. The \texttt{mean()} function defaults to
+\texttt{na.rm\ =\ FALSE}, which indicates that it does not remove missing values
+by default.
+
+We can also calculate the median TFR
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{median}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{tfr,}
+       \AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 2.3
+\end{verbatim}
+
+\hypertarget{measures-of-variation}{%
+\subsection{Measures of variation}\label{measures-of-variation}}
+
+One typical set of descriptive statistics that is very frequently used
+is the so-called \textbf{five number summary} and it consists of : the
+Minimum, lower quartile, median, upper quartile and maximum values. This
+is often useful if the data are not symmetric or skewed. This is what
+you get when you use the \texttt{fivenum()} function, or we can include the
+mean if we use the \texttt{summary()} function.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{fivenum}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{tfr) }
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 1.0 1.6 2.3 3.8 7.2
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{summary}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{tfr)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+##   1.000   1.600   2.300   2.709   3.750   7.200
+\end{verbatim}
+
+\hypertarget{variance}{%
+\subsubsection{Variance}\label{variance}}
+
+To calculate the variance and standard deviation of a variable:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{var}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{tfr, }
+   \AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{) }\CommentTok{\#variance}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 1.806338
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sd}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{tfr,}
+   \AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{) }\CommentTok{\#standard deviation}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 1.344001
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{sqrt}\NormalTok{(}\FunctionTok{var}\NormalTok{(prb}\SpecialCharTok{$}\NormalTok{tfr)) }\CommentTok{\#same as using sd()}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] 1.344001
+\end{verbatim}
+
+The above sections have shown some basic ways to summarize data in R,
+along with many handy functions that are pervasive in my own general
+work flow. Is this everything R will do, No.~Are these the only way to
+do things in R? Never. I'm constantly marveled at how many new functions
+I see my students using in their own work and this reminds me how much
+of the R ecosystem I have yet to explore, even after twenty-plus years
+of using it.
+
+\hypertarget{the-tidyverse}{%
+\section{The tidyverse}\label{the-tidyverse}}
+
+So far, most of the functions I have discussed have been from the base R
+ecosystem, with some specific functions from other downloadable
+packages. One of the biggest changes to R in recent years has been the
+explosion in popularity of the \textbf{tidyverse} \citet{tidyverse}. The tidyverse
+is a large collection of related packages that share a common philosophy
+of how data and programming relate to one another and work together to
+produce a more streamlined, literate way of programming with data.
+
+To get the core parts of the tidyverse, install it using
+\texttt{install.packages("tidyverse")} in your R session. This will install the
+core components of the tidyverse that can then be used throughout the
+rest of the book \footnote{If you followed the script at the beginning of this
+  chapter, the tidyverse will already be installed.}.
+
+Two of the workhorses in the tidyverse are the packages \texttt{dplyr} \citet{dplyr}
+and \texttt{ggplot2} \citet{ggplot2}. The \texttt{dplyr} package is very thoroughly described
+in the book \emph{R for Data Science} \citet{Wickham2017R}, and the \texttt{ggplot2}
+package also has a book-length description in the book \emph{ggplot2: Elegant
+Graphics for Data Analysis} \citet{ggplot2}, so I won't waste time and space
+here with complete descriptions. Instead, I will show some pragmatic
+examples of how these work in my own work flow, and also use these
+packages together to produce some descriptive data visualizations.
+
+\hypertarget{basic-dplyr}{%
+\subsection{Basic dplyr}\label{basic-dplyr}}
+
+The \texttt{dplyr} package has many functions that work together to produce
+succinct, readable and highly functional code. I often say about base R
+packages in comparison to things like SAS, that I can do something in R
+in about 10 lines of code compared to 50 in SAS. Using dplyr, you can do
+even more, faster.
+
+The package consists of core ``verbs'' that are used to clean, reshape,
+and summarize data. Using ``pipes'', the user can chain these verbs
+together so that you only have to name the data being used once, which
+makes for more efficient code, since you're not constantly having to
+name the dataframe. The pipes also allow for all variables within a
+dataframe to be accessed, without using the \texttt{\$} or \texttt{{[}{]}} notation
+described earlier in this chapter.
+
+Perhaps a short tour of using dplyr would be good at this point, and we
+will see it used throughout the book. In the following code, I will use
+the \texttt{prb} data from earlier, and I will do a series of tasks. First, I
+will create a new variable using the \texttt{mutate()} function, then group the
+data into groups (similar to SAS's `by' processing) , then do some
+statistical summaries of other variables using the \texttt{summarise()}
+function.
+
+Here we go:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(dplyr)}
+
+\NormalTok{prb }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{mutate}\NormalTok{(}\AttributeTok{high\_tfr =} \FunctionTok{ifelse}\NormalTok{(}\AttributeTok{test =}\NormalTok{ tfr }\SpecialCharTok{\textgreater{}} \DecValTok{3}\NormalTok{,}
+                           \AttributeTok{yes =}  \StringTok{"high"}\NormalTok{,}
+                           \AttributeTok{no =}  \StringTok{"low"}\NormalTok{) )}\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{group\_by}\NormalTok{(high\_tfr) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{summarise}\NormalTok{(}\AttributeTok{mean\_e0 =} \FunctionTok{mean}\NormalTok{(e0male, }\AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## # A tibble: 2 x 2
+##   high_tfr mean_e0
+##   <chr>      <dbl>
+## 1 high        62.8
+## 2 low         73.6
+\end{verbatim}
+
+The \texttt{prb\%\textgreater{}\%} line says, take the prb data and feed it into the next verb
+using the pipe. The next line
+\texttt{mutate(high\_tfr\ =\ ifelse(test\ =\ tfr\ \textgreater{}\ 3,yes\ =\ \ "high",\ no\ =\ \ "low")\ )\%\textgreater{}\%}
+tells R to create a new variable called \texttt{high\_tfr}, the value of the
+variable will be created based on conditional logic. If the value of the
+tfr is over 3, the value will be \texttt{"high"} and if the value of the tfr is
+less than 3, the value of the variable will be \texttt{"low"}.
+
+The \texttt{group\_by(high\_tfr)\%\textgreater{}\%} line tells R to form a ``grouped data frame'',
+basically this is how \texttt{dplyr} segments data into discrete groups, based
+off a variable, and then performs operations on those groups. This is
+the same thing as stratification of data.
+
+The final command \texttt{summarise(mean\_e0\ =\ mean(e0male,\ na.rm\ =\ TRUE))} tells R to take the mean of the \texttt{e0male} variable, in this case it will be calculated for each of the \texttt{high\_tfr} groups.
+
+Finally, we \texttt{ungroup()} the dataframe to remove the grouping, this is
+customary whenever using the \texttt{group\_by()} verb.
+
+We can also summarize multiple variables at the same time using the \texttt{across()} command. In the code below, I find the mean (specified by \texttt{.fns\ =\ mean}) for each of the four variables \texttt{e0male}, \texttt{e0female}, \texttt{gnigdp} and \texttt{imr} for each of the \texttt{high\_tfr} groups.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{prb }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{mutate}\NormalTok{(}\AttributeTok{high\_tfr =} \FunctionTok{ifelse}\NormalTok{(}\AttributeTok{test =}\NormalTok{ tfr }\SpecialCharTok{\textgreater{}} \DecValTok{3}\NormalTok{,}
+                           \AttributeTok{yes =}  \StringTok{"high"}\NormalTok{,}
+                           \AttributeTok{no =}  \StringTok{"low"}\NormalTok{) )}\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{group\_by}\NormalTok{(high\_tfr) }\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{summarise}\NormalTok{(}\AttributeTok{n =} \FunctionTok{n}\NormalTok{(),}
+            \FunctionTok{across}\NormalTok{(}\AttributeTok{.cols =} \FunctionTok{c}\NormalTok{(e0male, e0female, gnigdp, imr),}
+                   \AttributeTok{.fns =}\NormalTok{ mean,}
+                   \AttributeTok{na.rm =} \ConstantTok{TRUE}\NormalTok{))}\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{ungroup}\NormalTok{()}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## # A tibble: 2 x 6
+##   high_tfr     n e0male e0female gnigdp   imr
+##   <chr>    <int>  <dbl>    <dbl>  <dbl> <dbl>
+## 1 high        68   62.8     66.4  5329.  43.2
+## 2 low        142   73.6     78.9 27216.  11.9
+\end{verbatim}
+
+The line \texttt{summarise(n=n()\ ,\ across(.cols\ =\ c(e0male,\ e0female,\ gnigdp,\ imr),\ .fns\ =\ mean,\ na.rm\ =\ TRUE))}
+tells R to first count the number of cases in each group \texttt{n\ =\ n()}, then
+summarize multiple variables, in this case male and female life
+expectancy at birth, GDP, and the infant mortality rate, by each of the
+levels of the \texttt{high\_tfr} variable. The summary I want to do is the mean
+of each variable, being sure to remove missing values before calculating
+the mean.
+
+We see then the estimates of the four other indicators for countries
+that have TFR over 3, versus countries with a TFR under 3.
+
+This is a basic \texttt{dplyr} use, but it is far from what the package can do.
+Throughout the rest of the book, this process will be used to do
+calculations, aggregate data, present model results and produce
+graphics. This example was trying to show a simple workflow in dplyr,
+and introduce the pipe concept.
+
+Next, we will explore some basic uses of \texttt{dplyr} in conjunction with the
+\texttt{ggplot2} package.
+
+\hypertarget{basic-ggplot}{%
+\section{Basic ggplot}\label{basic-ggplot}}
+
+Let's say that we want to compare the distributions of income from the
+above examples graphically. Since the \texttt{ggplot2} library is part of the
+tidyverse, it integrates directly with dplyr and we can do plots within
+pipes too.
+
+In generally, \texttt{ggplot()} has a few core statements.
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi})}
+\tightlist
+\item
+  \texttt{ggplot()} statement - This tells R the data and the basic aesthetic
+  that will be plotted, think x and y axis of a graph. The aesthetic
+  is defined using the \texttt{aes()} function. This is where you pass values
+  to be plotted to the plot device.
+\item
+  Define the geometries you want to use to plot your data, there are
+  many types of plots you can do, some are more appropriate for
+  certain types of data
+\item
+  Plot annotations - Titles, labels etc. This allows you to customize
+  the plot with more information to make it more easily
+  understandable.
+\end{enumerate}
+
+Now I will illustrate some basic ggplot examples, and I'm going to use
+the PRB data that I have been using for other examples. In order to
+better illustrate the code, I will walk through a \emph{very} minimal
+example, line by line.
+
+\texttt{library(ggplot2)} Loads the ggplot package
+
+\texttt{ggplot(data\ =\ prb,\ mapping\ =\ aes(x\ =\ tfr))+} Use the ggplot function,
+on the prb dataframe. The variable we are plotting is the total
+fertility rate, \texttt{tfr}. In this case, it is the only variable we are
+using. I include a \texttt{+} at the end of the line to tell R that more
+elements of the plot are going to be added.
+
+\texttt{geom\_histogram()+} Tells R that the \texttt{geom}etry we are using is a
+histogram, again we have the \texttt{+} at the end of the line to indicate that
+we will add something else to the plot, in this case a title.
+
+\texttt{ggtitle(label\ =\ "Distribution\ of\ the\ Total\ Fertility\ Rate,\ 2018")}
+Tells R the primary title for the plot, which describes what is being
+plotted. I'm also going to add an additional annotation to the x-axis to
+indicate that it is showing the distribution of the TFR:
+
+\texttt{xlab(label\ =\ "TFR")}
+
+Now, let's see all of this together:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(ggplot2)}
+
+\FunctionTok{ggplot}\NormalTok{(}\AttributeTok{data=}\NormalTok{prb,}
+       \AttributeTok{mapping=}\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ tfr))}\SpecialCharTok{+}
+  \FunctionTok{geom\_histogram}\NormalTok{()}\SpecialCharTok{+}
+  \FunctionTok{ggtitle}\NormalTok{(}\AttributeTok{label =} \StringTok{"Distribution of the Total Fertility Rate, 2018"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{xlab}\NormalTok{(}\AttributeTok{label =} \StringTok{"TFR"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{_main_files/figure-latex/prbhist-1.pdf}
+
+The above example named the data frame explicitly in the \texttt{ggplot()}
+call, but we can also use \texttt{dplyr} to pipe data into the plot:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{prb}\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{ggplot}\NormalTok{(}\AttributeTok{mapping=}\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ tfr))}\SpecialCharTok{+}
+  \FunctionTok{geom\_histogram}\NormalTok{()}\SpecialCharTok{+}
+  \FunctionTok{ggtitle}\NormalTok{(}\AttributeTok{label =} \StringTok{"Distribution of the Total Fertility Rate, 2018"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{xlab}\NormalTok{(}\AttributeTok{label =} \StringTok{"TFR"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
+\end{verbatim}
+
+\includegraphics{_main_files/figure-latex/unnamed-chunk-69-1.pdf}
+
+We can likewise incorporate a \texttt{dplyr} workflow directly into our
+plotting, using the example from before, we will create histograms for
+the high and low fertility groups using the \texttt{facet\_wrap()} function.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{prb}\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{mutate}\NormalTok{(}\AttributeTok{high\_tfr =} \FunctionTok{ifelse}\NormalTok{(}\AttributeTok{test =}\NormalTok{ tfr }\SpecialCharTok{\textgreater{}} \DecValTok{3}\NormalTok{,}
+                           \AttributeTok{yes =} \StringTok{"high"}\NormalTok{,}
+                           \AttributeTok{no =} \StringTok{"low"}\NormalTok{) )}\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{group\_by}\NormalTok{(high\_tfr)}\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{ggplot}\NormalTok{(}\AttributeTok{mapping=}\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ imr))}\SpecialCharTok{+}
+  \FunctionTok{geom\_histogram}\NormalTok{(}\FunctionTok{aes}\NormalTok{( }\AttributeTok{fill =}\NormalTok{ high\_tfr))}\SpecialCharTok{+}
+  \FunctionTok{facet\_wrap}\NormalTok{( }\SpecialCharTok{\textasciitilde{}}\NormalTok{ high\_tfr)}\SpecialCharTok{+}
+  \FunctionTok{ggtitle}\NormalTok{(}\AttributeTok{label =} \StringTok{"Distribution of the Infant Mortality Rate, 2018"}\NormalTok{,}
+          \AttributeTok{subtitle =} \StringTok{"Low and High Fertility Countries"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{xlab}\NormalTok{(}\AttributeTok{label =} \StringTok{"Infant Mortality Rate"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
+\end{verbatim}
+
+\begin{verbatim}
+## Warning: Removed 1 rows containing non-finite values (stat_bin).
+\end{verbatim}
+
+\includegraphics{_main_files/figure-latex/unnamed-chunk-70-1.pdf}
+
+You also notice that I used the \texttt{aes(fill\ =\ high\_tfr)} to tell R to
+color the histogram bars according to the variable \texttt{high\_tfr}. The
+\texttt{aes()} function allows you to modify colors, line types, and fills
+based of values of a variable.
+
+Another way to display the distribution of a variable is to use
+\texttt{geom\_density()} which calculates the kernel density of a variable.
+Again, I use a variable, this time the continent a country is on, to
+color the lines for the plot.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{prb}\SpecialCharTok{\%\textgreater{}\%}
+\FunctionTok{ggplot}\NormalTok{(}\AttributeTok{mapping =} \FunctionTok{aes}\NormalTok{(tfr,}
+                     \AttributeTok{colour =}\NormalTok{ continent,}
+                     \AttributeTok{stat =}\NormalTok{ ..density..))}\SpecialCharTok{+}
+  \FunctionTok{geom\_density}\NormalTok{()}\SpecialCharTok{+}
+  \FunctionTok{ggtitle}\NormalTok{(}\AttributeTok{label =} \StringTok{"Distribution of the Total Fertility Rate by Continent"}\NormalTok{,}
+          \AttributeTok{subtitle =} \StringTok{"2018 Estimates"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{xlab}\NormalTok{(}\AttributeTok{label =} \StringTok{"TFR"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{_main_files/figure-latex/unnamed-chunk-71-1.pdf}
+
+\hypertarget{stem-and-leaf-plotsbox-and-whisker-plots}{%
+\subsection{Stem and leaf plots/Box and Whisker plots}\label{stem-and-leaf-plotsbox-and-whisker-plots}}
+
+Another visualization method is the stem and leaf plot, or box and
+whisker plot. This is useful when you have a continuous variable you
+want to display the distribution of across levels of a categorical
+variable. This is basically a graphical display of Tukey's 5 number
+summary of data.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{prb}\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{ggplot}\NormalTok{( }\AttributeTok{mapping =} \FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ continent, }\AttributeTok{y =}\NormalTok{ tfr))}\SpecialCharTok{+}
+  \FunctionTok{geom\_boxplot}\NormalTok{()}\SpecialCharTok{+}
+  \FunctionTok{ggtitle}\NormalTok{(}\AttributeTok{label =} \StringTok{"Distribution of the Total Fertility Rate by Continent"}\NormalTok{,}
+          \AttributeTok{subtitle =} \StringTok{"2018 Estimates"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{_main_files/figure-latex/unnamed-chunk-72-1.pdf}
+
+You can flip the axes, by adding \texttt{coord\_flip()}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{prb}\SpecialCharTok{\%\textgreater{}\%}
+\FunctionTok{ggplot}\NormalTok{( }\AttributeTok{mapping =} \FunctionTok{aes}\NormalTok{( }\AttributeTok{x =}\NormalTok{ continent,}
+                       \AttributeTok{y =}\NormalTok{ tfr))}\SpecialCharTok{+}
+  \FunctionTok{geom\_boxplot}\NormalTok{()}\SpecialCharTok{+}
+  \FunctionTok{ggtitle}\NormalTok{(}\AttributeTok{label =} \StringTok{"Distribution of the Total Fertility Rate by Continent"}\NormalTok{,}
+          \AttributeTok{subtitle =} \StringTok{"2018 Estimates"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{coord\_flip}\NormalTok{()}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{_main_files/figure-latex/unnamed-chunk-73-1.pdf}
+
+You can also color the boxes by a variable, Here, I will make a new
+variable that is the combination of the continent variable with the
+region variable, using the \texttt{paste()} function. It's useful for combining
+values of two strings.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{prb}\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{mutate}\NormalTok{(}\AttributeTok{newname =} \FunctionTok{paste}\NormalTok{(continent, region, }\AttributeTok{sep =} \StringTok{"{-}"}\NormalTok{))}\SpecialCharTok{\%\textgreater{}\%}
+  \FunctionTok{ggplot}\NormalTok{(}\FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ newname,}
+             \AttributeTok{y =}\NormalTok{ tfr,}
+             \AttributeTok{fill =}\NormalTok{ continent))}\SpecialCharTok{+}
+  \FunctionTok{geom\_boxplot}\NormalTok{()}\SpecialCharTok{+}
+  \FunctionTok{coord\_flip}\NormalTok{()}\SpecialCharTok{+}
+  \FunctionTok{ggtitle}\NormalTok{(}\AttributeTok{label =} \StringTok{"Distribution of the Total Fertility Rate by Continent"}\NormalTok{,}
+          \AttributeTok{subtitle =} \StringTok{"2018 Estimates"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{_main_files/figure-latex/unnamed-chunk-74-1.pdf}
+
+\hypertarget{x-y-scatter-plots}{%
+\subsection{X-Y Scatter plots}\label{x-y-scatter-plots}}
+
+These are useful for finding relationships among two or more continuous
+variables. \texttt{ggplot()} can really make these pretty. The \texttt{geom\_point()}
+geometry adds points to the plot.
+
+Here are a few riffs using the PRB data:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{prb}\SpecialCharTok{\%\textgreater{}\%}
+\FunctionTok{ggplot}\NormalTok{(}\AttributeTok{mapping=} \FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ tfr,}
+                    \AttributeTok{y =}\NormalTok{ imr))}\SpecialCharTok{+}
+  \FunctionTok{geom\_point}\NormalTok{()}\SpecialCharTok{+}
+  \FunctionTok{ggtitle}\NormalTok{(}\AttributeTok{label =} \StringTok{"Relationship between Total Fertility and Infant Mortality"}\NormalTok{,}
+          \AttributeTok{subtitle =} \StringTok{"2018 Estimates"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{xlab}\NormalTok{(}\AttributeTok{label =} \StringTok{"TFR"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{ylab}\NormalTok{(}\AttributeTok{label =} \StringTok{"IMR"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## Warning: Removed 1 rows containing missing values (geom_point).
+\end{verbatim}
+
+\includegraphics{_main_files/figure-latex/unnamed-chunk-75-1.pdf}
+
+R also makes it easy to overlay linear and spline smoothers for the data
+(more on splines later).
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{prb}\SpecialCharTok{\%\textgreater{}\%}
+\FunctionTok{ggplot}\NormalTok{(}\AttributeTok{mapping =} \FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ tfr,}
+                    \AttributeTok{y =}\NormalTok{ imr))}\SpecialCharTok{+}
+  \FunctionTok{geom\_point}\NormalTok{()}\SpecialCharTok{+}
+  \FunctionTok{geom\_smooth}\NormalTok{(}\AttributeTok{method =} \StringTok{"lm"}\NormalTok{,}
+              \AttributeTok{color =} \StringTok{"black"}\NormalTok{,}
+              \AttributeTok{se =}\NormalTok{ F)}\SpecialCharTok{+} \CommentTok{\#linear regression fit}
+  \FunctionTok{geom\_smooth}\NormalTok{(}\AttributeTok{color =} \StringTok{"blue"}\NormalTok{,}
+              \AttributeTok{method =} \StringTok{"loess"}\NormalTok{,}
+              \AttributeTok{se =} \ConstantTok{FALSE}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{ggtitle}\NormalTok{(}\AttributeTok{label =} \StringTok{"Relationship between Total Fertility and Infant Mortality"}\NormalTok{,}
+          \AttributeTok{subtitle =} \StringTok{"2018 Estimates"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{xlab}\NormalTok{(}\AttributeTok{label =} \StringTok{"TFR"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{ylab}\NormalTok{(}\AttributeTok{label =} \StringTok{"IMR"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{_main_files/figure-latex/unnamed-chunk-76-1.pdf}
+
+Now we color the points by continent
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{prb}\SpecialCharTok{\%\textgreater{}\%}
+\FunctionTok{ggplot}\NormalTok{(}\AttributeTok{mapping =} \FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ tfr, }
+                     \AttributeTok{y =}\NormalTok{ imr,}
+                     \AttributeTok{color =}\NormalTok{continent))}\SpecialCharTok{+}
+  \FunctionTok{geom\_point}\NormalTok{()}\SpecialCharTok{+}
+  \FunctionTok{geom\_smooth}\NormalTok{(}\AttributeTok{method =} \StringTok{"lm"}\NormalTok{,}
+              \AttributeTok{se =} \ConstantTok{FALSE}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{ggtitle}\NormalTok{(}\AttributeTok{label =} \StringTok{"Relationship between Total Fertility and Infant Mortality"}\NormalTok{,}
+          \AttributeTok{subtitle =} \StringTok{"2018 Estimates"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{xlab}\NormalTok{(}\AttributeTok{label =} \StringTok{"TFR"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{ylab}\NormalTok{(}\AttributeTok{label =} \StringTok{"IMR"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{_main_files/figure-latex/unnamed-chunk-77-1.pdf}
+
+\hypertarget{facet-plots}{%
+\subsection{Facet plots}\label{facet-plots}}
+
+Facet plots are nice, they allow you to create a plot separately based
+on a grouping variable. This allows you to visualize if the relationship
+is constant across those groups. Here, I repeat the plot above, but I
+facet on the continent, and include the regression line for each
+continent.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{prb}\SpecialCharTok{\%\textgreater{}\%}
+\FunctionTok{ggplot}\NormalTok{(}\AttributeTok{mapping=} \FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ tfr,}
+                    \AttributeTok{y =}\NormalTok{ imr,}
+                    \AttributeTok{color =}\NormalTok{ continent))}\SpecialCharTok{+}
+  \FunctionTok{geom\_point}\NormalTok{()}\SpecialCharTok{+}
+  \FunctionTok{geom\_smooth}\NormalTok{(}\AttributeTok{method =} \StringTok{"lm"}\NormalTok{,}
+              \AttributeTok{se =} \ConstantTok{FALSE}\NormalTok{,}
+              \AttributeTok{color =} \StringTok{"black"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{facet\_wrap}\NormalTok{( }\SpecialCharTok{\textasciitilde{}}\NormalTok{ continent)}\SpecialCharTok{+}
+  \FunctionTok{ggtitle}\NormalTok{(}\AttributeTok{label =} \StringTok{"Relationship between Total Fertility and Infant Mortality"}\NormalTok{,}
+          \AttributeTok{subtitle =} \StringTok{"2018 Estimates"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{xlab}\NormalTok{(}\AttributeTok{label =} \StringTok{"TFR"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{ylab}\NormalTok{(}\AttributeTok{label =} \StringTok{"IMR"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{_main_files/figure-latex/unnamed-chunk-78-1.pdf}
+
+Another example, this time of a bad linear plot! \texttt{ggplot} makes it easy
+to examine if a relationship is linear or curvilinear, at least
+visually.
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{ggplot}\NormalTok{(}\AttributeTok{data =}\NormalTok{ prb,}\AttributeTok{mapping =} \FunctionTok{aes}\NormalTok{(}\AttributeTok{x =}\NormalTok{ tfr, }\AttributeTok{y =}\NormalTok{ pctlt15\_2018))}\SpecialCharTok{+}
+  \FunctionTok{geom\_point}\NormalTok{()}\SpecialCharTok{+}
+  \FunctionTok{geom\_smooth}\NormalTok{( }\AttributeTok{method =} \StringTok{"lm"}\NormalTok{,}
+               \AttributeTok{se =} \ConstantTok{FALSE}\NormalTok{,}
+               \AttributeTok{color =} \StringTok{"black"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{geom\_smooth}\NormalTok{( }\AttributeTok{method =} \StringTok{"loess"}\NormalTok{,}
+               \AttributeTok{se =} \ConstantTok{FALSE}\NormalTok{,}
+               \AttributeTok{color =} \StringTok{"blue"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{ggtitle}\NormalTok{(}\AttributeTok{label =} \StringTok{"Relationship between Total Fertility and Percent under age 15"}\NormalTok{,}
+          \AttributeTok{subtitle =} \StringTok{"2018 Estimates{-} Linear \& Loess fit"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{xlab}\NormalTok{(}\AttributeTok{label =} \StringTok{"Percent under age 15"}\NormalTok{)}\SpecialCharTok{+}
+  \FunctionTok{ylab}\NormalTok{(}\AttributeTok{label =} \StringTok{"IMR"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## `geom_smooth()` using formula 'y ~ x'
+## `geom_smooth()` using formula 'y ~ x'
+\end{verbatim}
+
+\includegraphics{_main_files/figure-latex/unnamed-chunk-79-1.pdf}
+
+\hypertarget{chapter-summary}{%
+\section{Chapter summary}\label{chapter-summary}}
+
+In this chapter, I have introduced R and Rstudio and some basic uses of
+the software for accessing data and estimating some summary statistics.
+The R ecosystem is large and complex, and the goal of this book is to
+show you, the user, how to use R for analyzing data from demographic
+data sources. In the chapters that follow, I will show how to use R
+within two large universes of data, the macro and the micro. The \emph{macro}
+level sections will focus on using R on data that come primarily from
+places - nations, regions, administrative areas. The \emph{micro} level
+sections will focus on analyzing complex survey data on individual
+responses to demographic surveys. The final section will discuss
+approaches that merge these two levels into a multi-level framework and
+describe how such models are estimated and applied.
+
+\hypertarget{references}{%
+\section{References}\label{references}}
+
+  \bibliography{book.bib}
+
+\end{document}
