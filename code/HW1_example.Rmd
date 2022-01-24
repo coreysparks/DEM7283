@@ -1,0 +1,29 @@
+---
+title: "Homework 1 example"
+author: "Corey Sparks PhD"
+date: "January 24, 2022"
+output: html_document
+---
+
+
+# Corey Sparks
+
+## corey.sparks@utsa.edu
+
+Use a screen capture tool to take a capture of you R session showing version 4.1.2
+
+Homework 0.1
+1) Make sure Rstudio is version 2021.09.2-382.exe, if not, update it
+2) Make sure R is version 4.1.2, if not, update it
+3) Run the start up script here:
+https://github.com/coreysparks/Rcode/blob/master/install_first_7283.R
+
+In Rstudio type:
+
+source("https://raw.githubusercontent.com/coreysparks/Rcode/master/install_first_7283.R")
+
+4) run update.packages(ask=F) in Rstudio to make sure everything is up to date
+
+5) Take a screen shot of your Rstudio window, showing the version of R at 4.1.2, here is mine:
+
+![this is my R](C:/Users/ozd504/dem7903/hw1r.png)
