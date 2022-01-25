@@ -25,6 +25,7 @@ source("https://raw.githubusercontent.com/coreysparks/Rcode/master/install_first
 4) run update.packages(ask=F) in Rstudio to make sure everything is up to date
 
 5) Take a screen shot of your Rstudio window, showing the version of R at 4.1.2, here is mine:
-![](C:/Users/ozd504/Github/DEM7283/images/Screenshot 2022-01-24 125304.png)
+
+![here is my hw](C:/Users/ozd504/Documents/hw1.png)
 
 
