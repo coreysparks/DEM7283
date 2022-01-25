@@ -85,6 +85,8 @@ library(ggplot2)
 library(pander)
 library(dplyr)
 library(knitr)
+library(factoextra)
+library(FactoMineR)
 ```
 
 ```{r}
@@ -166,17 +168,50 @@ We use the `prcomp()` function to do the pca, we specify our variables we want i
 ```{r}
 brfss_17b<-brfss_17%>%
   filter(complete.cases(mmsawt, ststr, agec, race_eth,educ,healthdays, healthmdays, smoke, bmi, badhealth,ins, checkup, hbp, hchol, heart, ast))%>%
-  select(mmsawt, ststr, agec, race_eth,educ, healthdays, healthmdays, smoke, bmi, badhealth,ins, checkup, hbp, hchol, heart, ast)%>%
-  mutate_at(vars(healthdays, healthmdays, smoke, bmi, badhealth,ins, checkup, hbp, hchol, heart, ast), scale)
+  select(mmsawt, ststr, agec, race_eth,educ, healthdays, healthmdays, smoke, bmi, badhealth,ins, checkup, hbp, hchol, heart, ast)#%>%
+#  mutate_at(vars(healthdays, healthmdays, smoke, bmi, badhealth,ins, checkup, hbp, hchol, heart, ast), scale)
 
 ```
 
 
+## Maybe do MCA here
+
+```{r, fig.width=10, fig.height=12}
+options(ggrepel.max.overlaps = Inf)
+X<- data.frame(lapply(brfss_17b[1:1000, c(3,4,5,8,10,11,12,13,14,15,16)], as.factor))
+
+mc1 <- MCA(X=X , ncp = 2, graph=T)
+
+get_eigenvalue(mc1)
+var<-get_mca_var(mc1)
+fviz_screeplot(mc1, addlables=T)
+fviz_mca_biplot(mc1, repel = T, ggtheme=theme_minimal(), max.overlaps = 5)
+
+fviz_mca_var(mc1, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, # Avoid text overlapping
+             ggtheme = theme_minimal())
+
+fviz_mca_var(mc1, col.var = "contrib",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), 
+             repel = TRUE, # avoid text overlapping (slow)
+             ggtheme = theme_minimal()
+             )
+
+fviz_mca_ind(mc1, col.ind = "cos2", 
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE, # Avoid text overlapping (slow if many points)
+             ggtheme = theme_minimal())
+
+res.desc <- dimdesc(mc1, axes = c(1,2))
+res.desc[[2]]
+```
+
+
+
 ```{r}
 
-brfss.pc<-princomp(~healthdays+healthmdays+smoke+bmi+badhealth+hbp+ hchol+ heart+ ast,
-                   data=brfss_17b,
-                   scores=T)
+brfss.pc<-PCA(brfss_17b[1:10000, c(8,10,11,12,13,14,15,16)],scale.unit = T, graph = F)
 
 #Screeplot
 screeplot(brfss.pc,
