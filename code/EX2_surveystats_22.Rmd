@@ -223,6 +223,10 @@ library(survey)
 library(questionr)
 library(dplyr)
 library(forcats)
+library(tidyverse)
+library(gtsummary)
+set_gtsummary_theme(theme_gtsummary_compact(set_theme = TRUE))
+
 ```
 
 ```{r}
@@ -391,9 +395,14 @@ options here:
 ```{r}
 library(srvyr)
 options(survey.lonely.psu = "adjust")
+brfss20$crap <- rnorm(193900, 1, 1)
 
-des<-svydesign(ids=~1, strata=~ststr, weights=~mmsawt, data = brfss20 )
+
+des<-svydesign(ids = ~1,  strata=~ststr, weights=~mmsawt, data = brfss20 )
 des
+
+
+
 ```
 
 
@@ -434,11 +443,12 @@ cat<-svyby(formula = ~badhealth,
            FUN=svymean)
 
 svychisq(~badhealth+educ, design = des)
+```
 
+```{r}
 knitr::kable(cat,
       caption = "Survey Estimates of Poor SRH by Sex",
-      align = 'c',  
-      format = "html")
+      align = 'c')
 
 ```
 
@@ -457,12 +467,13 @@ sv.table<-svyby(formula = ~badhealth,
                 design = des,
                 FUN = svymean,
                 na.rm=T)
+```
 
+```{r}
 
 knitr::kable(sv.table,
       caption = "Survey Estimates of Poor SRH by Education",
-      align = 'c',  
-      format = "html")
+      align = 'c')
 ```
 
 ```{r}
@@ -481,8 +492,7 @@ sv.table<-svyby(formula = ~factor(badhealth),
 ```{r}
 knitr::kable(sv.table,
       caption = "Estimates of Poor SRH by Education - No survey design",
-      align = 'c',  
-      format = "html")
+      align = 'c')
 
 ```
 
@@ -491,6 +501,39 @@ weighted table, but the standard errors have now been adjusted for
 survey design as well, so they are also correct. You also see they are
 much larger than the ones we computed above, which assumed random
 sampling.
+
+```{r}
+#Make a survey design that is random sampling - no survey information
+des<-svydesign(ids =~1, strata = ~ststr,  weights = ~mmsawt, data = brfss20)
+
+sv.table2<-svyby(formula = ~factor(badhealth),
+                by = ~educ,
+                design = des,
+                FUN = svymean,
+                na.rm=T)
+```
+
+
+
+```{r}
+knitr::kable(sv.table2,
+      caption = "Estimates of Poor SRH by Education - With survey design",
+      align = 'c',  
+      format = "html")
+
+```
+
+```{r}
+sv1 <- data.frame(param = sv.table[, 1],
+                  se = c(sv.table[, 5], sv.table2[,5]),
+                  group = c(rep("nodes",5), rep("des", 5)))
+
+sv1%>%
+  ggplot(aes(x=param,y=se, fill=group))+
+  geom_col(position = "dodge")
+```
+
+
 
 ### Another way
 
@@ -537,9 +580,10 @@ library(srvyr)
 brfss20%>%
   as_survey_design(strata = ststr,
                    weights = mmsawt)%>%
-  group_by(educ)%>%
+  group_by(educ, male)%>%
   summarise(mean_bh = survey_mean(badhealth, na.rm=T))%>%
-  ungroup()
+  ungroup()%>%
+  ggplot(aes(x=educ, y = mean_bh, fill=male))+geom_col(position="dodge")
 
 
 ```
@@ -552,13 +596,18 @@ The package `gtsummary` package provides a wonderful way to summarise and create
 library(gtsummary)
 
 brfss20%>%
+  mutate(bh = as.factor(badhealth))%>%
   as_survey_design( strata =ststr,
                     weights = mmsawt)%>%
-  select(badhealth, educ)%>%
+  select(bh, educ)%>%
   tbl_svysummary(by = educ, 
-              label = list(badhealth = "Fair/Poor Health"))%>%
+              label = list(badhealth = "Fair/Poor Health"),
+              statistic = list(all_categorical() ~ "{n} ({p}%)"))%>%
   add_p()%>%
-  add_n()
+  #add_n()%>%
+  modify_header(all_stat_cols() ~ "**{level}**")%>%
+   bold_labels() %>%
+  modify_spanning_header(all_stat_cols() ~ "**Educational Attainment**")
 ```
 Which produces a nice table showing the mean of the outcome, as well as a survey-corrected test of independence. 
 
@@ -665,8 +714,7 @@ citytab<-svyby(~obese,
                FUN = svymean,
                na.rm=T )
 
-knitr::kable(citytab,
-             type="html", 
+knitr::kable(citytab[ 1:10, ],
              digits=3,
              caption = "Obesity Estimats for TX MSAs")
 
