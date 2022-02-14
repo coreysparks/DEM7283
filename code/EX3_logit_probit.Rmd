@@ -152,7 +152,7 @@ stargazer(fit1, fit2, fit3,
           style="demography", type="html",
           column.labels = c("OLS", "Weights Only", "Survey Design"),
           title = "Regression models for BMI using survey data - BRFSS 2016", 
-          covariate.labels=c("PrimarySchool", "SomeHS", "SomeColl", "CollGrad", "Age 24-39","Age 39-59" ,"Age 59-79", "Age 80+"), 
+          covariate.labels=c( "SomeHS","hsGRAD", "SomeColl", "CollGrad", "Age 24-39","Age 39-59" ,"Age 59-79", "Age 80+"), 
           keep.stat="n",
           model.names=F, 
           align=T,
@@ -564,7 +564,7 @@ svychisq(~badhealth+educ,
 ### plot of estimates with standard errors
 
 ```{r}
-cat%>%
+cat%>%`
   ggplot()+
   geom_point(aes(x=educ,y=badhealth))+
   geom_errorbar(aes(x=educ, ymin = badhealth-1.96*se, 
@@ -601,6 +601,7 @@ dog%>%
         caption = "Source: CDC BRFSS - SMART Data, 2017 \n Calculations by Corey S. Sparks, Ph.D.",
        x = "Race/Ethnicity",
        y = "%  Fair/Poor Health")+
+  ylim(0, .25)+
   theme_minimal()
 
 ```
@@ -644,6 +645,10 @@ catdog%>%
 To fit the model to our survey data, we use `svyglm()`, and specify our model equation and name of our survey design object. Since we are using a logistic regression model, specify `family = binomial`. The default link function is the logit:
 
 ```{r}
+
+fit.lm1 <- glm(badhealth ~ race_eth + educ + ageg,
+                  data=sub,
+                  family = binomial)
 #Logit model
 fit.logit<-svyglm(badhealth ~ race_eth + educ + ageg,
                   design = des,
@@ -667,7 +672,7 @@ A sligtly more digestible form can be obtained from the `sjPlot` library. In thi
 ```{r}
 library(sjPlot)
 plot_model(fit.logit,
-           axis.lim = c(.1, 10), #you may need to modify these
+           #axis.lim = c(.1, 10), #you may need to modify these
            title = "Odds ratios for Poor Self Rated Health")
 ```
 
@@ -722,7 +727,7 @@ library(emmeans)
 rg<-ref_grid(fit.logit)
 
 marg_logit<-emmeans(object = rg,
-              specs = c( "race_eth",  "educ", "ageg"),
+              specs = c( "educ"),
               type="response" )
 
 knitr::kable(marg_logit,  digits = 4)
