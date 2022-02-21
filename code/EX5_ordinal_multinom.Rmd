@@ -14,7 +14,7 @@ output:
 
 This example will cover the use of R functions for fitting Ordinal and Multinomial logit models to complex survey data.
 
-For this example I am using 2017 CDC Behavioral Risk Factor Surveillance System (BRFSS) SMART MSA data. [Link](https://www.cdc.gov/brfss/smart/smart_2017.html)
+For this example I am using 2020 CDC Behavioral Risk Factor Surveillance System (BRFSS) SMART MSA data. [Link](https://www.cdc.gov/brfss/smart/smart_2020.html)
 
 
 ```{r "setup", include=FALSE}
@@ -29,70 +29,64 @@ library(VGAM)
 library(stargazer)
 library(survey)
 library(ggplot2)
+library(svyVGAM)
 ```
 
 ```{r, echo=FALSE}
-
-load(url("https://github.com/coreysparks/data/blob/master/brfss_2017.Rdata?raw=true"))
-
-
-#The names in the data are very ugly, so I make them less ugly
-nams<-names(brfss_17)
-head(nams, n=10)
-
-#we see some names are lower case, some are upper and some have a little _ in the first position. This is a nightmare.
-newnames<-tolower(gsub(pattern = "_",replacement =  "",x =  nams))
-names(brfss_17)<-newnames
+brfss20<- readRDS(url("https://github.com/coreysparks/DEM7283/blob/master/data/brfss20sm.rds?raw=true"))
+### Fix variable names
+names(brfss20) <- tolower(gsub(pattern = "_",replacement =  "",x =  names(brfss20)))
 
 #Poor or fair self rated health
-brfss_17$badhealth<-Recode(brfss_17$genhlth, recodes="4:5=1; 1:3=0; else=NA")
+brfss20$badhealth<-Recode(brfss20$genhlth, recodes="4:5=1; 1:3=0; else=NA")
 
 #sex
-brfss_17$male<-as.factor(ifelse(brfss_17$sex==1, "Male", "Female"))
+brfss20$male<-as.factor(ifelse(brfss20$sex==1, "Male", "Female"))
 
 #Age cut into intervals
-brfss_17$agec<-cut(brfss_17$age80, breaks=c(0,24,39,59,79,99))
+brfss20$agec<-cut(brfss20$age80, breaks=c(0,24,39,59,79,99))
 
 #race/ethnicity
-brfss_17$black<-Recode(brfss_17$racegr3, recodes="2=1; 9=NA; else=0")
-brfss_17$white<-Recode(brfss_17$racegr3, recodes="1=1; 9=NA; else=0")
-brfss_17$other<-Recode(brfss_17$racegr3, recodes="3:4=1; 9=NA; else=0")
-brfss_17$hispanic<-Recode(brfss_17$racegr3, recodes="5=1; 9=NA; else=0")
+brfss20$black<-Recode(brfss20$racegr3, recodes="2=1; 9=NA; else=0")
+brfss20$white<-Recode(brfss20$racegr3, recodes="1=1; 9=NA; else=0")
+brfss20$other<-Recode(brfss20$racegr3, recodes="3:4=1; 9=NA; else=0")
+brfss20$hispanic<-Recode(brfss20$racegr3, recodes="5=1; 9=NA; else=0")
 
-brfss_17$race_eth<-Recode(brfss_17$racegr3, recodes="1='nhwhite'; 2='nh black'; 3='nh other';4='nh multirace'; 5='hispanic'; else=NA", as.factor = T)
+brfss20$race_eth<-Recode(brfss20$racegr3, recodes="1='nhwhite'; 2='nh black'; 3='nh other';4='nh multirace'; 5='hispanic'; else=NA", as.factor = T)
 
 #insurance
-brfss_17$ins<-Recode(brfss_17$hlthpln1, recodes ="7:9=NA; 1=1;2=0")
+brfss20$ins<-Recode(brfss20$hlthpln1, recodes ="7:9=NA; 1=1;2=0")
 
 #income grouping
-brfss_17$inc<-ifelse(brfss_17$incomg==9, NA, brfss_17$incomg)
+brfss20$inc<-ifelse(brfss20$incomg==9, NA, brfss20$incomg)
 
 #education level
-brfss_17$educ<-Recode(brfss_17$educa, recodes="1:2='0Prim'; 3='1somehs'; 4='2hsgrad'; 5='3somecol'; 6='4colgrad';9=NA", as.factor=T)
-brfss_17$educ<-relevel(brfss_17$educ, ref='2hsgrad')
+brfss20$educ<-Recode(brfss20$educa, recodes="1:2='0Prim'; 3='1somehs'; 4='2hsgrad'; 5='3somecol'; 6='4colgrad';9=NA", as.factor=T)
+brfss20$educ<-relevel(brfss20$educ, ref='2hsgrad')
 
 #employment
-brfss_17$employ<-Recode(brfss_17$employ1, recodes="1:2='Employed'; 2:6='nilf'; 7='retired'; 8='unable'; else=NA", as.factor=T)
-brfss_17$employ<-relevel(brfss_17$employ, ref='Employed')
+brfss20$employ<-Recode(brfss20$employ1, recodes="1:2='Employed'; 2:6='nilf'; 7='retired'; 8='unable'; else=NA", as.factor=T)
+brfss20$employ<-relevel(brfss20$employ, ref='Employed')
 
 #marital status
-brfss_17$marst<-Recode(brfss_17$marital, recodes="1='married'; 2='divorced'; 3='widowed'; 4='separated'; 5='nm';6='cohab'; else=NA", as.factor=T)
-brfss_17$marst<-relevel(brfss_17$marst, ref='married')
+brfss20$marst<-Recode(brfss20$marital, recodes="1='married'; 2='divorced'; 3='widowed'; 4='separated'; 5='nm';6='cohab'; else=NA", as.factor=T)
+brfss20$marst<-relevel(brfss20$marst, ref='married')
 
 #Age cut into intervals
-brfss_17$agec<-cut(brfss_17$age80, breaks=c(0,24,39,59,79,99))
+brfss20$agec<-cut(brfss20$age80, breaks=c(0,24,39,59,79,99))
 
-#BMI, in the brfss_17a the bmi variable has 2 implied decimal places, so we must divide by 100 to get real bmi's
+#BMI, in the brfss20a the bmi variable has 2 implied decimal places, so we must divide by 100 to get real bmi's
 
-brfss_17$bmi<-brfss_17$bmi5/100
-brfss_17$obese<-ifelse(brfss_17$bmi>=30, 1, 0)
+brfss20$bmi<-brfss20$bmi5/100
+brfss20$obese<-ifelse(brfss20$bmi>=30, 1, 0)
 #smoking currently
-brfss_17$smoke<-Recode(brfss_17$smoker3, recodes="1:2='Current'; 3='Former';4='NeverSmoked'; else=NA", as.factor=T)
-brfss_17$smoke<-relevel(brfss_17$smoke, ref = "NeverSmoked")
+brfss20$smoke<-Recode(brfss20$smoker3, recodes="1:2='Current'; 3='Former';4='NeverSmoked'; else=NA", as.factor=T)
+brfss20$smoke<-relevel(brfss20$smoke, ref = "NeverSmoked")
 
 ```
 
 # Other logit model specifications
+
 In the basic logistic regression model, we assumed a dichotomous outcome 
   * y = 0 or 1
 This is a very flexible type of model since we can write any number of outcomes as a dichotomous variable.
@@ -106,6 +100,7 @@ Although the logistic regression model is very flexible, we may often run into o
 These types of outcomes require other kinds of regression models to analyze them.
 
 ## Logit model for ordinal outcomes
+
 Suppose we have an outcome with *J* ordered outcomes, and each person, i, has a response: $Y_{i}$, and we can write the probability of a person having response level *J* as:
 $Pr(Y_ij = j)$ for J= 1 ... J
 
@@ -172,18 +167,22 @@ For example:
 
 ```{r}
 #General ordinal coding, with 5 being the worst and 1 being the best health
-brfss_17$generalhealth<-Recode(brfss_17$genhlth,
-                               recodes="1:2=1;3=2;4:5=3; else=NA", as.factor = T)
-brfss_17$generalhealth<-relevel(brfss_17$generalhealth, ref = "1")
-brfss_17$healthnum<-car::Recode(brfss_17$genhlth,
-                                recodes="1:2=1;3=2;4:5=3; else=NA", as.factor = F)
+brfss20$generalhealth<-Recode(brfss20$genhlth,
+                               recodes="1:2=1;3=2;4:5=3; else=NA",
+                               as.factor = T)
+
+brfss20$generalhealth<-relevel(brfss20$generalhealth, ref = "1")
+
+brfss20$healthnum<-car::Recode(brfss20$genhlth,
+                                recodes="1:2=1;3=2;4:5=3; else=NA",
+                                as.factor = F)
 
 #First we tell R our survey design
 options(survey.lonely.psu = "adjust")
 
 
 library(dplyr)
-sub<-brfss_17%>%
+sub<-brfss20%>%
   select(badhealth,healthnum,generalhealth, mmsaname, bmi,
          agec,race_eth, marst, educ,white, black, hispanic,
          other, smoke, ins, mmsawt, ststr) %>%
@@ -191,7 +190,10 @@ sub<-brfss_17%>%
 
 #First we tell R our survey design
 options(survey.lonely.psu = "adjust")
-des<-svydesign(ids=~1, strata=~ststr, weights=~mmsawt, data =sub )
+des<-svydesign(ids=~1,
+               strata=~ststr,
+               weights=~mmsawt,
+               data =sub )
 
 ```
 
@@ -201,11 +203,16 @@ des<-svydesign(ids=~1, strata=~ststr, weights=~mmsawt, data =sub )
 To fit an ordinal logit to survey data in R, we use the `svyolr` function in the survey library. 
 
 ```{r}
+library(gtsummary)
+
 #Here I fit three nested models for the health outcome
-fit.solr1<-svyolr(generalhealth~race_eth+educ+agec,des)
-summary(fit.solr1)
-#Calculate the AIC ourself
-fit.solr1$deviance+2*length(fit.solr1$coefficients)
+fit.solr1<-svyolr(generalhealth~race_eth+educ+agec,
+                  design = des)
+fit.solr1%>%
+  tbl_regression()
+
+#Calculate the AIC 
+
 ```
 
 Which gives us the results from the proportional odds model. In this case, we see that non-Hispanic whites have lower odds of reporting poorer health, compared to Hispanics, also NH Other respondents are less likely to report worse health, compared to Hispanics.
@@ -215,14 +222,19 @@ We also see that as education increases, the odds of reporting poorer health dec
 Now we can "examine" the proportional odds assumption by fitting logits for each change
 
 ```{r}
-ex1<-svyglm(I(healthnum>1)~race_eth+educ+agec,des, family="binomial")
-ex2<-svyglm(I(healthnum>2)~race_eth+educ+agec,des, family="binomial")
+ex1<-svyglm(I(healthnum>1)~race_eth+educ+agec,
+            design = des,
+            family="binomial")
+ex2<-svyglm(I(healthnum>2)~race_eth+educ+agec,
+            design = des,
+            family="binomial")
 ```
 
 This is **NOT** a statistical test, just a a rough guide. Here, I plot the coefficients of each model. If the proportional odds is correct, and the assumption is ok, then all these should be "approximately" the same values.
 
 ```{r}
-coefs<-data.frame(parms =c( coefficients(ex1)[-1],coefficients(ex2)[-1]),
+coefs<-data.frame(parms =c( coefficients(ex1)[-1],
+                            coefficients(ex2)[-1]),
                   beta = rep(names(coefficients(ex1))[-1], 2 ), 
                   mod = c(rep("I(healthnum>1)",12 ),
                           rep("I(healthnum>2)",12 )))
@@ -256,25 +268,41 @@ We can also fit a cumulative logit model where the coefficients are not assumed 
 ```{r}
 
 #Proportional odds
-fit.vgam<-vglm(as.ordered(generalhealth)~race_eth+educ+agec,
-               brfss_17, weights =mmsawt/mean(mmsawt, na.rm=T),
-               family=cumulative(parallel = T, reverse = T))  #<-parallel = T == proportional odds
+fit.vgam<-svy_vglm(as.ordered(generalhealth)~race_eth+educ+agec,
+                   design = des,
+               family=cumulative(parallel = T,
+                                 reverse = T))  #<-parallel = T == proportional odds
+
+m1 <- fit.vgam%>%
+  tbl_regression()
+m1
 summary(fit.vgam)
 
-
-
-#Non-proportional odds
-fit.vgam2<-vglm(as.ordered(generalhealth)~race_eth+educ+agec,brfss_17,
-                weights =mmsawt/mean(mmsawt, na.rm=T),
-                family=cumulative(parallel = F, reverse = T))  #<-parallel = F == Nonproportional odds
-summary(fit.vgam2)
-
-AIC(fit.vgam)
-AIC(fit.vgam2)
 ```
 
-Based on the AIC, the non-proportional odds model fits better than the proportional odds model.
 
+```{r}
+
+#Non-proportional odds
+fit.vgam2<-svy_vglm(as.ordered(generalhealth)~race_eth+educ+agec,
+                design = des,
+                family=cumulative(parallel = F, reverse = T))  #<-parallel = F == Nonproportional odds
+
+
+m2 <- fit.vgam2%>%
+  tbl_regression()
+
+m2
+```
+
+You can calculate an AIC of sorts by hand
+
+```{r}
+-2*fit.vgam$fit@criterion$loglikelihood + 2*length(fit.vgam$coef)
+-2*fit.vgam2$fit@criterion$loglikelihood + 2*length(fit.vgam2$coef)
+```
+
+So the non-proportional odds model has a much lower AIC.
 
 ## Multinomial Model
 We also commonly see a response variable with unordered categories for a response. Such as:
@@ -318,72 +346,27 @@ Unfortunately, in R there is no multinomial survey design model, so we have to u
 
 Now I fit the model, There is no survey-corrected multinomial model in R, so we use `vglm` and use `family = multinomial`. 
 ```{r}
-mfit<-vglm(generalhealth~race_eth+educ+agec,
+mfit<-svy_vglm(generalhealth~race_eth+educ+agec,
            family=multinomial(refLevel = 1),
-           data=brfss_17,
-           weights=mmsawt/mean(mmsawt, na.rm=T))
+           design = des)
+mfit%>%
+  tbl_regression()
 
-summary(mfit)
 ```
 
-
-Calculate the odds ratios for each covariate's effect on each model
+Compare all three models with our home-made AIC
 
 ```{r}
-round(exp(coef(mfit)), 3)
-
+-2*fit.vgam$fit@criterion$loglikelihood + 2*length(fit.vgam$coef)
+-2*fit.vgam2$fit@criterion$loglikelihood + 2*length(fit.vgam2$coef)
+-2*mfit$fit@criterion$loglikelihood + 2*length(mfit$coef)
 ```
+
+
+
 So in these results, each equation is presented, based off what the transition is. For example. `race_ethnh black:1` corresponds to the odds ratio for nh black respondents having good  compared to  verygood/excellent health, compared to Hispanics
 
 And the `race_ethnh black:2` odds ratio is the odds ratio for nh black respondents having fair/poor versus verygood/excellent health, compared to Hispanics. 
 
 In terms of education, those with primary school and some high school are more likely to report good, compared to excellent/vg health, compared to those with high school, but those with college education are less likely to report good vs excellent/vg health, compared to those with high school. 
 
-We can also obtain confidence intervals for these odds ratios
-```{r}
-round(exp(confint(mfit)), 3)
-
-```
-
-## Get Fitted Probabilities from models
-Just like with the binomial model, we can estimate the probability that a given respondent answers with a certain level of the response from either of these models.
-
-```{r}
-#get a series of predicted probabilites for different "types" of people for each model
-dat<-expand.grid(race_eth=levels(brfss_17$race_eth),
-                 educ=levels(brfss_17$educ),
-                 agec=levels(brfss_17$agec))
-
-#generate the fitted values
-#Unfortunately, the survey proportional odds model won't generate fitted values
-#but here I use a weighted multinomial model, which fits the data better anyway
-fitm<-predict(mfit, newdat=dat,type="response")
-#add the values to the fake data
-dat<-cbind(dat, round(fitm,3))
-
-#Print the fitted probabilities
-head(dat, n=20)
-
-```
-
-This will use `polr` with survey weights to get fitted probabilities from the proportional odds model. The fitted values are right, but the standard errors won't be.
-
-```{r}
-fitted.ord<-round(predict(fit.vgam, newdat=dat[,1:3], type="response"), 3)
-
-dat<-cbind(dat, fitted.ord)
-
-names(dat)<-c(names(dat)[1:3], "mp1", "mp2", "mp3", "op1", "op2", "op3")
-
-head(dat, n=20)
-```
-
-Let's look at the relative model fits:
-
-```{r}
-AIC(fit.vgam) #proportional odds
-AIC(fit.vgam2) #cumulative logit, non proportional
-AIC(mfit) #multinomial
-```
-
-Looks like the multinomial is the best fitting model, but it is very close to the non proportional odds model using the cumulative logit.
