@@ -104,7 +104,7 @@ census_api_key(key = "yourkeyhere", install = TRUE)
 
 which only needs to be done once.
 
-A basic use of the `tidycensus` package is to get data and produce maps of the indicators. This is done easily because `tidycensus` fits directly into general `dplyr` and `ggplot2` workflows. Below is an example of accessing 2019 ACS data on poverty rate estimates for New York census tracts from New York county, New York. The sytax takes several arguments indicating what level of census geography you want, the year of the estimates, the details of states and counties you may want, and which ACS tables you want. Here I use the Data Profile table for the percentage estimate of families with incomes below the poverty line. The `output = "wide"` option is useful if you get multiple estimates, as it arrages them into columns, one for each estimate. 
+A basic use of the `tidycensus` package is to get data and produce maps of the indicators. This is done easily because `tidycensus` fits directly into general `dplyr` and `ggplot2` workflows. Below is an example of accessing 2019 ACS data on poverty rate estimates for New York census tracts from New York county, New York. The syntax takes several arguments indicating what level of census geography you want, the year of the estimates, the details of states and counties you may want, and which ACS tables you want. Here I use the Data Profile table for the percentage estimate of families with incomes below the poverty line. The `output = "wide"` option is useful if you get multiple estimates, as it arranges them into columns, one for each estimate. 
 
 
 
@@ -327,7 +327,7 @@ When doing analysis of place-based data, maps are almost a fundamental aspect of
 
 
 
-## Basics of Genearlized Linear Models
+## Basics of Generalized Linear Models
 
 Up until now, we have been relying on linear statistical models which assumed the Normal distribution for our outcomes. A broader class of regression models, are ***Generalized Linear Models*** [@nelder_generalized_1972; @mccullagh_generalized_1998], or **GLM**s, which allow for the estimation of a linear regression specification for outcomes that are not assumed to come from a Normal distribution. GLMs are a class of statistical models with three underlying components: A probability density appropriate to the outcome, a link function and a linear predictor. The ***link function*** is some mathematical function that links the mean of the specified probability distribution to the linear predictor of regression parameters and covariates. For example, the Normal distribution used by the OLS model has the mean, $\mu$, which is typically estimated using the ***linear mean function*** :
 $$\mu = \beta_0 + \beta_1 x_1$$ 
@@ -561,7 +561,7 @@ Which shows that Texas has a standardized mortality rate `r (round(exp(coef(glmb
 
 ## Poisson distribution 
 
-Another distribution commonly used in the analysis of place-based data is the Poisson distribution. The Poisson is applicable to outcomes that are positive integers, and is commonly used in epdiemiology as a model of relative risk of a disease or mortality. The Poisson has a single parameter, the mean, $\lambda$, and it is really the average count for the outcome ($y$). We have several ways of modeling a count outcome with the Poisson
+Another distribution commonly used in the analysis of place-based data is the Poisson distribution. The Poisson is applicable to outcomes that are positive integers, and is commonly used in epidemiology as a model of relative risk of a disease or mortality. The Poisson has a single parameter, the mean, $\lambda$, and it is really the average count for the outcome ($y$). We have several ways of modeling a count outcome with the Poisson
 
 -   *Pure count model* If each area or place has the same total area, risk set, or population size, then we can model the mean as-is. This would lead to a model that looks like:
 
@@ -623,7 +623,7 @@ txca$E<- txca$Population*(sum(txca$Deaths/sum(txca$Population)))
 
 In this calculation, the `Population` variable is multiplied by $r$, which is the sum of all deaths, divided by all populations. 
 
-The age-specific expected count is a little more involved. We first have to sum all deaths and populations by age, then calculate the age specific rate, then join this back to the original data based on the `Age_Group` variable. Is this the only way to do this, no, but it works in this example. Alternatively, we could get another age schedule of mortality rates and merge it to these data and standardize our data to that mortality shedule.
+The age-specific expected count is a little more involved. We first have to sum all deaths and populations by age, then calculate the age specific rate, then join this back to the original data based on the `Age_Group` variable. Is this the only way to do this, no, but it works in this example. Alternatively, we could get another age schedule of mortality rates and merge it to these data and standardize our data to that mortality schedule.
 
 ```{r}
 
@@ -641,7 +641,7 @@ txca2%>%
   select(State, Age_Group, Deaths, Population, E, E_age)%>%
   gt()
 ```
-In this table, you can see the age-specifc expected counts of deaths are much more in line with the age-specific mortality rate, and the numbers of expected deaths are much more similar to the observed pattern of deaths, when compared to the expected counts derived from the crude death rate. 
+In this table, you can see the age-specific expected counts of deaths are much more in line with the age-specific mortality rate, and the numbers of expected deaths are much more similar to the observed pattern of deaths, when compared to the expected counts derived from the crude death rate. 
 
 ```{r}
 glmp_E <- glm(Deaths ~ offset(log(E)) + factor(Age_Group)+State,
