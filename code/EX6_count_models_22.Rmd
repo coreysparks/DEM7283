@@ -37,7 +37,7 @@ Paul Voss [-@voss_demography_2007] describes most demography (and certainly most
 
 In the macro-demographic perspective on demography, observations are typically places, areas, or some other aggregate level of individuals. We do not observe the individual people themselves often times. An example of this is if you were to have access to an aggregate count of deaths in a region, even if the deaths were classified by age and sex, you still would be dealing with data that ignores, or has no index to the more nuanced characteristics of the individual decedents themselves. That being said, data such as these are invaluable, and most demographic summaries of individual-level data would aggregate based on the characteristics of the individuals any way. The macro scale principal is illustrated below, where all of the variables we observe are a scale above the individual person.
 
-![Macro Level Proposition](C:/Users/ozd504/Documents/Github/dem-stats-book/images/macro2.png)
+![Macro Level Proposition](C:/Users/ozd504/Github/dem-stats-book/images/macro2.png)
 
 Such **macro-level propositions** are hypothesized relationships among variables ($\rightarrow$) measured at a macro scale ($Z$ and $Y$), which ignores individual level data, mostly because we don't observe individuals ($x$ and $y$) in many of these kinds of analysis.
 
@@ -51,7 +51,7 @@ The goal of this chapter is to illustrate how places are a special unit of analy
 
 In the macro-demographic perspective on demography, observations are typically places, areas, or some other aggregate level of individuals. We do not observe the individual people themselves often times. An example of this is if you were to have access to an aggregate count of deaths in a region, even if the deaths were classified by age and sex, you still would be dealing with data that ignores, or has no index to the more nuanced characteristics of the individual decedents themselves. That being said, data such as these are invaluable, and most demographic summaries of individual-level data would aggregate based on the characteristics of the individuals any way. The macro scale principal is illustrated below, where all of the variables we observe are a scale above the individual person.
 
-![Macro Level Proposition](C:/Users/ozd504/Documents/Github/dem-stats-book/images/macro2.png)
+![Macro Level Proposition](C:/Users/ozd504/Github/dem-stats-book/images/macro2.png)
 
 Such **macro-level propositions** are hypothesized relationships among variables ($\rightarrow$) measured at a macro scale ($Z$ and $Y$), which ignores individual level data, mostly because we don't observe individuals ($x$ and $y$) in many of these kinds of analysis.
 
@@ -181,7 +181,7 @@ library(sf)
 ipums_co <- read_sf("C:/Users/ozd504/OneDrive - University of Texas at San Antonio/projects/book_data/US_county10_2000.shp")
 
 
-im_dat <- readr::read_csv("C:/Users/ozd504/Documents/Github/dem-stats-book/data/nhgis0025_ds231_2005_county.csv")
+im_dat <- readr::read_csv("C:/Users/ozd504/Github/dem-stats-book/data/nhgis0025_ds231_2005_county.csv")
 
 m_dat <- left_join(x = ipums_co,
                    y = im_dat,
@@ -484,7 +484,7 @@ The Binomial is very useful for conducting standardization of rates between grou
 
 ```{r}
 library(gt)
-txca <- readr::read_delim(url("https://raw.githubusercontent.com/coreysparks/dem-stats-book/master/data/CMF_TX_CA_age.txt?token=GHSAT0AAAAAABQZ5VMKFA7HBM5RY4QA3ORCYRGDHDA"),
+txca <- readr::read_delim(url("https://raw.githubusercontent.com/coreysparks/dem-stats-book/master/data/CMF_TX_CA_age.txt?token=GHSAT0AAAAAABQZ5VMKYNG6BLT3ZTZEQJDCYRP2ZGA"),
                           delim = "\t",
                           quote = "\"",
                           skip=1,
@@ -735,7 +735,7 @@ The `dispmod` package implements the method of Breslow [-@breslow_extra-poisson_
 library(dispmod)
 
 glmp_d <- glm.poisson.disp(glmp_E,
-                           verbose = F)
+                           verbose = T)
 
 glmp_d%>%
   tbl_regression(exp = T)
@@ -855,7 +855,7 @@ glmnb<- glm.nb(Deaths ~ offset(log(Population)) + factor(Age_Group) +  State,
                data=txca)
 
 glmnb%>%
-  tbl_regression()
+  tbl_regression(exp=T)
 
 ```
 
