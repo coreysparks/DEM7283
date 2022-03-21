@@ -176,16 +176,17 @@ brfss20b<-brfss20%>%
   select(mmsawt, ststr, ageg, race_eth,educ, healthdays, healthmdays, smoke, bmi, health,ins, checkup,  heart, ast)#%>%
 #  mutate_at(vars(healthdays, healthmdays, smoke, bmi, badhealth,ins, checkup,  heart, ast), scale)
 
-samps <- sample(1:dim(brfss20b)[1], size = 10000, )
+samps <- sample(1:dim(brfss20b)[1], size = 10000, replace = FALSE)
+brfss20b<- brfss20b[samps,]
 
 ```
 
 
-
+### PCA using `FactoMineR`
 ```{r}
 
-brfss.pc<-PCA(brfss20b[, c(6:14)],
-              scale.unit = T,
+brfss.pc<-PCA(brfss20b[, c(6:14)], #columns 6:14 are my variables, yours will be different
+              scale.unit = T, #center the variables
               graph = F)
 
 ```
@@ -220,9 +221,13 @@ In terms of the loadings for PC1, we see positive  associations with everything.
 For PC2 we see a mixture of loadings, some positive, some negative, and the only two variables that are loading with large coefficients on this one are smoking and insurance status. 
 
 ```{r}
-fviz_pca_ind(brfss.pc, label="none", col.ind="cos2" )+
-  scale_color_gradient2(low="blue", mid="white", 
-                      high="red", midpoint = .5)+
+fviz_pca_ind(brfss.pc,
+             label="none",
+             col.ind="cos2" )+
+  scale_color_gradient2(low="blue",
+                        mid="white", 
+                      high="red",
+                      midpoint = .5)+
   theme_minimal()
 ```
 
@@ -230,9 +235,14 @@ fviz_pca_ind(brfss.pc, label="none", col.ind="cos2" )+
 
 Some tools that allow for better understanding of the components are:
  - Correlation of each variable with each PC
+ - Rank correlations from lowest to highest
 
 ```{r}
-dimdesc(brfss.pc)
+desc <- dimdesc(brfss.pc)
+desc$Dim.1
+
+desc$Dim.2
+
 ```
 
 
@@ -278,37 +288,53 @@ fit.1<-svyglm(pc1~factor(ageg)+educ+(race_eth),
 summary(fit.1)
 ```
 
-So, overall, the index increases across age, and decreases with higher education. Hispanics and other race/ethnic groups have lower indices on average than whites, while NH blacks and multiple race respondents have higher values.
+So, overall, the index increases across age, and decreases with higher education. Among the 10,000 sampled individuals, there is no variation between the race/ethnic groups.
 
 
-### Aggregate data example
+### Aggregate data example - Indices for Places
 
-This is an example from a paper some former students and I did at the 2014 Applied Demography conference entitled "Spatial accessibility to food sources in Alamo Area Council of Governments (AACOG)" where, we examined factors influencing whether or not a census tract was a food desert in the area surrounding San Antonio.  We used the index from the Sharkey paper above
-
-In this case, we had to do some reverse coding of the index to make it work out the way it should
+This is an example from a paper some former students and I did at the 2014 Applied Demography conference entitled "Spatial accessibility to food sources in Alamo Area Council of Governments (AACOG)" where, we examined factors influencing whether or not a census tract was a food desert in the area surrounding San Antonio.  We used the index from the Sharkey paper above.
 
 ```{r, fig.width=8, fig.height=10}
 
 library(sf)
-sp<-st_read(dsn = "~/OneDrive - University of Texas at San Antonio//classes/dem7283/class_21_7283/data", layer = "shp2_nm")
+sp<-st_read(dsn = "../data", layer = "shp2_nm")
 
-pcshark<-prcomp(~punemp+pprsnsp+(-1*p25plsl)+gt1prrm+pubasst+phwoveh+phwophn, center=T, scale=T, data=sp, retx=T)
-pcshark
-summary(pcshark)
+nosp <- sp
+st_geometry(nosp)<- NULL
 
-#Here I reverse the direction of the index by multiplying by -1
-sp$sharkeyindex<- -1*prcomp(~punemp+pprsnsp+(-1*p25plsl)+gt1prrm+pubasst+phwoveh+phwophn, center=T, scale=T, data=sp, retx=T)$x[,1]
+pc_shark <- PCA(nosp[, c("punemp", "pprsnsp", "p25plsl","gt1prrm","pubasst","phwoveh","phwophn" )],
+                scale.unit = T, #center the variables
+              graph = F)
+
+
+summary(pc_shark)
+desc <- dimdesc(pc_shark)
+desc$Dim.1
+```
+
+
+```{r}
+fviz_pca_var(pc_shark,
+            col.var="contrib")+
+  theme_minimal()
+```
+
+```{r}
+# Here I reverse the direction of the index by multiplying by -1
+sp$sharkeyindex<- pc_shark$ind$coord[,1]
 
 ```
 
 
 ```{r}
-fit<-glm(LILAT_1A1~scale(plingis)+scale(interct)+Rural+sharkeyindex,family=binomial, sp)
+fit<-glm(LILAT_1A1~scale(interct)+Rural+sharkeyindex,family=binomial, sp)
 summary(fit)
 
 ```
 
-Map estimates of fitted probability
+Map estimates of fitted probability of food desert
+
 ```{r}
 sp$fitted<-fit$fitted.values
 
@@ -329,7 +355,7 @@ m1<-tm_shape(sp)+
   tm_compass()
 
 m2<-tm_shape(sp)+
-  tm_polygons("sharkeyindex", title="Risk Index", palette="Greens", style="quantile",border.col = NULL)+
+  tm_polygons("sharkeyindex", title="Risk Index", palette="Greens", style="fisher",border.col = NULL)+
   tm_format("World", title="AACOG Tract - Risk Index", legend.outside=T)+
    tm_scale_bar()+
   tm_compass()
