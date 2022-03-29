@@ -141,7 +141,7 @@ Total nonresponse
 
 ### Predictive mean matching
 
--	Regress Y on the observed X's for the incomplete cases
+-	Regress Y on the observed X's for the complete cases
 
 -	Form fitted or "predicted" values
 
@@ -329,7 +329,7 @@ Which doesn't look like much of a difference because only `r table(is.na(brfss20
 ```{r}
 table(brfss20$inc)
 #find the most common value
-mcv.inc<-factor(names(which.max(table(brfss20$inc))), levels = levels(brfss20$inc))
+mcv.inc<-factor(names(which.max(table(brfss20$inc))), levels = levels(factor(brfss20$inc)))
 mcv.inc
 #impute the cases
 brfss20$inc.imp<-as.factor(ifelse(is.na(brfss20$inc)==T, mcv.inc, brfss20$inc))
@@ -350,9 +350,12 @@ We can construct a flag variable. This is a useful exercise to see whether we ha
 
 ```{r}
 fit1<-lm(bmi~is.na(inc), data=brfss20)
-fit1<-lm(bmi~is.na(educ), data=brfss20)
-fit1<-lm(bmi~is.na(race_eth), data=brfss20)
+fit2<-lm(bmi~is.na(educ), data=brfss20)
+fit3<-lm(bmi~is.na(race_eth), data=brfss20)
 summary(fit1)
+summary(fit2)
+summary(fit3)
+
 
 ```
 
