@@ -14,96 +14,86 @@ output:
 
 In this example, we will use Generalized Estimating Equations to do some longitudinal modeling of data from the [ECLS-K 2011](https://nces.ed.gov/ecls/dataproducts.asp). Specifically, we will model changes in a student's standardized math score as a continuous outcome and self rated health as a binomial outcome, from fall kindergarten to spring, 1st grade. 
 
-Introduction to GEE's
-========================================================
+### Introduction to GEE's
 
-Up until now, we have used (G)LMM's to analyze data that were "clustered"
-
-- Persons within neighborhoods
-- Survey data in general - stratified sampling
-
-The next topic will introduce a modeling strategy that allows us to consider clustered data, but in a different fashion
-
-GLMMS's
-========================================================
-
-GLMM's are commonly referred to as *conditional* models, because the model coefficients "$\beta$'s" are condition on the random effects in the model. 
-
-Likewise, the mean if conditional on the random effects. This is another way of saying that the mean for a given covariate pattern is conditional on the group that the particular person is in. 
-
-$\mu_{ij}^c = E(Y_{ij} | u_j) = X_{ij}\beta + u_j$
-
-GLMMS's and GEE's
-========================================================
-
-In contrast, **Generalzed Estimating Equations** are referred to as *marginal* models because they only estimate the overall mean.
+**Generalzed Estimating Equations** are referred to as *marginal* models because they only estimate the overall mean.
 
 $\mu_{ij} = X_{ij}\beta$
 
-[Lee and Nelder, 2004](http://www.people.vcu.edu/~dbandyop/BIOS625/LeeNelder2004.pdf) provide a very good description of how these two methods compare to one another
+[Lee and Nelder, 2004](http://www.people.vcu.edu/~dbandyop/BIOS625/LeeNelder2004.pdf) provide a very good description of how these two methods are used
 
 Generalized Estimating Equations
 ========================================================
 
 - Typically first attributed to [Liang and Zeger, 1986](http://biomet.oxfordjournals.org/content/73/1/13.short)
+
 - GEE's are regression models
+
 - Interested in modeling the *mean response*, while treating correlation within person/cluster as a *nuisance*
+
 - **NOT** based on maximum likelihood
+
 - Does not need a fully specified joint distribution, only the marginal distribution (*mean*) of the outcome
+
 - Models can be for any distribution for the outcome
 
-GEE's
-========================================================
 
 - For longitudinal data, we assume we have $y_{ij}$ as our outcome on person *i* at time *j*. This could just as easily be persons within other types of clusters, like counties or sampling units.
-- Also have $X_{ij}$, the matrix of predictors
-- Specify the link function between $y_{ij}$ and $X_{ij}$ as in a GLM, via a *link function*
-- Focus is on the *linear predictor* of the link function - the mean
-- **NOT INTERESTED** in variance components **ONLY** regression coefficients
 
-GEE's
-========================================================
+- Also have $X_{ij}$, the matrix of predictors
+
+- Specify the link function between $y_{ij}$ and $X_{ij}$ as in a GLM, via a *link function*
+
+- Focus is on the *linear predictor* of the link function - the mean
+
+- **ONLY** interested in regression coefficients
+
+## Covariance Structures
 
 - Covariance structure
   - We also may wish to model *how* observations are related to one another via some type of *correlation structure* between waves
+  
   - This directly implies that observations are *NOT INDEPENDENT*, and that's fine
-  - Observations between clusters **are** independent
+  
+  - Observations between clusters or waves **are** independent
+  
   - Errors are correlated
+  
   - No assumption of common variance (homoskedsasticity)
 
 
-GEE's - Model form
-========================================================
+### GEE's - Model form
 
 A basic form of the model would be:
 
 $Y_{ij} = \beta_0 + \sum_k X_{ijk} \beta_k + CORR + error$
 
-Ordinary models will tend to over estimate the standard errors for the $\beta$'s  for time varying predictors in a model with repeated observations, because these models do not account for the correlation within clusters \ observations over time. 
+Ordinary models will tend to over estimate the standard errors for the $\beta$'s  for time varying predictors in a model with repeated observations, because these models do not account for the correlation within clusters/observations over time. 
 
 Likewise, the standard errors of time invariant predictors will be under estimated
 
 
-GEE's - Model estimation
-========================================================
+### GEE - Model estimation
 
-Given the mean function for the model and a specified correlation function, the model parameters may be estimated by finding the solution for:
+Given the mean function for the model and a specified correlation/covariance function, the model parameters may be estimated by finding the solution for:
 
 $$U(\beta) = \sum_i ^n   \frac{\delta \mu_{ij}}{ \delta \beta_k} V_i^{-1} (Y_{ij} - \mu(\beta))$$
 
 
 Which gives estimates of the $\beta$'s for the linear mean function. 
 
-GEE's - Model estimation
-========================================================
+
+### GEE cookbook
 
 - First, a naive linear regression analysis is carried out, assuming the observations within subjects are independent.
+
 - Then, residuals are calculated from the naive model (observed-predicted) and a working correlation matrix is estimated from these residuals.
+
 - Then the regression coefficients are refit, correcting for the correlation. (Iterative process)
+
 - The within-subject correlation structure is treated as a nuisance variable (i.e. as a covariate)  
 
-GEE's - Correlation Structure
-========================================================
+### GEE - Correlation Structures
 
 For three time points per person, the ordinary regression model correlation in residuals within clusters/persons over time can be thought of as the matrix:
 
@@ -114,9 +104,6 @@ $$\begin{bmatrix}
 \end{bmatrix}$$
 
 which assumed the variances are constant and the residuals are independent over time
-
-GEE's - Correlation Structure
-========================================================
 
 But in a GEE, the model include the actual correlation between measurements over time: 
 
@@ -129,18 +116,20 @@ a & \sigma_2 ^2 &b \\
 Which allows the variances over time to be different, as well as correlations between times to be present.
 
 
-GEE's - Correlation Structure
-========================================================
-
 - Several types of correlation/covariance are commonly used in GEE's
+
 - When we fit a GEE, we have to assume a certain type of correlation for the repeated measures. These are typically:
+
   - Independence - same as OLS
+  
   - Exchangeable/compound symmetry (simplest)
+  
   - Autoregressive
+  
   - Unstructured (most complicated)
   
-GEE's - Correlation Structure - Independent
-========================================================
+#### Correlation Structure - Independent
+
 
 $$\begin{bmatrix}
 1 & 0 & 0 \\ 
@@ -149,8 +138,7 @@ $$\begin{bmatrix}
 \end{bmatrix}$$
 
 
-GEE's - Correlation Structure - Exchangeable
-========================================================
+####  Correlation Structure - Exchangeable
 
 $$\begin{bmatrix}
 1 & \rho & \rho \\ 
@@ -159,8 +147,7 @@ $$\begin{bmatrix}
 \end{bmatrix}$$
 
 
-GEE's - Correlation Structure - AR(1)
-========================================================
+####  Correlation Structure - AR(1)
 
 $$\begin{bmatrix}
 1 & \rho & \rho^2 \\ 
@@ -168,14 +155,16 @@ $$\begin{bmatrix}
  \rho^2 & \rho & 1
 \end{bmatrix}$$
 
-GEE's - Correlation Structure - Unstructured
-========================================================
+####  Correlation Structure - Unstructured
 
 $$\begin{bmatrix}
 1 & \rho_1 & \rho_2 \\ 
 \rho_1 & 1 &\rho_3 \\ 
  \rho_2 & \rho_3& 1
 \end{bmatrix}$$
+
+
+## Data Example
 
 ```{r}
 
@@ -188,14 +177,20 @@ library(dplyr)
 
 
 ## Data and recodes
+
 First we load our data
+
 ```{r, message=FALSE}
-load("~/OneDrive - University of Texas at San Antonio//classes/dem7283/class_21_7283/data/eclsk_2011/eclsk_k5.Rdata")
+load("C:/Users/ozd504//OneDrive - University of Texas at San Antonio//classes/dem7283/class_22_7283/data/eclsk_2011/eclsk_k5.Rdata")
 names(eclskk5)<-tolower(names(eclskk5))
 #get out only the variables I'm going to use for this example
 
 #subset the data
+```
 
+Here I select variables that I will use
+
+```{r}
 eclsk.sub<-eclskk5%>%
   select(childid, x_chsex_r, x1locale, x_raceth_r, x2povty, x12par1ed_i, p1curmar, x1htotal, x1mscalk5, x2mscalk5, x3mscalk5, x4mscalk5, x5mscalk5, p1hscale, p2hscale, p4hscale, x2fsstat2, x4fsstat2, x4fsstat2, x12sesl, x4sesl_i, p2parct1, p2parct2, s1_id, p2safepl, x2krceth, p1o2near, x_distpov, w1c0, w1p0, w2p0, w1c0str, w1p0str, w4c4p_40, w4c4p_4str,w4c4p_4psu, w1c0psu, w1p0psu, x1height, x2height, x4height, x4height, x5height, x1kage_r, x2kage_r, x3age, x4age, x5age)
 
@@ -262,19 +257,16 @@ I have to make the repeated measures of each of my longitudinal variables. These
 #recode our outcomes, the  first is the child's math standardized test score  in Kindergarten
 eclsk.sub$math_1<-ifelse(eclsk.sub$x1mscalk5<0, NA, eclsk.sub$x1mscalk5)
 eclsk.sub$math_2<-ifelse(eclsk.sub$x2mscalk5<0, NA, eclsk.sub$x2mscalk5)
-#eclsk.sub$math3<-ifelse(eclsk.sub$x3mscalk1<0, NA, eclsk.sub$x3mscalk1)
 eclsk.sub$math_4<-ifelse(eclsk.sub$x4mscalk5<0, NA, eclsk.sub$x4mscalk5)
 
 #Second outcome is child's height for age, continuous outcome
 eclsk.sub$height_1<-ifelse(eclsk.sub$x1height<=-7, NA, eclsk.sub$x1height)
 eclsk.sub$height_2<-ifelse(eclsk.sub$x2height<=-7, NA, eclsk.sub$x2height)
-#eclsk.sub$height3<-ifelse(eclsk.sub$x3height<=-7, NA, eclsk.sub$x3height)
 eclsk.sub$height_4<-ifelse(eclsk.sub$x4height<=-7, NA, eclsk.sub$x4height)
 
 #Age at each wave
 eclsk.sub$ageyrs_1<-ifelse(eclsk.sub$x1kage_r<0, NA, eclsk.sub$x1kage_r/12)
 eclsk.sub$ageyrs_2<-ifelse(eclsk.sub$x2kage_r<0, NA, eclsk.sub$x2kage_r/12)
-#eclsk.sub$age_yrs3<-ifelse(eclsk.sub$x3age<0, NA, eclsk.sub$x3age/12)
 eclsk.sub$ageyrs_4<-ifelse(eclsk.sub$x4age<0, NA, eclsk.sub$x4age/12)
 
 eclsk.sub<- eclsk.sub[is.na(eclsk.sub$ageyrs_1)==F, ]
@@ -282,7 +274,6 @@ eclsk.sub<- eclsk.sub[is.na(eclsk.sub$ageyrs_1)==F, ]
 #Height for age z score standardized by sex and age
 eclsk.sub$heightz_1<-ave(eclsk.sub$height_1, as.factor(paste(round(eclsk.sub$ageyrs_1, 1.5), eclsk.sub$male)), FUN=scale)
 eclsk.sub$heightz_2<-ave(eclsk.sub$height_2, as.factor(paste(round(eclsk.sub$ageyrs_2, 1.5), eclsk.sub$male)), FUN=scale)
-#eclsk.sub$height_z3<-ave(eclsk.sub$height3, as.factor(paste(round(eclsk.sub$age_yrs3, 1.5), eclsk.sub$male)), FUN=scale)
 eclsk.sub$heightz_4<-ave(eclsk.sub$height_4, as.factor(paste(round(eclsk.sub$ageyrs_4, 1.5), eclsk.sub$male)), FUN=scale)
 
 
@@ -302,20 +293,24 @@ eclsk.sub$chhealth_4<-ifelse(eclsk.sub$p4hscale<0, NA, eclsk.sub$p4hscale)
 #SES
 eclsk.sub$hhses_1<-ifelse(eclsk.sub$x12sesl==-9, NA, scale(eclsk.sub$x12sesl))
 eclsk.sub$hhses_2<-ifelse(eclsk.sub$x12sesl==-9, NA, scale(eclsk.sub$x12sesl))
-
 eclsk.sub$hhses_4<-ifelse(eclsk.sub$x4sesl_i==-9, NA, scale(eclsk.sub$x4sesl_i))
 ```
 
 ## Reshaping data into longitudinal format
-To analyze data longitudinally, we must reshape the data from its current "wide" format, where each repeated measure is a column, into the "long" format, where there is a single column for a particular variable, and we account for the repeated measurements of each person. In this case, I'm going to use three waves of data, so each child can contribute up to three lines to the data.
+To analyze data longitudinally, we must reshape the data from its current "wide" format, where each repeated measure is a column, into the "long" format, where there is a single column for a particular variable, and we account for the repeated measurements of each person. 
 
-The `reshape()` function will do this for us, but below I use a tidy method, using a combination of the `data.table` and `dplyr` packages. I first make a long data set of the height, age, math, child health and household SES measures, then I left join it to the time invariant variables i'll use in my models below. 
+In this case, I'm going to use three waves of data, so each child can contribute up to three lines to the data.
+
+The `reshape()` function will do this for us, but below I use a tidy method, using a combination of the `data.table` and `dplyr` packages.
+
+I first make a long data set of the height, age, math, child health and household SES measures, then I left join it to the time invariant variables i'll use in my models below. 
+
 ```{r}
 library(tidyr)
 e.long.comp<-eclsk.sub%>%
   rename(wt = w4c4p_40,strata= w4c4p_4str, psu = w4c4p_4psu)%>%
   select(childid,male, hisp, black, asian, nahn, other,wt, strata, psu, #time constant
-         height_1, height_2, height_4, #t-varying variables
+         height_1, height_2, height_4, #time-varying variables
          ageyrs_1, ageyrs_2, ageyrs_4,
          chhealth_1, chhealth_2, chhealth_4,
          foodinsec_1, foodinsec_2, foodinsec_4,
@@ -323,14 +318,18 @@ e.long.comp<-eclsk.sub%>%
          math_1,math_2, math_4)%>%
   pivot_longer(cols = c(-childid, -male, -hisp, -black, -asian,-nahn, -other, -wt, -strata, -psu), #time constant variables go here
                names_to  = c(".value", "wave"), #make wave variable and put t-v vars into columns
-               names_sep = "_")%>% #all t-v variables have _ between name and time, like age_1, age_2
+               names_sep = "_")%>% #all t-v variables have a _ between name and time, like age_1, age_2
   filter(complete.cases(.))%>%
   arrange(childid, wave)
 
 
-head(e.long.comp)
+knitr::kable(head(e.long.comp), format="html")
 ```
+
+
 ### useing data.table
+There are lots of ways to do this, the `data.table` package offers an alternative:
+
 ```{r, eval=FALSE}
 
 library(data.table)
@@ -353,9 +352,6 @@ e.long<-eclsk.sub%>%
 
 
 e.long$wave<-e.long$variable
-head(e.long)
-
-
 e.long.comp<-e.long%>%
   filter(complete.cases(.), w4c4p_40>0)
 
@@ -364,18 +360,19 @@ e.long.comp<-e.long%>%
 
 
 ### Visualization of longitudinal data
+
 ```{r}
 library(ggplot2)
 
-first10<-unique(e.long.comp$childid)[1:10]
+first10<-unique(e.long.comp$childid)[1:10] #get id's of first 10 kids
 
 sub<-e.long.comp%>%
-  filter(childid%in%first10)
+  filter(childid %in% first10)
 
-ggplot(sub, aes(x=ageyrs, y=math))+
+ggplot(sub, aes(x = ageyrs, y = math))+
   geom_point()+
-  geom_smooth(method='lm',formula=y~x)+
-  facet_wrap(~childid,nrow = 3)+
+  geom_smooth(method='lm', formula= y~x)+
+  facet_wrap(~childid, nrow = 3)+
   ggtitle(label = "Change in Math score across age", 
           subtitle = "First 10 children in ECLS-K 2011")
 
@@ -385,16 +382,26 @@ ggplot(sub, aes(x=ageyrs, y=math))+
 
 ### Longitudinal Models using GEE's
 
-The GEE is used here  
+The Gaussian GLM is used here, so I can fit the model to check for correlation among waves
+
 ```{r,  results='hide'}
 
 #basic linear model
 fit.1<-glm(scale(math)~scale(ageyrs)+male+black+hisp+asian+nahn+other+hhses, data=e.long.comp, weights=wt/mean(wt))
 summary(fit.1)
 
+```
+
+Extact residuals and put them in a data frame
+
+```{r}
 #Get residuals and put them in a data frame
 e.long.comp$resid<- residuals(fit.1)
+```
 
+Next, I reshape the residuals into the wide format to check for correlation among them
+
+```{r}
 e.res<-e.long.comp%>%
   select(childid, wave,resid)%>%
   pivot_wider(id_cols=c(childid),
@@ -405,8 +412,10 @@ head(e.res)
 ```
 
 Here is our actual correlation matrix in the residuals between waves: 
+
 ```{r}
-cor(e.res[,-1], use="pairwise.complete")
+cor(e.res[,-1],
+    use="pairwise.complete")
 ```
 
 This is certainly not independence, and looks more like an AR(1), because the correlation decreases as the *difference* between wave number increases.
@@ -414,6 +423,7 @@ This is certainly not independence, and looks more like an AR(1), because the co
 Now we fit the GEE:
 ### Model with independent correlation
 Meaning ZERO correlation between waves
+
 ```{r}
 
 fit.1<-geeglm(scale(math)~scale(ageyrs)+male+black+hisp+asian+nahn+other+hhses,
@@ -427,6 +437,7 @@ summary(fit.1)
 
 
 ### Model with Exchangeable correlation
+
 Meaning correlation between waves, but the correlation is the same for each pair waves 
 ```{r}
 
@@ -460,7 +471,11 @@ summary(fit.3)
 
 The implied correlation in the AR(1) model is : `r fit.3$geese$alpha`
 
-Since GEE's aren't fit via maximum likelihood, they aren't comparable in terms of AIC or likelihood ratio tests. However, [Pan, 2001](http://onlinelibrary.wiley.com/doi/10.1111/j.0006-341X.2001.00120.x/abstract) describe an information criterion using a Quasi-likelihood formulation. This can be used to compare models with alternative correlation structures, with the lowest **QIC** representing the best fitting model. Another criterion is the **Correlation Information Criterion** (Hin and Wang, 2008)[https://onlinelibrary.wiley.com/doi/abs/10.1002/sim.3489], which is proposed to be better for choosing among models with the same mean function, but different correlation structures, which is what we're doing here.
+Since GEE's aren't fit via maximum likelihood, they aren't comparable in terms of AIC or likelihood ratio tests. However, [Pan, 2001](http://onlinelibrary.wiley.com/doi/10.1111/j.0006-341X.2001.00120.x/abstract) describe an information criterion using a Quasi-likelihood formulation. 
+
+This can be used to compare models with alternative correlation structures, with the lowest **QIC** representing the best fitting model. 
+
+Another criterion is the **Correlation Information Criterion** (Hin and Wang, 2008)[https://onlinelibrary.wiley.com/doi/abs/10.1002/sim.3489], which is proposed to be better for choosing among models with the same mean function, but different correlation structures, which is what we're doing here.
 
 ```{r}
 library(MESS) #need to install
@@ -468,6 +483,7 @@ QIC(fit.1)
 QIC(fit.2)
 QIC(fit.3)
 ```
+
 So, it looks like the AR(1) correlation structure is slightly  better than the exchangeable structure, using the CIC but there is not much difference between models using this criteria. 
 
 
@@ -476,6 +492,7 @@ So, it looks like the AR(1) correlation structure is slightly  better than the e
 Here we use the GEE for a binomial outcome. 
 
 Here are what the data look like:
+
 ```{r}
 
 binomial_smooth <- function(...) {
@@ -489,7 +506,9 @@ ggplot(e.long.comp, aes(x=ageyrs, y=poorhealth))+
   binomial_smooth()+
   ggtitle(label = "Change in Math score across age",
           subtitle = "First 10 children in ECLS-K 2011 - All children")
+```
 
+```{r}
 ids<-unique(e.long.comp$childid)[1:10]
 
 e.long.comp%>%
@@ -507,19 +526,27 @@ e.long.comp%>%
 btest<-glm(I(chhealth>2)~scale(ageyrs)+male+black+hisp+asian+nahn+other+hhses+factor(wave) , family=binomial, data=e.long.comp, weights=wt/mean(wt))
 
 e.long.comp$residb<- residuals(btest)
+```
 
+Check for correlation among waves:
+
+```{r}
 e.res3<-e.long.comp%>%
   select(childid, wave,residb)%>%
   pivot_wider(id_cols=c(childid),
               names_from = wave,
                values_from=residb )
+```
 
+```{r}
 head(e.res3)
 cor(e.res3[, -1], use = "pairwise")
 ```
+
 These look like a constant correlation, or AR(1) perhaps because the correlation decreases between waves 1 and 4, but is pretty similar between 1 and 2.
 
 ### Logistic GEE with independent correlation
+
 ```{r}
 
 fitb.1<-geeglm(poorhealth~scale(ageyrs)+male+black+hisp+asian+nahn+other+hhses,
