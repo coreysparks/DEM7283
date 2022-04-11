@@ -144,15 +144,17 @@ library(mgcv) #one library for GAMs
 library(ggplot2)
 library(dplyr)
 
-dat<-data.frame(y=y2, x=t)
+dat<-data.frame(y = y2, x = t)
 
-gamfit<-gam(y~s(x), data=dat)
+gamfit<-gam(y ~ s(x), data=dat)
 summary(gamfit)
 plot(gamfit)
 
 
 dat%>%
-  ggplot(aes(x=x, y=y))+geom_point()+geom_smooth(method = "gam", formula = y ~s(x))
+  ggplot(aes(x=x, y=y))+
+  geom_point()+
+  geom_smooth(method = "gam", formula = y ~ s(x))
 ```
 
 
@@ -254,17 +256,18 @@ Here is a GAM fit to the BRFSS, using smooth terms for age, bmi and number of po
 
 ```{r, warning=FALSE}
 
-brfgam<-gam(badhealth~s(age80)+s(bmi)+s(healthmdays)+educ+male+black+hispanic+other,
+brfgam<-gam(badhealth ~ s(age80)+ s(bmi)+ s(healthmdays)+ educ+ male+ black + hispanic+ other,
             data=brfss_17,
             weights = mmsawt/mean(mmsawt, na.rm=T),
             family=binomial)
+
 summary(brfgam)
 plot(brfgam)
 ```
 
 Versus the linear terms
 ```{r, warning=FALSE}
-brfgam_l<-gam(badhealth~age80+bmi+healthmdays+educ+male+black+hispanic+other,
+brfgam_l<-gam(badhealth~age80+ bmi+ healthmdays+ educ+ male+ black+ hispanic+ other,
               data=brfss_17,
               weights = mmsawt/mean(mmsawt, na.rm=T),
               family=binomial)
@@ -276,7 +279,9 @@ summary(brfgam_l)
 ### LRT for the difference in model fits
 
 ```{r}
-anova( brfgam_l, brfgam, test="Chisq")
+anova( brfgam_l,
+       brfgam,
+       test="Chisq")
 ```
 
 ### Using smooth terms in other models
@@ -288,32 +293,19 @@ Here is an example using bmi as a continuous outcome`glm()`
 
 ```{r}
 library(survey)
-des<-svydesign(ids = ~1, stata=~ststr, weights = ~ mmsawt, data=brfss_17)
+des<-svydesign(ids = ~1,
+               stata=~ststr,
+               weights = ~ mmsawt,
+               data=brfss_17)
 
-ex1<-svyglm(bmi ~ bs(age80)+male+black+hispanic+other,
+ex1<-svyglm(bmi ~ bs(age80)+ male+ black+ hispanic+ other,
     family=gaussian,
     des)
+
 summary(ex1)
-
-newdat<-expand.grid(age80=seq(20,80,5),
-                    male = c(0,1), 
-                    black = mean(brfss_17$black),
-                    hispanic = mean(brfss_17$hispanic),
-                    other = mean(brfss_17$other))
-
-newdat$pred<-predict(ex1, newdata=newdat, type="response")
-
-newdat%>%
-  ggplot()+
-  geom_line(aes(x=age80, y=pred, color=factor(male) ))
 ```
 
 ```{r}
-ex1<-svyglm(badhealth ~ bs(age80)+male+black+hispanic+other,
-    family=binomial,
-    des)
-summary(ex1)
-
 newdat<-expand.grid(age80=seq(20,80,5),
                     male = c(0,1), 
                     black = mean(brfss_17$black),
@@ -324,7 +316,32 @@ newdat$pred<-predict(ex1, newdata=newdat, type="response")
 
 newdat%>%
   ggplot()+
-  geom_line(aes(x=age80, y=pred, color=factor(male) ))
+  geom_line(aes(x=age80,
+                y=pred,
+                color=factor(male) ))
+```
+
+```{r}
+ex1<-svyglm(badhealth ~ bs(age80)+ male+ black+ hispanic+ other,
+    family=binomial,
+    des)
+summary(ex1)
+```
+
+```{r}
+newdat<-expand.grid(age80=seq(20,80,5),
+                    male = c(0,1), 
+                    black = mean(brfss_17$black),
+                    hispanic = mean(brfss_17$hispanic),
+                    other = mean(brfss_17$other))
+
+newdat$pred<-predict(ex1, newdata=newdat, type="response")
+
+newdat%>%
+  ggplot()+
+  geom_line(aes(x=age80,
+                y=pred,
+                color=factor(male) ))
 
 ```
 
