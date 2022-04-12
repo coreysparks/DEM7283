@@ -77,7 +77,7 @@ n <- 100 # number of data points
 t <-  seq(from=0, to = 2*pi, length.out=100)
 a <- 3
 b <- 2
-c.norm <- rnorm(n, 0, .1)
+c.norm <- rnorm(n, 0, 5)
 amp <- 1
 
 # generate data and calculate "y"
@@ -103,10 +103,10 @@ library(splines)
 library(mgcv)
 plot(t, y2, t="l", ylim=range(y2)*c(1,1.2), main="Increasingly complex splines")
 fit<-spline(y2,t)
-lines(spline(t,y2, n = 4),col="darkgreen",lwd=2,type="l")
-lines(spline(t,y2, n = 10),col="red",lwd=2,type="l")
-lines(spline(t,y2, n = 20),col="blue",lwd=2,type="l")
-lines(spline(t,y2, n = 30),col="orange",lwd=2,type="l")
+#lines(spline(t,y2, n = 4),col="darkgreen",lwd=2,type="l")
+#lines(spline(t,y2, n = 10),col="red",lwd=2,type="l")
+#lines(spline(t,y2, n = 20),col="blue",lwd=2,type="l")
+lines(spline(t,y2, n = 100),col="orange",lwd=2,type="l")
 ```
 
 
@@ -119,11 +119,11 @@ The splines above were piecewise linear, we can also fit piecewise cubic splines
 
 plot(t, y2, t="l", ylim=range(y2)*c(1,1.2), main="Increasingly complex splines")
 
-fit<-smooth.spline(t, y2, df=2)
-fit5<-smooth.spline(t, y2, df=5)
-fit10<-smooth.spline(t, y2, df=10)
-lines(fit, col="red")
-lines(fit5, col="green")
+#fit<-smooth.spline(t, y2, df=2)
+#fit5<-smooth.spline(t, y2, df=5)
+fit10<-smooth.spline(t, y2)
+#lines(fit, col="red")
+#lines(fit5, col="green")
 lines(fit10, col="blue")
 
 ```
@@ -247,6 +247,7 @@ brfss_17$obese<-ifelse(is.na(brfss_17$bmi)==T, NA,
 ```{r}
 brfss_17<-brfss_17%>%
   select(  ststr, agec,bmi,healthmdays, age80, educ, black, hispanic, other,smoke,obese, badhealth, male, mmsawt, mmsa_name )%>%
+  filter(bmi<60)%>%
   filter(complete.cases(.))
 
 ```
@@ -256,13 +257,29 @@ Here is a GAM fit to the BRFSS, using smooth terms for age, bmi and number of po
 
 ```{r, warning=FALSE}
 
-brfgam<-gam(badhealth ~ s(age80)+ s(bmi)+ s(healthmdays)+ educ+ male+ black + hispanic+ other,
+brfgam<-gam(badhealth ~ s(age80, by = educ)+  educ,
             data=brfss_17,
             weights = mmsawt/mean(mmsawt, na.rm=T),
             family=binomial)
 
 summary(brfgam)
 plot(brfgam)
+
+library(emmeans)
+
+rg<-ref_grid(brfgam, at = list(age80 = seq(18, 80)))
+
+
+marg_logit<-emmeans(object = rg,
+                    ~age80+educ, 
+              type="response" )
+
+
+ marg_logit%>%
+   as.data.frame()%>%
+  ggplot()+
+  #geom_point(aes(x=paste(msi2, race_eth, sep = "-"), y=rndmean, color=msi2))+
+  geom_line(aes(x=age80, y=prob, color=educ, group=educ))
 ```
 
 Versus the linear terms
