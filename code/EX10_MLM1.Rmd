@@ -312,6 +312,7 @@ brfss_17$agec<-cut(brfss_17$age80,
 #so we must divide by 100 to get real bmi's
 
 brfss_17$bmi<-brfss_17$bmi5/100
+brfss_17$bmiz<-scale(brfss_17$bmi)
 
 #smoking currently
 brfss_17$smoke<-Recode(brfss_17$smoker3, 
@@ -333,8 +334,14 @@ head(data.frame(name=table(brfss_17$mmsaname),
                 id=unique(brfss_17$mmsa)))
 #people within each msa
 
+brfss_17%>%
+  group_by(mmsa)%>%
+  summarize(npeople = n())
+
 #How many total MSAs are in the data?
-length(table(brfss_17$mmsa))
+brfss_17%>%
+  summarize(ncities = n_distinct(mmsa))
+
 #MSAs
 ```
 
@@ -363,8 +370,6 @@ usacs<-usacs%>%
 head(usacs)
 ```
 
-I also have segregation measures at the MSA level that I made [here](http://rpubs.com/corey_sparks/116032), I will merge these in too.
-
 
 ### Clean and standardize contextual data
 ```{r}
@@ -373,17 +378,17 @@ usacs<-usacs %>%
   mutate_at(c( "medhhinc", "pvacant"),myscale)
 
 merged<-usacs%>%
-  filter(complete.cases(.))
+  filter(complete.cases(.))%>%
+  mutate(GEOID = as.numeric(GEOID))
+
 head(merged)
 ```
 
 Now, I merge the data back to the individual level data:
 ```{r}
-merged<-merge(x=brfss_17,
-              y=merged,
-              by.x="mmsa",
-              by.y="GEOID",
-              all.x=F)
+merged<-left_join(brfss_17,
+              merged,
+              by=c("mmsa"="GEOID"))
 
 ```
 
@@ -423,12 +428,6 @@ tm_shape(msa_ec)+
 Merge the MSA data to the BRFSS data
 
 ```{r merged}
-
-merged$bmiz<-as.numeric(scale(merged$bmi,
-                              center=T,
-                              scale=T))
-#merged<-merged[complete.cases(merged[, c("bmiz", "race_eth", "agec", "educ", "gini")]),]
-#and merge the data back to the kids data
 
 merged<-merged%>%
   dplyr::select(bmiz, obese, mmsa, agec, educ, race_eth,smoke, healthmdays, badhealth,bmi,medhhinc,pvacant, male, mmsawt, mmsaname )%>%
@@ -476,13 +475,14 @@ Basic hierarchical model for means of each MSA:
 
 fit<-lmer(bmiz~(1|mmsaname),
            data=merged)
+
 arm::display(fit,
              detail=T)
 
 ```
 
 ```{r}
-merged$predbmi<-sdbmi*(fitted(fit))+meanbmi
+merged$predbmi<-sdbmi*(fitted(fit)) + meanbmi
 
 head(ranef(fit)$mmsa)
 
@@ -494,35 +494,13 @@ head(est)
 
 ```
 
-
-```{r}
-msa_ec<-merge(msa_ec, est,
-              by.x="CBSAFP", by.y="id")
-
-tm_shape(msa_ec)+
-  tm_polygons("X.Intercept.",
-              style="quantile",
-              n=5,
-              legend.hist = TRUE) +
-   tm_layout(legend.outside = TRUE,
-             title = "Estimated BMI") 
-
-```
-
-```{r}
-
-citymeans<-aggregate(cbind(bmi, predbmi)~mmsaname,merged, mean)
-head(citymeans, n=10)
-
-plot(predbmi~bmi, citymeans)
-```
-
 Model with individual level predictors:
 
 ```{r}
 fit2<-lmer(bmiz~male+agec+educ+(1|mmsa),
            data=merged,
            na.action=na.omit)
+
 arm::display(fit2, detail=T)
 
 ```
@@ -539,7 +517,6 @@ They do.
 
 We also typically would test to see if the random effect term is significant, SAS pumps out a test of this, so we do the same kind of thing in R
 ```{r}
-
 rand(fit2)
 
 ```
@@ -548,9 +525,11 @@ Which shows significant variation in average BMI across MSAs.
 
 
 Some may be interested in getting the intra-class correlation coefficient. While I don't usually pay attention to this, here it is:
+
 ```{r ICC, fig.width=8, fig.height=14}
 library(sjstats); library(sjPlot)
 icc(fit2)
+
 plot_model(fit,
            type = "re",
            sort.est="sort.all",
@@ -559,105 +538,3 @@ plot_model(fit,
 
 So less than 1% of the variance in BMI is due to difference between MSAs. That's not much, but according to our random effect testing, it's not, statistically speaking, 0.
 
-### Pooling of estimates
-It may be informative to plot the estimated BMI's for each MSA from the OLS and multilevel models. This section illustrates the effects of "pooling" as Gelman & Hill ch 12. 
-
-```{r}
-#these models are good for estimating group means better than traditional methods
-#this follows the examples in chapter 12 of Gelman and Hill, I stole the code directly from them.
-
-#complete pooling, this model fits the grand mean ONLY
-fit.cp<-lm(bmi~1, merged)
-display(fit.cp)
-
-
-#No pooling i.e. fixed effects regression, this model fits separate means for each MSA using OLS
-lm.unpooled<-lm(bmi~factor(mmsa)-1, merged)
-
-
-#partial pooling, this model fits the population mean and MSA deviations using multilevel models
-fit0<-lmer(bmi~1+(1|mmsa), merged)
-
-#partial pooling with covariate
-fit0.1<-lmer(bmi~medhhinc+pvacant+(1|mmsa), merged)
-
-```
-
-### Plot the means of the counties
-```{r}
-mmsas<-unique(merged$mmsa)
-J<-length(unique(merged$mmsa))
-ns<-as.numeric(table(brfss_17$mmsa[brfss_17$mmsa%in%mmsas]))
-sample.size <- as.numeric(table(brfss_17$mmsa[brfss_17$mmsa%in%mmsas]))
-sample.size.jittered <- sample.size*exp (runif (J, -.1, .1))
-
-par (mar=c(5,5,4,2)+.1)
-plot (sample.size.jittered, 
-      coef(lm.unpooled), cex.lab=1.2, cex.axis=1.2,
-      xlab="sample size in MSA j", ylab=expression (paste ("est. intercept, ", alpha[J], "   (no pooling)")),
-      pch=20, log="x", ylim=c(25, 30), yaxt="n", xaxt="n")
-axis (1, quantile(ns), cex.axis=1.1)
-axis (2, seq(25, 30), cex.axis=1.1)
-for (j in 1:J){
-  lines (rep(sample.size.jittered[j],2),
-         coef(lm.unpooled)[j] + c(-1,1)*se.coef(lm.unpooled)[j], lwd=.5)
-}
-abline (coef(fit.cp)[1], 0, lwd=.5)
-title(main="Estimates of MSA Means from the Fixed Effect Model")
-
-```
-
-
-
-
-### Plot MLM estimates of MSA means + se's
-
-```{r}
-
-par (mar=c(5,5,4,2)+.1)
-a.hat.M1 <- coef(fit0)$mmsa[,1]
-a.se.M1 <- se.coef(fit0)$mmsa
-
-plot (as.numeric(ns), t(a.hat.M1), cex.lab=1.2, cex.axis=1.1,
-      xlab="sample size in MSA j",
-      ylab=expression (paste("est. intercept, ", alpha[j], "(multilevel model)")),
-      pch=20, log="x", ylim=c(25, 30), yaxt="n", xaxt="n")
-axis (1, quantile(ns), cex.axis=1.1)
-axis (2, seq(25,30), cex.axis=1.1)
-for (j in 1:length(unique(merged$mmsa))){
-  lines (rep(as.numeric(ns)[j],2),
-         as.vector(a.hat.M1[j]) + c(-1,1)*a.se.M1[j], lwd=.5, col="gray10")
-}
-abline (coef(fit.cp)[1], 0, lwd=.5)
-title(main="Estimates of MSA Means from the MLM")
-
-```
-
-### Plot MLM estimates of MSA means + se's, model with MSA covariates
-```{r}
-
-par (mar=c(5,5,4,2)+.1)
-a.hat.M2 <- coef(fit0.1)$mmsa[,1]
-a.se.M2 <- se.coef(fit0.1)$mmsa
-
-plot (as.numeric(ns), t(a.hat.M2), cex.lab=1.2, cex.axis=1.1,
-      xlab="sample size in MSA j",
-      ylab=expression (paste("est. intercept, ", alpha[j], "(multilevel model with covariates)")),
-      pch=20, log="x", ylim=c(25, 30), yaxt="n", xaxt="n")
-axis (1, quantile(ns), cex.axis=1.1)
-axis (2, seq(25,30), cex.axis=1.1)
-for (j in 1:length(unique(merged$mmsa))){
-  lines (rep(as.numeric(ns)[j],2),
-         as.vector(a.hat.M2[j]) + c(-1,1)*a.se.M2[j], lwd=.5, col="gray10")
-}
-abline (coef(fit.cp)[1], 0, lwd=.5)
-title(main="Estimates of MSA Means from the MLM with MSA predictors")
-
-#This plot shows that as the n_j goes down, the standard error of the estimate increases
-qplot(y=se.coef(lm.unpooled), x=coef(lm.unpooled), size=sqrt(ns))
-
-#again, we see the relationship between variance and n_j
-qplot(y=as.numeric(a.se.M1),x=se.coef(lm.unpooled),color=sqrt(ns))
-
-
-```
