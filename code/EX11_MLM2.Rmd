@@ -48,7 +48,7 @@ Sources of information for contextual units come from many sources. They type of
 
 In this model, we consider how factors operating at four levels can combine to influence a person-level outcome. These levels are: person, family, neighborhood, and society. Heise and colleagues (1999) use this simple diagram to explain the factors that lead to partner violence in developing countries. In their model, which they refer to as an ecological model, violence is affected by woman-centric factors such as education and age, family or couple-level factors such as differences in education or work between couples, neighborhood level factor, which they identify as related to social institutions such as local customs and gender roles, and the outermost layer could reflect societal norms and women's power dynamics within a society. 
 
-![Onion Model](C:/Users/ozd504/Documents/GitHub/DEM7283/images/onion.png)
+![Onion Model](C:/Users/ozd504/GitHub/DEM7283/images/onion.png)
 
 In terms of measurement of the various levels within a given multilevel modeling framework, as we saw in the previous section of this lesson, the outcome variable is measured on the individual, and typically comes from some sort of survey mechanism. Depending on the survey, it can ask questions that solely relate to the focal-person, or the respondent, or the survey could ask other questions about other members of the household or questions about how the respondent views the neighborhood in which they live. Many surveys ask such questions about how a respondent views their neighborhood. An example of this is that in recent years, the National Health Interview Survey asked questions about a respondent's neighborhood, including questions about how much they can depend on their neighbors, how much people in their neighborhood help each other, and how much trust they have of their neighbors. This allows us to ask questions related to ideas of collective efficacy, without having any sort of geographic identifier in the public-use version of that data.
 
@@ -61,6 +61,7 @@ We will often be interested in factors at both the individual *AND* contextual l
 
 To measure macro level variables, I will include some Census variables from the ACS 2011 5 Year estimates load in ACS data from **_tidycensus_**.
 The first set of variables includes information on the economic conditions of the county, specifically poverty and unemployment.
+
 ### Higher level predictors
 We will often be interested in factors at both the individual *AND* contextual levels. To illustrate this, I will use data from the American Community Survey measured at the MSA level. Specifically, I use the DP3 table, which provides economic characteristics of places, from the 2010 5 year ACS [Link](http://www.census.gov/acs/www/data_documentation/special_data_release/).
 
@@ -314,6 +315,7 @@ model1<-glmer(obese ~ agec + male + educ + race_eth + medhhinc + pvacant+ (1|mms
                                      optCtrl=list(maxfun=2e9)))
 
 ```
+
 ```{r}
 library(gtsummary)
 model1%>%
@@ -388,7 +390,7 @@ Here, we load the IHIS data and do some recodes.
 ```{r}
 library(ipumsr)
 library(haven)
-ddi<- read_ipums_ddi("C:/Users/ozd504/OneDrive - University of Texas at San Antonio//classes/dem7473/nhis_00011.xml")
+ddi<- read_ipums_ddi("C:/Users/ozd504/OneDrive - University of Texas at San Antonio//classes/dem7473/data/nhis_00011.xml")
 dat<-read_ipums_micro(ddi)
 dat<-zap_labels(dat)
 #names(dat)
