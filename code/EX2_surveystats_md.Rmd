@@ -1,0 +1,649 @@
+---
+title: "DEM 7283 - Example 1 - Survey Statistics using BRFSS data"
+author: "Corey Sparks, PhD"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  md_document:
+    variant: markdown_github
+---
+
+## What is a survey?
+
+A systematic method for gathering information from a sample of entities
+for the purposes of constructing quantitative descriptors of the
+attributes of the larger population of which the entities are members
+
+## Questions when identifying a survey data source:
+
+1)  What is the target population?
+2)  What is the sampling frame
+
+-   how do we know who ***could*** be included?
+
+3)  What is the sample design?
+4)  What is the mode of data collection?
+5)  Is the survey ongoing or a one-time collection?
+
+# Core Concepts
+
+***Sampling units*** - where information will be collected from
+
+***Sampling frame*** - the set of sampling units containing distinct
+sets of population members
+
+# Weights and weighting
+
+Surveys with complex sample designs will often have:
+
+-   Unequal probabilities of selection
+-   Variation in response rates across groups
+-   Differences in distributions of characteristics compared to the
+    population
+
+### Weights are used to compensate for these features
+
+## What is a weight?
+
+-   A weight is used to indicate the relative strength of an
+    observation.
+
+-   In the simplest case, each observation is counted equally.
+
+-   For example, if we have five observations, and wish to calculate the
+    mean, we just add up the values and divide by 5.
+
+### Dataset with 5 cases
+
+```{r, results='asis'}
+library(htmlTable)
+y<-c(4,2,1,5,2)
+wt<-c(1,2,4,1,2)
+dat<-data.frame(y=y, weight=wt)
+knitr::kable(dat)
+
+```
+
+Unweighted sample mean
+
+```{r}
+mean(dat$y)
+```
+
+Weighted sample mean
+
+```{r}
+library(questionr)
+wtd.mean(x=dat$y, weights=dat$weight)
+
+```
+
+## Difference between unweighted and weighted data
+
+-   With unweighted data, each case is counted equally.
+
+-   Unweighted data represent only those in the sample who provide data.
+
+-   With weighted data, each case is counted relative to its
+    representation in the population.
+
+-   Weights allow analyses that represent the target population.
+
+Weights compensate for collecting data from a sample rather than the
+entire population and for using a complex sample design.
+
+Weights adjust for differential selection probabilities and reduce bias
+associated with non-response by adjusting for differential nonresponse.
+Weights are used when estimating characteristics of the population.
+
+## Sample variance estimation in complex designs
+
+***Standard errors*** are produced for estimates from sample surveys.
+They are a measure of the variance in the estimates associated with the
+selected sample being one of many possible samples.
+
+Standard errors are used to test hypotheses and to study group
+differences.
+
+Using inaccurate standard errors can lead to identification of
+statistically significant results where none are present and vice versa
+
+## Complex survey designs and standard errors
+
+-   The usual standard error formula assumes a simple random sample.
+
+-   Software packages designed for simple random samples tend to
+    underestimate the standard errors for complex sample designs.
+
+-   Standard errors for estimates from a complex sample must account for
+    the within cluster/ across cluster variation.
+
+-   Special software can make the adjustment, or this adjustment can be
+    approximated using the design effect.
+
+## Methods for sample variance estimation
+
+There are basically 3 ways in which software estimates variances: 1)
+Naive method 2) Taylor series approximation 3) Balanced or Jackknife
+replication
+
+## Data Example
+
+This example will cover the use of R functions for analyzing complex
+survey data. Most social and health surveys are not simple random
+samples of the population, but instead consist of respondents from a
+complex survey design.
+
+These designs often stratify the population based on one or more
+characteristics, including geography, race, age, etc. In addition the
+designs can be multi-stage, meaning that initial strata are created,
+then respondents are sampled from smaller units within those strata.
+
+An example would be if a school district was chosen as a sample strata,
+and then schools were then chosen as the primary sampling units (PSUs)
+within the district. From this 2 stage design, we could further sample
+classrooms within the school (3 stage design) or simply sample students
+(or whatever our unit of interest is).
+
+## Multi-stage sampling
+
+-   Non-random sampling
+
+-   Population consists of known sub-groups called *clusters*
+
+-   A 2 -stage sample might be households within neighborhoods, or
+    children within schools
+
+    -   We may choose a random sample of schools/neighborhoods at the
+        first stage, and a random sample of people within each
+        school/neighborhood as the second stage
+    -   We need to be *careful* because the observations in the second
+        stage are not *independent* of one another
+    -   Increased probability of selection for children in a selected
+        school
+
+-   This type of sampling leads to *dependent* observations
+
+Here's a picture of this:
+
+![](C:/Users/ozd504/Documents/Github/dem7283/images/MLdata.png)
+
+
+A second feature of survey data we often want to account for is
+differential respondent weighting. This means that each respondent is
+given a weight to represent how common that particular respondent is
+within the population. This reflects the differenital probability of
+sampling based on respondent characteristics.
+
+As demographers, we are also often interested in making inference for
+the population, not just the sample, so our results must be
+generalizable to the population at large. Sample weights are used in the
+process as well.
+
+When such data are analyzed, we must take into account this nesting
+structure (sample design) as well as the respondent sample weight in
+order to make valid estimates of **ANY** statistical parameter. If we do
+not account for design, the parameter standard errors will be incorrect,
+and if we do not account for weighting, the parameters themselves will
+be incorrect and biased.
+
+In general there are typically three things we need to find in our
+survey data codebooks: The sample strata identifier, the sample primary
+sampling unit identifier (often called a cluster identifier) and the
+respondent survey weight. These will typically have one of these names
+and should be easily identifiable in the codebook.
+
+Statistical software will have special routines for analyzing these
+types of data and you must be aware that the diversity of statistical
+routines that generally exists will be lower for analyzing complex
+survey data, and some forms of analysis *may not be available!*
+
+See [Thomas Lumley's
+Book](https://onlinelibrary.wiley.com/doi/book/10.1002/9780470580066) on
+this!
+
+Below I illustrate the use of survey characteristics when conducting
+descriptive analysis of a survey data set and a linear regression model
+estimated from that data. For this example I am using 2016 CDC
+Behavioral Risk Factor Surveillance System (BRFSS) SMART metro area
+survey data. [Link](https://www.cdc.gov/brfss/smart/smart_2016.html)
+
+```{r}
+#load brfss
+library(car)
+library(stargazer)
+library(survey)
+library(questionr)
+library(dplyr)
+library(forcats)
+```
+
+```{r}
+
+brfss20<- readRDS(url("https://github.com/coreysparks/DEM7283/blob/master/data/brfss20sm.rds?raw=true"))
+### Fix variable names
+names(brfss20) <- tolower(gsub(pattern = "_",replacement =  "",x =  names(brfss20)))
+
+```
+
+
+### Recoding of variables
+
+Be sure to always check your codebooks!
+
+```{r}
+#Poor or fair self rated health
+brfss20$badhealth<-Recode(brfss20$genhlth, recodes="4:5=1; 1:3=0; else=NA")
+
+#sex
+brfss20$male<-as.factor(ifelse(brfss20$sex==1, "Male", "Female"))
+
+#race/ethnicity
+brfss20$black<-Recode(brfss20$racegr3, recodes="2=1; 9=NA; else=0")
+brfss20$white<-Recode(brfss20$racegr3, recodes="1=1; 9=NA; else=0")
+brfss20$other<-Recode(brfss20$racegr3, recodes="3:4=1; 9=NA; else=0")
+brfss20$hispanic<-Recode(brfss20$racegr3, recodes="5=1; 9=NA; else=0")
+brfss20$race_eth<-Recode(brfss20$racegr3, 
+recodes="1='nhwhite'; 2='nh black'; 3='nh other';4='nh multirace'; 5='hispanic'; else=NA",
+as.factor = T)
+brfss20$race_eth<-relevel(brfss20$race_eth, ref = "nhwhite")
+
+#insurance
+brfss20$ins<-Recode(brfss20$hlthpln1, recodes ="7:9=NA; 1=1;2=0")
+
+#income grouping
+brfss20$inc<-ifelse(brfss20$incomg==9, NA, brfss20$incomg)
+
+#education level
+brfss20$educ<-Recode(brfss20$educa, recodes="1:2='0Prim'; 3='1somehs'; 4='2hsgrad'; 5='3somecol'; 6='4colgrad';9=NA", as.factor=T)
+brfss20$educ<-fct_relevel(brfss20$educ,'0Prim','1somehs','2hsgrad','3somecol','4colgrad' ) 
+
+#employment
+brfss20$employ<-Recode(brfss20$employ1, recodes="1:2='Employed'; 2:6='nilf'; 7='retired'; 8='unable'; else=NA", as.factor=T)
+brfss20$employ<-relevel(brfss20$employ, ref='Employed')
+
+#marital status
+brfss20$marst<-Recode(brfss20$marital, recodes="1='married'; 2='divorced'; 3='widowed'; 4='separated'; 5='nm';6='cohab'; else=NA", as.factor=T)
+brfss20$marst<-relevel(brfss20$marst, ref='married')
+
+#Age cut into intervals
+brfss20$agec<-cut(brfss20$age80, breaks=c(0,24,39,59,79,99))
+
+#BMI, in the brfss20a the bmi variable has 2 implied decimal places, so we must divide by 100 to get real bmi's
+
+brfss20$bmi<-brfss20$bmi5/100
+brfss20$obese<-ifelse(brfss20$bmi>=30, 1, 0)
+```
+
+### Filter cases
+
+```{r}
+
+brfss20<-brfss20%>%
+  filter(sex!=9, is.na(educ)==F, is.na(badhealth)==F)
+
+```
+
+### Analysis
+
+First, we will do some descriptive analysis, such as means and cross
+tabulations.
+
+```{r, eval=FALSE}
+library(gtsummary)
+
+brfss20%>%
+  select(badhealth, educ)%>%
+  tbl_summary(by = educ, 
+              label = list(badhealth = "Fair/Poor Health"),
+              statistic = all_categorical())%>%
+  add_p()%>%
+  add_n()
+
+```
+
+
+```{r}
+#First we will do some tables
+#Raw frequencies
+table(brfss20$badhealth, brfss20$educ)
+
+#column percentages
+100*prop.table(table(brfss20$badhealth, brfss20$educ), margin=2)
+
+#basic chi square test of independence
+chisq.test(table(brfss20$badhealth, brfss20$educ))
+```
+
+So basically all of these numbers are incorrect, since they all assume
+random sampling. Now, we must tell R what the survey design is and what
+the weight variable is, then we can re-do these so they are correct.
+
+### Create a survey design object
+
+Now we identify the survey design. *ids* = PSU identifers,
+*strata*=strata identifiers, *weights*=sampling weights, *data*= the
+data frame where these variables are located. Lastly, I only include
+respondents with NON-MISSING case weights.
+
+I first try to get only cities in the state of Texas by looking for "TX"
+in the MSA's name field in the data.
+
+```{r}
+brfss20$tx<-NA
+brfss20$tx[grep(pattern = "TX", brfss20$mmsaname)]<-1
+
+```
+
+Now I make the survey design object. You may be required to specify two
+options here:
+
+1.  `survey.lonely.psu` This means that some of the strata only have 1
+    PSU within them. This does not allow for within strata variance to
+    be calculated. So we often have to tell the computer to do something
+    here. Two valid options are "adjust", to center the stratum at the
+    population mean rather than the stratum mean, and "average" to
+    replace the variance contribution of the stratum by the average
+    variance contribution across strata. (from ?surveyoptions)
+
+2.  Nesting of PSU within strata. By default, PSUs have numeric
+    identifiers that can overlap between strata. By specifying `nest=T`,
+    we tell R to re-lable the PSUs so they are unique across strata. If
+    your survey requires this, it will throw a warning message.
+
+```{r}
+library(srvyr)
+library(gtsummary)
+options(survey.lonely.psu = "adjust")
+
+test<-  brfss20%>%
+  as_survey_design( strata =ststr, weights = mmsawt)%>%
+  select(badhealth, educ)%>%
+  tbl_svysummary(by = educ, 
+              label = list(badhealth = "Fair/Poor Health"))%>%
+  add_p()%>%
+  add_n()
+
+test
+
+brfss20<-brfss20%>%
+  filter(tx==1, is.na(mmsawt)==F, is.na(badhealth)==F)
+
+#
+
+des<-svydesign(ids=~1, strata=~ststr, weights=~mmsawt, data = brfss20 )
+
+```
+
+\#\#\#Simple weighted analysis Now , we re-do the analysis from above
+using only weights:
+
+```{r}
+#counts
+cat<-wtd.table(brfss20$badhealth, brfss20$educ, weights = brfss20$mmsawt)
+
+#proportions
+prop.table(wtd.table(brfss20$badhealth, brfss20$educ, weights = brfss20$mmsawt), margin=2)
+
+#compare that with the original, unweighted proportions
+prop.table(table(brfss20$badhealth, brfss20$educ), margin=2)
+
+```
+
+There **are** differences, notably that the prevalence of poor SRH is
+*higher in the sample than the population*. This is important!
+
+Let's say we also want the standard errors of these percentages. This
+can be found for a proportion by: $s.e. (p)={\sqrt {p(1-p)} \over {n}}$
+
+So we need to get n and p, that's easy:
+
+```{r,results='asis'}
+n<-table(is.na(brfss20$badhealth)==F)
+n
+
+p<-prop.table(wtd.table(brfss20$badhealth, brfss20$educ, weights = brfss20$mmsawt), margin=2)
+t(p)
+
+p<-prop.table(wtd.table(brfss20$badhealth, brfss20$male, weights = brfss20$mmsawt), margin=2)
+t(p)
+
+se<-(p*(1-p))/n[2]
+
+p<-
+
+knitr::kable(data.frame(proportion=p, se=sqrt(se))[, c(1,2,3,6)], format = "html", caption = "Frequencies assuming random sampling")
+
+```
+
+Which shows us the errors in the estimates based on the weighted
+proportions. That's nice, but since we basically inflated the n to be
+the population of the US, these standard errors are too small. This is
+another example of using survey statistical methods, to get the right
+standard error for a statistic.
+
+### Proper survey design analysis
+
+```{r, results='asis'}
+#Now consider the full sample design + weights
+cat<-svyby(formula = ~badhealth, by=~male+agec+ins, design = des, FUN=svymean)
+
+svychisq(~badhealth+male, design = des)
+
+knitr::kable(cat,
+      caption = "Survey Estimates of Poor SRH by Sex",
+      align = 'c',  
+      format = "html")
+
+```
+
+Which gives the same %'s as the weighted table above, but we also want
+the correct standard errors for our bad health prevalence.
+
+The `svyby()` function will calculate statistics by groups, in this case
+we want the % in bad health by each level of education. The %'s can be
+gotten using the `svymean()` function, which finds means of variables
+using survey design:
+
+```{r, results='asis'}
+
+sv.table<-svyby(formula = ~badhealth, by = ~educ, design = des, FUN = svymean, na.rm=T)
+
+
+knitr::kable(sv.table,
+      caption = "Survey Estimates of Poor SRH by Education",
+      align = 'c',  
+      format = "html")
+
+#Make a survey design that is random sampling - no survey information
+nodes<-svydesign(ids = ~1,  weights = ~1, data = brfss20)
+
+sv.table<-svyby(formula = ~factor(badhealth), by = ~educ, design = nodes, FUN = svymean, na.rm=T)
+
+
+prop.table(table(brfss20$sex, brfss20$badhealth))
+
+knitr::kable(sv.table,
+      caption = "Estimates of Poor SRH by Education - No survey design",
+      align = 'c',  
+      format = "html")
+
+```
+
+And we see the same point estimates of our prevalences as in the simple
+weighted table, but the standard errors have now been adjusted for
+survey design as well, so they are also correct. You also see they are
+much larger than the ones we computed above, which assumed random
+sampling.
+
+### Another way
+
+There's this great R package, `tableone` that does this stuff very
+nicely and incorporates survey design too. Here's an example of using it
+to generate your bi-variate tests like above:
+
+```{r}
+library(tableone)
+#not using survey design
+t1<-CreateTableOne(vars = c("educ", "marst", "male", "badhealth"),strata="race_eth", data = brfss20)
+
+
+
+#t1<-print(t1, format="p")
+print(t1,format="p" )
+#, strata = "badhealth", test = T,
+#using survey design
+st1<-svyCreateTableOne(vars = c("educ", "marst", "male", "badhealth"), strata = "race_eth", test = T, data = des)
+#st1<-print(st1, format="p")
+print(st1, format="p")
+```
+
+## Regression example
+
+Next we apply this logic to a regression case. First we fit the OLS
+model for our BMI outcome using education and age as predictors:
+
+```{r}
+fit1<-lm(bmi~educ+agec, data=brfss20)
+```
+
+Next we incorporate case weights
+
+```{r}
+fit2<-lm(bmi~educ+agec, data=brfss20, weights = mmsawt)
+
+```
+
+Now we will incorporate design effects as well:
+
+```{r}
+fit3<-svyglm(bmi~educ+agec,des, family=gaussian)
+
+```
+
+Now I make a table to show the results of the three models:
+
+```{r, results='asis'}
+stargazer(fit1, fit2, fit3, style="demography", type="html",
+          column.labels = c("OLS", "Weights Only", "Survey Design"),
+          title = "Regression models for BMI using survey data - BRFSS 2016", 
+          covariate.labels=c("PrimarySchool", "SomeHS", "SomeColl", "CollGrad", "Age 24-39","Age 39-59" ,"Age 59-79", "Age 80+"), 
+          keep.stat="n", model.names=F, align=T, ci=T)
+```
+
+Notice, the results for the education levels are much *less* significant
+than the were with either of the other two analysis. This is because
+those models had standard errors for the parameters that were too small.
+You see all the standard errors are larger and the T statistics are
+smaller.
+
+Which shows the same $\beta$'s between the survey design model and the
+weighted model but the standard errors are larger in the survey model,
+so the test statistics are more conservative (smaller t statistics).
+
+While in this simple model, our overall interpretation of the effects do
+not change (positive effects of education, negative effects of age), it
+is entirely possible that they could once we include our survey design
+effects.
+
+It may be informative to plot the results of the models to see how
+different the coefficients are from one another:
+
+```{r}
+
+library(ggplot2)
+library(dplyr)
+coefs<-data.frame(coefs=c(coef(fit1)[-1], coef(fit3)[-1]),
+                  mod=c(rep("Non Survey Model", 8),rep("Survey Model", 8)),
+                  effect=rep(names(coef(fit1)[-1]), 2))
+
+coefs%>%
+  ggplot()+
+  geom_point(aes( x=effect, y=coefs, group=effect,color=effect, shape=mod),
+             position=position_jitterdodge(jitter.width = 1),
+             size=2)+
+  ylab("Regression Coefficient")+
+  xlab("Beta")+
+  geom_abline(intercept = 0, slope=0)+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  ggtitle(label = "Comparison of Survey and Non-Survey Regression effects")
+
+
+```
+
+Which shows us that the betas are similar but have some differences
+between the two models.
+
+## Creating Survey estimates for places
+
+One of the coolest ways to use the BRFSS is to calculate estimates for
+places, and by demographic characteristics withing places. Again, we use
+`svyby()` to do this, but now we calculate obesity rates by sex within
+cities.
+
+```{r, results='asis'}
+citytab<-svyby(~obese, ~mmsaname, design=des,FUN = svymean, na.rm=T )
+knitr::kable(citytab, type="html", digits=3,caption = "Obesity Estimats for TX MSAs")
+
+```
+
+### Using srvyr
+
+There's a new package called `srvyr` that incorporates the survey
+analysis stuff into the `dplyr` universe:
+
+```{r, eval=F}
+library(srvyr)
+brfsurv<-brfss20%>%
+  as_survey_design(1,strata=ststr,weights=mmsawt )
+
+
+brfsurv%>%
+  group_by(mmsaname)%>%
+    summarise(obprev = survey_mean(obese, na.rm=T))
+
+```
+
+## Replicate Weights
+
+If your dataset comes with *replicate weights*, you have to specify the
+survey design slightly differently. Here is an example using the IPUMS
+CPS data. For this data, you can get information
+[here](https://cps.ipums.org/cps/repwt.shtml), but you must consult your
+specific data source for the appropriate information for your data.
+
+```{r, message=F, warning=F}
+load(url("https://github.com/coreysparks/data/blob/master/cpsmar10tx.Rdata?raw=true"))
+names(cpsmar10tx)
+
+```
+
+So we see the replicate weights are in columns 8 through 167 in the data
+
+```{r}
+#simple binary outcome
+cpsmar10tx$poverty<-ifelse(cpsmar10tx$offpov==1,1,0)
+
+# Replicate weight design - I got these details from the data source, you should too
+des2<-svrepdesign( data = cpsmar10tx,repweights = cpsmar10tx[, c(8:167)]  ,
+                   weights = ~wtsupp ,
+                   type="JK1",
+                   scale=.025)
+des2
+
+```
+
+```{r}
+#Without design
+prop.table(table(cpsmar10tx$poverty))
+
+#with design
+prop.table(svytable(~poverty, design = des2))
+
+```
+
+```{r}
+#Again, using the mean
+mean(cpsmar10tx$poverty)
+#Using the design. This would be an official estimate of poverty in TX in 2010:
+svymean(~poverty, design=des2)
+```
