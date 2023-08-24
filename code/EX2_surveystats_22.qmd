@@ -9,6 +9,7 @@ output:
     fig_width: 7
     toc: yes
     toc_float: yes
+    embed-resources: true
 editor_options:
   markdown:
     wrap: 72
@@ -245,7 +246,7 @@ Be sure to always check your codebooks!
 Here is the codebook for the BRFSS
 
 ```{=html}
-<iframe width="780" height="500" src="/Users/coreysparks/Documents/GitHub/DEM7283/data/codebook20_llcp-v2-508.pdf" title="BRFSS 2020 Codebook">
+<iframe width="700" height="500" src="codebook20_llcp-v2-508.pdf" title="BRFSS 2020 Codebook">
 </iframe>
 ```
 
