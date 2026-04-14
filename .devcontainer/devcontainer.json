@@ -1,0 +1,13 @@
+{
+  "name": "R 4.5.3",
+  "image": "rocker/r-ver:4.5.3",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "REditorSupport.r",
+        "quarto.quarto"
+      ]
+    }
+  },
+  "postCreateCommand": "R --version"
+}
