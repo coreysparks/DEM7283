@@ -8,6 +8,7 @@
       "onAutoForward": "openBrowser"
     }
   },
+  "postStartCommand": "sudo rstudio-server start || true",
   "customizations": {
     "vscode": {
       "extensions": [
