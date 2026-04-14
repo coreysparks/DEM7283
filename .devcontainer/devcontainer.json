@@ -1,6 +1,13 @@
 {
-  "name": "R 4.5.3",
-  "image": "rocker/r-ver:4.5.3",
+  "name": "R 4.5.3 + RStudio",
+  "image": "rocker/rstudio:4.5.3",
+  "forwardPorts": [8787],
+  "portsAttributes": {
+    "8787": {
+      "label": "RStudio",
+      "onAutoForward": "openBrowser"
+    }
+  },
   "customizations": {
     "vscode": {
       "extensions": [
@@ -8,6 +15,5 @@
         "quarto.quarto"
       ]
     }
-  },
-  "postCreateCommand": "R --version"
+  }
 }
