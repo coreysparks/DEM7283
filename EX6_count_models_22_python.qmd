@@ -1,0 +1,189 @@
+---
+title: "DEM 7283 - Count Data Models, Python"
+author: "Corey Sparks, PhD, converted to Python"
+date: "2026-04-22"
+format:
+  html:
+    toc: true
+execute:
+  echo: true
+  warning: false
+  message: false
+jupyter: python3
+---
+
+## Purpose
+
+This notebook converts the count data models chapter into Python. Main tools:
+
+- `pandas`
+- `numpy`
+- `statsmodels`
+- `geopandas`
+- `matplotlib`
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+```
+
+## Read AHRF data
+
+```{python}
+import io, zipfile, requests
+url = "https://data.hrsa.gov/DataDownload/AHRF/AHRF_2019-2020_SAS.zip"
+r = requests.get(url, timeout=120)
+z = zipfile.ZipFile(io.BytesIO(r.content))
+name = [n for n in z.namelist() if n.endswith(".sas7bdat")][0]
+ahrf = pd.read_sas(z.open(name), format="sas7bdat", encoding="latin1")
+ahrf.head()
+```
+
+## Recode variables
+
+```{python}
+ahrf2 = (
+    ahrf.assign(
+        cofips=ahrf["f00004"].astype(str),
+        coname=ahrf["f00010"],
+        state=ahrf["f00011"],
+        popn=ahrf["f1198416"],
+        births1618=ahrf["f1254616"],
+        lowbw1618=ahrf["f1255316"],
+        fampov14=ahrf["f1443214"],
+        lbrate1618=1000 * (ahrf["f1255316"] / ahrf["f1254616"]),
+        rucc=ahrf["f0002013"].astype("category"),
+        obgyn15_pc=1000 * (ahrf["f1168415"] / ahrf["f1198416"]),
+    )[["births1618", "lowbw1618", "lbrate1618", "state", "cofips", "coname", "popn", "fampov14", "rucc", "obgyn15_pc"]]
+    .dropna()
+    .copy()
+)
+ahrf2.head()
+```
+
+## Histogram of the low birth weight rate
+
+```{python}
+plt.figure(figsize=(8, 5))
+plt.hist(ahrf2["lbrate1618"], bins=30)
+plt.title("Distribution of low birth weight rates in US counties")
+plt.xlabel("Rate per 1,000 live births")
+plt.ylabel("Frequency")
+plt.tight_layout()
+plt.show()
+```
+
+## Gaussian GLM
+
+```{python}
+glm1 = smf.glm("lbrate1618 ~ fampov14 + C(rucc)", data=ahrf2, family=sm.families.Gaussian()).fit()
+print(glm1.summary())
+```
+
+```{python}
+glm2 = smf.glm("lbrate1618 ~ fampov14 + C(rucc)", data=ahrf2, family=sm.families.Gaussian(link=sm.families.links.log())).fit()
+print({"AIC_identity": glm1.aic, "AIC_log": glm2.aic})
+```
+
+## Binomial regression for grouped events
+
+```{python}
+ahrf2["lowbw_prop"] = ahrf2["lowbw1618"] / ahrf2["births1618"]
+glmb = smf.glm(
+    "lowbw_prop ~ fampov14 + C(rucc)",
+    data=ahrf2,
+    family=sm.families.Binomial(),
+    freq_weights=ahrf2["births1618"]
+).fit()
+print(glmb.summary())
+```
+
+```{python}
+np.exp(glmb.params)
+```
+
+## Poisson rate model with offset
+
+```{python}
+glmp = smf.glm(
+    "lowbw1618 ~ fampov14 + C(rucc)",
+    data=ahrf2,
+    family=sm.families.Poisson(),
+    offset=np.log(ahrf2["births1618"])
+).fit()
+print(glmp.summary())
+np.exp(glmp.params)
+```
+
+## Check overdispersion
+
+```{python}
+scale = glmp.deviance / glmp.df_resid
+scale
+```
+
+## Robust covariance alternative
+
+```{python}
+glmp_robust = smf.glm(
+    "lowbw1618 ~ fampov14 + C(rucc)",
+    data=ahrf2,
+    family=sm.families.Poisson(),
+    offset=np.log(ahrf2["births1618"])
+).fit(cov_type="HC1")
+print(glmp_robust.summary())
+```
+
+## Negative binomial model
+
+```{python}
+glmnb = smf.glm(
+    "lowbw1618 ~ fampov14 + C(rucc)",
+    data=ahrf2,
+    family=sm.families.NegativeBinomial(),
+    offset=np.log(ahrf2["births1618"])
+).fit()
+print(glmnb.summary())
+np.exp(glmnb.params)
+```
+
+## Age standardization style example
+
+```{python}
+# txca = pd.read_csv("CMF_TX_CA_age.txt", sep="	", skiprows=1)
+# txca["Deaths"] = pd.to_numeric(txca["Deaths"])
+# txca["Population"] = pd.to_numeric(txca["Population"])
+# glmb_s = smf.glm(
+#     "death_prop ~ C(Age_Group) + State",
+#     data=txca.assign(death_prop=txca["Deaths"] / txca["Population"]),
+#     family=sm.families.Binomial(),
+#     freq_weights=txca["Population"]
+# ).fit()
+# glmp_s = smf.glm(
+#     "Deaths ~ C(Age_Group) + State",
+#     data=txca,
+#     family=sm.families.Poisson(),
+#     offset=np.log(txca["Population"])
+# ).fit()
+```
+
+## Fractional logit substitute for beta style outcomes
+
+```{python}
+ahrf2["lbrate_prop"] = ahrf2["lbrate1618"] / 1000
+fraclogit = smf.glm(
+    "lbrate_prop ~ fampov14 + C(rucc)",
+    data=ahrf2.loc[(ahrf2["lbrate_prop"] > 0) & (ahrf2["lbrate_prop"] < 1)],
+    family=sm.families.Binomial()
+).fit()
+print(fraclogit.summary())
+```
+
+## Notes
+
+- `statsmodels` covers Gaussian, binomial, Poisson, and negative binomial very well
+- Grouped binomial models in Python usually use proportions plus `freq_weights`
+- Negative binomial is the main Python replacement when Poisson overdispersion is substantial

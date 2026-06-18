@@ -1,0 +1,172 @@
+---
+title: "DEM 5283/7283 - Multi-level Models Example 1, Python"
+author: "Corey Sparks, PhD, converted to Python"
+date: "2026-04-22"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+execute:
+  echo: true
+  warning: false
+  message: false
+jupyter: python3
+---
+
+## Purpose
+
+This notebook translates the original multi-level modeling example from R into Python based Quarto. The analysis uses:
+
+- `pandas` for data management
+- `numpy` for numerics
+- `statsmodels` for mixed models and GLM work
+- `geopandas` and `matplotlib` for mapping
+- `censusdata` or `cenpy` as a Python alternative to `tidycensus`
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+```
+
+## Load and clean BRFSS data
+
+```{python}
+# Preferred local workflow:
+# import pyreadr
+# result = pyreadr.read_r("brfss_2017.Rdata")
+# brfss_17 = result["brfss_17"]
+# brfss_17.columns = brfss_17.columns.str.replace("_", "", regex=False).str.lower()
+```
+
+## Recode variables
+
+```{python}
+# brfss_17["male"] = np.where(brfss_17["sex"] == 1, 1, 0)
+# brfss_17["bmi"] = np.where(brfss_17["bmi5"].isna(), np.nan, brfss_17["bmi5"] / 100)
+# brfss_17["healthdays"] = brfss_17["physhlth"].replace({88: 0, 77: np.nan, 99: np.nan})
+# brfss_17["healthmdays"] = brfss_17["menthlth"].replace({88: 0, 77: np.nan, 99: np.nan})
+# brfss_17["badhealth"] = np.select(
+#     [brfss_17["genhlth"].isin([4, 5]), brfss_17["genhlth"].isin([1, 2, 3])],
+#     [1, 0],
+#     default=np.nan
+# )
+# brfss_17["race_eth"] = np.select(
+#     [
+#         brfss_17["racegr3"] == 1,
+#         brfss_17["racegr3"] == 2,
+#         brfss_17["racegr3"] == 3,
+#         brfss_17["racegr3"] == 4,
+#         brfss_17["racegr3"] == 5
+#     ],
+#     ["nhwhite", "nh black", "nh other", "nh multirace", "hispanic"],
+#     default=np.nan
+# )
+# brfss_17["ins"] = brfss_17["hlthpln1"].replace({1: 1, 2: 0, 7: np.nan, 8: np.nan, 9: np.nan})
+# brfss_17["smoke"] = np.select(
+#     [brfss_17["smoker3"].isin([1, 2]), brfss_17["smoker3"].isin([3, 4])],
+#     [1, 0],
+#     default=np.nan
+# )
+# brfss_17["obese"] = np.where(brfss_17["bmi"].isna(), np.nan, (brfss_17["bmi"] > 30).astype(int))
+```
+
+## Distribution of respondents across MSAs
+
+```{python}
+# brfss_17.groupby("mmsa").size().reset_index(name="npeople").head()
+# brfss_17["mmsa"].nunique()
+```
+
+## Add contextual ACS data
+
+In R the original used `tidycensus::get_acs()`. In Python, a comparable workflow is to use the Census API via `censusdata` or `cenpy`, then merge on the MSA code.
+
+```{python}
+# import censusdata
+# vars_needed = ["DP05_0001E", "DP03_0062E", "DP04_0003PE"]
+# query, clean, and standardize the contextual variables, then merge on MSA code
+```
+
+## Prepare analysis file
+
+```{python}
+# merged = merged[["bmiz", "obese", "mmsa", "agec", "educ", "race_eth", "smoke",
+#                  "healthmdays", "badhealth", "bmi", "medhhinc", "pvacant", "male",
+#                  "mmsawt", "mmsaname"]].dropna()
+# meanbmi = merged["bmi"].mean()
+# sdbmi = merged["bmi"].std()
+```
+
+## Fixed effects precursor model
+
+```{python}
+# fit_anova = smf.ols("bmiz ~ C(mmsa)", data=merged).fit()
+# sm.stats.anova_lm(fit_anova, typ=2)
+```
+
+For a binary outcome:
+
+```{python}
+# fit_ob = smf.glm("obese ~ C(mmsa)", data=merged, family=sm.families.Binomial()).fit()
+# print(fit_ob.summary())
+```
+
+## Random intercept model
+
+```{python}
+# fit = smf.mixedlm("bmiz ~ 1", data=merged, groups=merged["mmsa"]).fit()
+# print(fit.summary())
+```
+
+## Mixed model with individual predictors
+
+```{python}
+# fit2 = smf.mixedlm("bmiz ~ male + C(agec) + C(educ)", data=merged, groups=merged["mmsa"]).fit()
+# print(fit2.summary())
+```
+
+Likelihood ratio style comparison:
+
+```{python}
+# lr_stat = 2 * (fit2.llf - fit.llf)
+# df_diff = fit2.df_modelwc - fit.df_modelwc
+# from scipy.stats import chi2
+# p_value = chi2.sf(lr_stat, df_diff)
+# print({"lr_stat": lr_stat, "df_diff": df_diff, "p_value": p_value})
+```
+
+## Intraclass correlation coefficient
+
+```{python}
+# var_u = fit2.cov_re.iloc[0, 0]
+# var_e = fit2.scale
+# icc = var_u / (var_u + var_e)
+# icc
+```
+
+## Caterpillar plot of random intercepts
+
+```{python}
+# re = pd.DataFrame({
+#     "mmsa": list(fit.random_effects.keys()),
+#     "rand_intercept": [v.iloc[0] if hasattr(v, "iloc") else list(v.values())[0] for v in fit.random_effects.values()]
+# }).sort_values("rand_intercept")
+# plt.figure(figsize=(8, 10))
+# plt.plot(re["rand_intercept"], np.arange(len(re)), marker="o", linestyle="none")
+# plt.yticks(np.arange(len(re)), re["mmsa"])
+# plt.axvline(0, linestyle="--")
+# plt.xlabel("Random intercept")
+# plt.ylabel("MSA")
+# plt.title("Random intercepts by MSA")
+# plt.tight_layout()
+# plt.show()
+```
+
+## Notes
+
+- `statsmodels` handles Gaussian mixed models well
+- Logistic mixed models are more limited in base `statsmodels` than in `lme4`
+- For full GLMM workflows in Python, consider `bambi`, `PyMC`, or `BinomialBayesMixedGLM`

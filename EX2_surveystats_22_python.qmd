@@ -1,0 +1,177 @@
+---
+title: "DEM 7283 - Example 1 - Survey Statistics using BRFSS data, Python"
+author: "Corey Sparks, PhD, converted to Python"
+date: "2026-04-22"
+format:
+  html:
+    toc: true
+execute:
+  echo: true
+  warning: false
+  message: false
+jupyter: python3
+---
+
+## Purpose
+
+This notebook translates the survey statistics example into Python. The closest Python tools are:
+
+- `pandas` for data handling
+- `statsmodels` for weighted regression
+- `samplics` for complex survey design estimation, where available
+
+Python's survey ecosystem is thinner than R's `survey` package, so this notebook emphasizes the main translations and practical equivalents.
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+```
+
+## Weighted mean example
+
+```{python}
+y = np.array([4, 2, 1, 5, 2])
+wt = np.array([1, 2, 4, 1, 2])
+dat = pd.DataFrame({"y": y, "weight": wt})
+dat
+```
+
+```{python}
+dat["y"].mean()
+```
+
+```{python}
+np.average(dat["y"], weights=dat["weight"])
+```
+
+## Load BRFSS data
+
+```{python}
+# import pyreadr
+# result = pyreadr.read_r("brfss20sm.rds")
+# brfss20 = result[None]
+# brfss20.columns = brfss20.columns.str.replace("_", "", regex=False).str.lower()
+```
+
+## Recode variables
+
+```{python}
+# brfss20["badhealth"] = np.select(
+#     [brfss20["genhlth"].isin([4, 5]), brfss20["genhlth"].isin([1, 2, 3])],
+#     [1, 0],
+#     default=np.nan
+# )
+# brfss20["male"] = np.where(brfss20["sex"] == 1, "Male", "Female")
+# brfss20.loc[brfss20["sex"] == 9, "male"] = np.nan
+# race_map = {1: "nhwhite", 2: "nh black", 3: "nh other", 4: "nh multirace", 5: "hispanic"}
+# brfss20["race_eth"] = brfss20["racegr3"].map(race_map)
+# educ_map = {1: "0Prim", 2: "0Prim", 3: "1somehs", 4: "2hsgrad", 5: "3somecol", 6: "4colgrad"}
+# brfss20["educ"] = brfss20["educa"].map(educ_map)
+# brfss20["bmi"] = brfss20["bmi5"] / 100
+# brfss20["obese"] = np.where(brfss20["bmi"] >= 30, 1, 0)
+```
+
+## Filter cases
+
+```{python}
+# brfss20 = brfss20.loc[(brfss20["sex"] != 9) & brfss20["educ"].notna() & brfss20["badhealth"].notna()].copy()
+```
+
+## Unweighted tables
+
+```{python}
+# pd.crosstab(brfss20["badhealth"], brfss20["male"])
+# pd.crosstab(brfss20["badhealth"], brfss20["educ"])
+```
+
+```{python}
+# tab = pd.crosstab(brfss20["badhealth"], brfss20["educ"])
+# 100 * tab.div(tab.sum(axis=0), axis=1)
+```
+
+## Weighted proportions by education
+
+```{python}
+# wt_tab = brfss20.groupby(["educ", "badhealth"], dropna=False)["mmsawt"].sum().unstack(fill_value=0)
+# wt_tab.div(wt_tab.sum(axis=1), axis=0)
+```
+
+## Simple weighted prevalence estimates
+
+```{python}
+# weighted_prev = brfss20.groupby("educ").apply(lambda d: np.average(d["badhealth"], weights=d["mmsawt"])).reset_index(name="weighted_badhealth_mean")
+# weighted_prev
+```
+
+## Complex survey design notes
+
+R's `survey` package directly supports Taylor linearization and replicate weights. In Python, two practical options are:
+
+1. Use `samplics` for survey estimators
+2. Use weighted point estimates in Python, then validate complex design estimates in R when needed
+
+```{python}
+# from samplics import TaylorEstimator
+# from samplics.utils.types import PopParam
+# est = TaylorEstimator(param=PopParam.mean)
+# est.estimate(
+#     y=brfss20["badhealth"].to_numpy(),
+#     samp_weight=brfss20["mmsawt"].to_numpy(),
+#     stratum=brfss20["ststr"].to_numpy(),
+#     psu=np.ones(len(brfss20))
+# )
+# est.to_dataframe()
+```
+
+## Weighted regression
+
+```{python}
+# fit1 = smf.ols("bmi ~ C(educ) + C(agec)", data=brfss20).fit()
+# print(fit1.summary())
+```
+
+```{python}
+# fit2 = smf.wls("bmi ~ C(educ) + C(agec)", data=brfss20, weights=brfss20["mmsawt"]).fit()
+# print(fit2.summary())
+```
+
+```{python}
+# fit3 = smf.wls("bmi ~ C(educ) + C(agec)", data=brfss20, weights=brfss20["mmsawt"]).fit(cov_type="HC1")
+# print(fit3.summary())
+```
+
+## Coefficient comparison plot
+
+```{python}
+# coefs = pd.DataFrame({
+#     "effect": fit1.params.index[1:],
+#     "non_survey_model": fit1.params.values[1:],
+#     "weighted_model": fit3.params.values[1:]
+# }).melt(id_vars="effect", var_name="model", value_name="coef")
+# plt.figure(figsize=(9, 5))
+# for m, d in coefs.groupby("model"):
+#     plt.scatter(d["effect"], d["coef"], label=m)
+# plt.axhline(0, linestyle="--")
+# plt.xticks(rotation=45, ha="right")
+# plt.ylabel("Regression coefficient")
+# plt.title("Comparison of coefficient estimates")
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
+```
+
+## Place level survey estimates
+
+```{python}
+# citytab = brfss20.groupby("mmsaname").apply(lambda d: np.average(d["obese"], weights=d["mmsawt"])).reset_index(name="obesity_prevalence")
+# citytab.head(10)
+```
+
+## Notes
+
+- R remains stronger for full design based survey analysis
+- Python handles weighted descriptives and weighted regression well
+- For replicated survey workflows, `samplics` is the best current Python direction

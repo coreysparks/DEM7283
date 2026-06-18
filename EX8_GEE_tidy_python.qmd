@@ -1,0 +1,181 @@
+---
+title: "DEM 7283 - Longitudinal Models for Change using GEE, Python"
+author: "Corey Sparks, PhD, converted to Python"
+date: "2026-04-22"
+format:
+  html:
+    toc: true
+execute:
+  echo: true
+  warning: false
+  message: false
+jupyter: python3
+---
+
+## Purpose
+
+This notebook translates the GEE longitudinal example into Python using:
+
+- `pandas`
+- `numpy`
+- `statsmodels`
+- `matplotlib`
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+from statsmodels.genmod.generalized_estimating_equations import GEE
+from statsmodels.genmod.cov_struct import Independence, Exchangeable, Autoregressive
+from statsmodels.genmod.families import Gaussian, Binomial
+```
+
+## Read and prepare the ECLS-K data
+
+```{python}
+ import pyreadr
+ result = pyreadr.read_r("eclsk_k5.rds")
+# eclskk5 = result["eclskk5"]
+# eclskk5.columns = eclskk5.columns.str.lower()
+```
+
+## Recode time invariant variables
+
+```{python}
+# eclsk = eclskk5.copy()
+# eclsk["male"] = np.select([eclsk["x_chsex_r"] == 1, eclsk["x_chsex_r"] == 2], [1, 0], default=np.nan)
+# eclsk["hisp"] = np.where(eclsk["x_raceth_r"].isin([3, 4]), 1, np.where(eclsk["x_raceth_r"] == -9, np.nan, 0))
+# eclsk["black"] = np.where(eclsk["x_raceth_r"] == 2, 1, np.where(eclsk["x_raceth_r"] == -9, np.nan, 0))
+# eclsk["asian"] = np.where(eclsk["x_raceth_r"] == 5, 1, np.where(eclsk["x_raceth_r"] == -9, np.nan, 0))
+# eclsk["nahn"] = np.where(eclsk["x_raceth_r"].isin([6, 7]), 1, np.where(eclsk["x_raceth_r"] == -9, np.nan, 0))
+# eclsk["other"] = np.where(eclsk["x_raceth_r"] == 8, 1, np.where(eclsk["x_raceth_r"] == -9, np.nan, 0))
+```
+
+## Recode time varying variables
+
+```{python}
+# eclsk["math_1"] = np.where(eclsk["x1mscalk5"] < 0, np.nan, eclsk["x1mscalk5"])
+# eclsk["math_2"] = np.where(eclsk["x2mscalk5"] < 0, np.nan, eclsk["x2mscalk5"])
+# eclsk["math_4"] = np.where(eclsk["x4mscalk5"] < 0, np.nan, eclsk["x4mscalk5"])
+# eclsk["ageyrs_1"] = np.where(eclsk["x1kage_r"] < 0, np.nan, eclsk["x1kage_r"] / 12)
+# eclsk["ageyrs_2"] = np.where(eclsk["x2kage_r"] < 0, np.nan, eclsk["x2kage_r"] / 12)
+# eclsk["ageyrs_4"] = np.where(eclsk["x4age"] < 0, np.nan, eclsk["x4age"] / 12)
+# eclsk["chhealth_1"] = np.where(eclsk["p1hscale"] < 0, np.nan, eclsk["p1hscale"])
+# eclsk["chhealth_2"] = np.where(eclsk["p2hscale"] < 0, np.nan, eclsk["p2hscale"])
+# eclsk["chhealth_4"] = np.where(eclsk["p4hscale"] < 0, np.nan, eclsk["p4hscale"])
+# eclsk["hhses_1"] = eclsk["x12sesl"].replace(-9, np.nan)
+# eclsk["hhses_2"] = eclsk["x12sesl"].replace(-9, np.nan)
+# eclsk["hhses_4"] = eclsk["x4sesl_i"].replace(-9, np.nan)
+```
+
+## Reshape to long format
+
+```{python}
+# wide_keep = ["childid", "male", "hisp", "black", "asian", "nahn", "other", "w4c4p_40",
+#              "math_1", "math_2", "math_4", "ageyrs_1", "ageyrs_2", "ageyrs_4",
+#              "chhealth_1", "chhealth_2", "chhealth_4", "hhses_1", "hhses_2", "hhses_4"]
+# d = eclsk[wide_keep].copy()
+# long = pd.wide_to_long(d, stubnames=["math", "ageyrs", "chhealth", "hhses"], i="childid", j="wave", sep="_", suffix=r"\d+").reset_index()
+# long = long.rename(columns={"w4c4p_40": "wt"}).dropna().sort_values(["childid", "wave"])
+# long.head()
+```
+
+## Visualize repeated measures
+
+```{python}
+# ids = long["childid"].drop_duplicates().iloc[:10]
+# sub = long.loc[long["childid"].isin(ids)]
+# fig, axes = plt.subplots(4, 3, figsize=(10, 10), sharex=True, sharey=True)
+# axes = axes.flatten()
+# for ax, cid in zip(axes, ids):
+#     tmp = sub.loc[sub["childid"] == cid]
+#     ax.scatter(tmp["ageyrs"], tmp["math"])
+#     if len(tmp) >= 2:
+#         z = np.polyfit(tmp["ageyrs"], tmp["math"], 1)
+#         xg = np.linspace(tmp["ageyrs"].min(), tmp["ageyrs"].max(), 50)
+#         ax.plot(xg, np.polyval(z, xg))
+#     ax.set_title(str(cid))
+# plt.tight_layout()
+# plt.show()
+```
+
+## Naive linear model
+
+```{python}
+# fit_naive = smf.wls("math ~ ageyrs + male + black + hisp + asian + nahn + other + hhses", data=long, weights=long["wt"] / long["wt"].mean()).fit()
+# print(fit_naive.summary())
+```
+
+## Residual correlation across waves
+
+```{python}
+# long["resid"] = fit_naive.resid
+# e_res = long.pivot(index="childid", columns="wave", values="resid")
+# e_res.corr()
+```
+
+## Gaussian GEE, independence
+
+```{python}
+# gee_ind = GEE.from_formula("math ~ ageyrs + male + black + hisp + asian + nahn + other + hhses", groups="childid", time="wave", cov_struct=Independence(), family=Gaussian(), data=long, weights=long["wt"] / long["wt"].mean()).fit()
+# print(gee_ind.summary())
+```
+
+## Gaussian GEE, exchangeable
+
+```{python}
+# gee_ex = GEE.from_formula("math ~ ageyrs + male + black + hisp + asian + nahn + other + hhses", groups="childid", time="wave", cov_struct=Exchangeable(), family=Gaussian(), data=long, weights=long["wt"] / long["wt"].mean()).fit()
+# print(gee_ex.summary())
+```
+
+## Gaussian GEE, AR(1)
+
+```{python}
+# gee_ar1 = GEE.from_formula("math ~ ageyrs + male + black + hisp + asian + nahn + other + hhses", groups="childid", time="wave", cov_struct=Autoregressive(), family=Gaussian(), data=long, weights=long["wt"] / long["wt"].mean()).fit()
+# print(gee_ar1.summary())
+```
+
+## Working correlation comparison
+
+```{python}
+# gee_ind.qic(), gee_ex.qic(), gee_ar1.qic()
+```
+
+## Binary response GEE
+
+```{python}
+# long["poorhealth"] = np.where(long["chhealth"] > 2, 1, 0)
+```
+
+```{python}
+# btest = smf.glm("poorhealth ~ ageyrs + male + black + hisp + asian + nahn + other + hhses + C(wave)", data=long, family=sm.families.Binomial(), freq_weights=long["wt"] / long["wt"].mean()).fit()
+# long["residb"] = btest.resid_response
+```
+
+```{python}
+# e_res_b = long.pivot(index="childid", columns="wave", values="residb")
+# e_res_b.corr()
+```
+
+```{python}
+# fitb1 = GEE.from_formula("poorhealth ~ ageyrs + male + black + hisp + asian + nahn + other + hhses", groups="childid", time="wave", cov_struct=Independence(), family=Binomial(), data=long, weights=long["wt"] / long["wt"].mean()).fit()
+# print(fitb1.summary())
+```
+
+```{python}
+# fitb2 = GEE.from_formula("poorhealth ~ ageyrs + male + black + hisp + asian + nahn + other + hhses", groups="childid", time="wave", cov_struct=Exchangeable(), family=Binomial(), data=long, weights=long["wt"] / long["wt"].mean()).fit()
+# print(fitb2.summary())
+```
+
+```{python}
+# fitb3 = GEE.from_formula("poorhealth ~ ageyrs + male + black + hisp + asian + nahn + other + hhses", groups="childid", time="wave", cov_struct=Autoregressive(), family=Binomial(), data=long, weights=long["wt"] / long["wt"].mean()).fit()
+# print(fitb3.summary())
+```
+
+## Notes
+
+- `statsmodels` is the main Python analogue of `geepack`
+- `GEE.from_formula()` provides the clearest translation from the original R syntax
+- Exchangeable and AR(1) working correlation structures are both supported directly

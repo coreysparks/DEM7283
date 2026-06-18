@@ -1,0 +1,181 @@
+---
+title: "DEM 7283 - Principal Components Analysis, Python"
+author: "Corey Sparks, PhD, converted to Python"
+date: "2026-04-22"
+format:
+  html:
+    toc: true
+execute:
+  echo: true
+  warning: false
+  message: false
+jupyter: python3
+---
+
+## Purpose
+
+This notebook shows how to do principal components analysis in Python with:
+
+- `pandas`
+- `numpy`
+- `scikit-learn`
+- `matplotlib`
+
+```{python}
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+import statsmodels.api as sm
+import statsmodels.formula.api as smf
+```
+
+## Load BRFSS data
+
+```{python}
+# import pyreadr
+# result = pyreadr.read_r("brfss20sm.rds")
+# brfss20 = result[None]
+# brfss20.columns = brfss20.columns.str.replace("_", "", regex=False).str.lower()
+```
+
+## Recode variables
+
+```{python}
+# brfss20["healthdays"] = brfss20["physhlth"].replace({88: 0, 77: np.nan, 99: np.nan})
+# brfss20["healthmdays"] = brfss20["menthlth"].replace({88: 0, 77: np.nan, 99: np.nan})
+# brfss20["health"] = np.select(
+#     [brfss20["genhlth"].isin([4, 5]), brfss20["genhlth"].isin([1, 2, 3])],
+#     [1, 0],
+#     default=np.nan
+# )
+# brfss20["ins"] = brfss20["hlthpln1"].replace({1: 1, 2: 0, 7: np.nan, 8: np.nan, 9: np.nan})
+# brfss20["bmi"] = brfss20["bmi5"] / 100
+# brfss20["smoke"] = np.select(
+#     [brfss20["smoker3"].isin([1, 2]), brfss20["smoker3"].isin([3, 4])],
+#     [1, 0],
+#     default=np.nan
+# )
+# brfss20["checkup"] = np.select(
+#     [brfss20["checkup1"].isin([1, 2]), brfss20["checkup1"].isin([3, 4, 8])],
+#     [1, 0],
+#     default=np.nan
+# )
+# brfss20["heart"] = brfss20["cvdcrhd4"].replace({1: 1, 2: 0})
+# brfss20["ast"] = np.select(
+#     [brfss20["asthma3"] == 1, brfss20["asthma3"].isin([2, 3, 4])],
+#     [1, 0],
+#     default=np.nan
+# )
+```
+
+## Build analysis file
+
+```{python}
+# keep = ["mmsawt", "ststr", "ageg", "race_eth", "educ", "healthdays", "healthmdays",
+#         "smoke", "bmi", "health", "ins", "checkup", "heart", "ast"]
+# brfss20b = brfss20[keep].dropna().sample(10000, random_state=42).copy()
+```
+
+## Run PCA
+
+```{python}
+# pca_vars = ["healthdays", "healthmdays", "smoke", "bmi", "health", "ins", "checkup", "heart", "ast"]
+# X = brfss20b[pca_vars].copy()
+# scaler = StandardScaler()
+# X_scaled = scaler.fit_transform(X)
+# pca = PCA()
+# pcs = pca.fit_transform(X_scaled)
+# explained = pd.DataFrame({
+#     "component": np.arange(1, len(pca.explained_variance_) + 1),
+#     "eigenvalue": pca.explained_variance_,
+#     "prop_var": pca.explained_variance_ratio_,
+#     "cum_var": np.cumsum(pca.explained_variance_ratio_)
+# })
+# explained.head(10)
+```
+
+## Scree plot
+
+```{python}
+# plt.figure(figsize=(8, 5))
+# plt.plot(explained["component"], explained["eigenvalue"], marker="o")
+# plt.axhline(1, linestyle="--")
+# plt.xlabel("Principal component")
+# plt.ylabel("Eigenvalue")
+# plt.title("Scree plot")
+# plt.tight_layout()
+# plt.show()
+```
+
+## Loadings
+
+```{python}
+# loadings = pd.DataFrame(pca.components_.T, index=pca_vars, columns=[f"PC{i}" for i in range(1, len(pca_vars) + 1)])
+# loadings.iloc[:, :4]
+```
+
+```{python}
+# loadings["PC1"].sort_values().plot(kind="barh", figsize=(8, 5))
+# plt.title("Variable loadings for PC1")
+# plt.tight_layout()
+# plt.show()
+```
+
+## Add component scores
+
+```{python}
+# brfss20b["pc1"] = pcs[:, 0]
+# brfss20b["pc2"] = pcs[:, 1]
+```
+
+## Look at variation by age and education
+
+```{python}
+# import seaborn as sns
+# sns.boxplot(data=brfss20b, x="ageg", y="pc1")
+# plt.xticks(rotation=45)
+# plt.tight_layout()
+# plt.show()
+# educ_order = ["0Prim", "1somehs", "2hsgrad", "3somecol", "4colgrad"]
+# brfss20b["educ"] = pd.Categorical(brfss20b["educ"], categories=educ_order, ordered=True)
+# sns.boxplot(data=brfss20b, x="educ", y="pc1")
+# plt.xticks(rotation=45)
+# plt.tight_layout()
+# plt.show()
+```
+
+## Regression using PC1
+
+```{python}
+# fit = smf.wls("pc1 ~ C(ageg) + C(educ) + C(race_eth)", data=brfss20b, weights=brfss20b["mmsawt"]).fit()
+# print(fit.summary())
+```
+
+## Aggregate place based PCA example
+
+```{python}
+# import geopandas as gpd
+# sp = gpd.read_file("../data/shp2_nm.shp")
+# vars2 = ["punemp", "pprsnsp", "p25plsl", "gt1prrm", "pubasst", "phwoveh", "phwophn"]
+# X2 = StandardScaler().fit_transform(sp[vars2].dropna())
+# pca2 = PCA()
+# pcs2 = pca2.fit_transform(X2)
+# sp.loc[sp[vars2].dropna().index, "sharkeyindex"] = pcs2[:, 0]
+```
+
+## Logistic regression with the index
+
+```{python}
+# fit_area = smf.glm("LILAT_1A1 ~ scale(interct) + Rural + sharkeyindex",
+#                    data=sp.dropna(subset=["LILAT_1A1", "interct", "Rural", "sharkeyindex"]),
+#                    family=sm.families.Binomial()).fit()
+# print(fit_area.summary())
+```
+
+## Notes
+
+- `sklearn.decomposition.PCA` is the main substitute for `FactoMineR::PCA`
+- `StandardScaler` replaces the z scoring step
+- Python does not yet have a direct drop in replacement for every descriptive PCA helper from `factoextra`, but the core analysis is straightforward
