@@ -1,0 +1,26 @@
+name: dem7283
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - ipykernel
+  - matplotlib
+  - statsmodels
+  - patsy
+  - scikit-learn
+  - requests
+  - scipy
+  - polars
+  - seaborn
+  - geopandas
+  - pyreadr
+  - pygam
+  - pip
+  - pip:
+      - svy
+      - samplics
+      - censusdata
+      - cenpy
