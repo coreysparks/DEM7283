@@ -1,0 +1,522 @@
+---
+title: "DEM 7283 - Example 3 - Logit and Probit Models"
+author: "Corey Sparks, PhD"
+date: today
+format:
+  html:
+    toc: true
+    toc-float: true
+    embed-resources: true
+    df-print: paged
+jupyter: dem7283
+---
+
+```{python}
+#| include: false
+import sys, os
+sys.path.insert(0, os.path.abspath('..'))
+
+import numpy as np
+import pandas as pd
+import polars as pl
+import pyreadr
+import requests
+import io
+import matplotlib.pyplot as plt
+import seaborn as sns
+import statsmodels.formula.api as smf
+
+sns.set_theme()
+import svy
+from scipy.stats import chi2_contingency
+
+from utils import make_svy_sample, svy_glm_results, svy_glm_coefs
+```
+
+## Load BRFSS data
+
+```{python}
+
+result = pyreadr.read_r("../data/brfss20sm.rds")
+brfss20 = result[None]
+
+# lowercase column names, remove underscores — mirrors R: tolower(gsub("_","",names(.)))
+brfss20.columns = [c.lower().replace('_', '') for c in brfss20.columns]
+print(brfss20.shape)
+```
+
+## Recode variables
+
+```{python}
+# poor/fair self-rated health: 1-3 = good, 4-5 = poor/fair; unmapped codes → NaN
+brfss20['badhealth'] = brfss20['genhlth'].map({1: 0, 2: 0, 3: 0, 4: 1, 5: 1})
+
+# sex: codes 7/9 (don't know/refused) left unmapped → NaN
+brfss20['male'] = brfss20['sex'].map({1: 'Male', 2: 'Female'})
+
+# age intervals
+brfss20['agec'] = pd.cut(brfss20['age80'], bins=[0, 29, 39, 59, 79, 99])
+brfss20['ageg'] = (brfss20['ageg']
+                   .astype('Int64')   # nullable int preserves NA
+                   .astype(str)
+                   .replace({'<NA>': pd.NA}))
+
+# race/ethnicity: code 9 (other/don't know) left unmapped → NaN
+brfss20['race_eth'] = brfss20['racegr3'].map({
+    1: 'nhwhite', 2: 'nh_black', 3: 'nh_other',
+    4: 'nh_multirace', 5: 'hispanic'
+})
+
+# binary race dummies: cast bool to float, then mask code-9 rows to NaN
+_not_missing = brfss20['racegr3'] != 9
+brfss20['black']    = (brfss20['racegr3'] == 2).astype(float).where(_not_missing)
+brfss20['white']    = (brfss20['racegr3'] == 1).astype(float).where(_not_missing)
+brfss20['other']    = brfss20['racegr3'].isin([3, 4]).astype(float).where(_not_missing)
+brfss20['hispanic'] = (brfss20['racegr3'] == 5).astype(float).where(_not_missing)
+
+# insurance: codes 7-9 left unmapped → NaN
+brfss20['ins'] = brfss20['hlthpln1'].map({1: 1.0, 2: 0.0})
+
+# income: code 9 = don't know/refused → NaN
+brfss20['inc'] = brfss20['incomg'].mask(brfss20['incomg'] == 9)
+
+# education (ordered categorical; unmapped code 9 → NaN)
+educ_order = ['0Prim', '1somehs', '2hsgrad', '3somecol', '4colgrad']
+brfss20['educ'] = pd.Categorical(
+    brfss20['educa'].map({1: '0Prim', 2: '0Prim', 3: '1somehs',
+                          4: '2hsgrad', 5: '3somecol', 6: '4colgrad'}),
+    categories=educ_order, ordered=True
+)
+
+# employment
+brfss20['employ'] = brfss20['employ1'].map({
+    1: 'Employed', 2: 'Employed', 3: 'nilf', 4: 'nilf',
+    5: 'nilf', 6: 'nilf', 7: 'retired', 8: 'unable'
+})
+
+# marital status
+brfss20['marst'] = brfss20['marital'].map({
+    1: 'married', 2: 'divorced', 3: 'widowed',
+    4: 'separated', 5: 'nm', 6: 'cohab'
+})
+
+# BMI
+brfss20['bmi'] = brfss20['bmi5'] / 100
+brfss20['obese'] = (brfss20['bmi'] >= 30).astype(float)
+
+# smoking
+brfss20['smoke'] = brfss20['smoker3'].map({1: 'Current', 2: 'Current', 3: 'Former', 4: 'NeverSmoked'})
+
+# seqno as unique respondent ID — used as PSU when each respondent is their own cluster (ids=~1 in R)
+if 'seqno' not in brfss20.columns:
+    brfss20['seqno'] = range(len(brfss20))
+```
+
+---
+
+## Regression example
+
+We first compare three ways to fit a linear model for BMI: plain OLS, weighted OLS, and a survey-design GLM. This shows why accounting for the complex sample design produces more conservative (larger) standard errors.
+
+### OLS
+
+```{python}
+sub_bmi = brfss20[['bmi', 'educ', 'agec', 'mmsawt', 'ststr', 'seqno']].dropna().copy()
+sub_bmi['agec'] = sub_bmi['agec'].astype(str)
+
+fit1 = smf.ols('bmi ~ C(educ) + C(agec)', data=sub_bmi).fit()
+print(fit1.summary().tables[1])
+```
+
+### Weighted OLS
+
+```{python}
+fit2 = smf.wls('bmi ~ C(educ) + C(agec)', data=sub_bmi, weights=sub_bmi['mmsawt']).fit()
+print(fit2.summary().tables[1])
+```
+
+### Survey GLM — Gaussian family
+
+The `svy` package uses a `Design` object specifying stratum, PSU, and weight columns. `make_svy_sample()` handles the required type conversions and dummy encoding.
+
+```{python}
+design_bmi = svy.Design(stratum='ststr', psu='seqno', wgt='mmsawt')
+sample_bmi, dummies_bmi = make_svy_sample(
+    sub_bmi, design_bmi,
+    cat_cols=['agec', 'educ'],
+    dummy_cols=['educ', 'agec']
+)
+fit3 = sample_bmi.glm.fit(y='bmi', x=dummies_bmi.columns.tolist(), family='gaussian')
+svy_glm_results(fit3)
+```
+
+Notice the standard errors are larger and the test statistics smaller compared to the OLS or weighted OLS results. This is because those models understate sampling variability in a complex design.
+
+### Compare OLS vs. Survey GLM coefficients
+
+```{python}
+coefs_ols = (pd.DataFrame({'estimate': fit1.params[1:], 'model': 'OLS'})
+             .reset_index(names='term'))
+coefs_svy = (svy_glm_coefs(fit3)[['term', 'estimate']]
+             .assign(model='Survey GLM'))
+
+coefs = pd.concat([coefs_ols, coefs_svy], ignore_index=True)
+
+fig, ax = plt.subplots(figsize=(8, 5))
+sns.scatterplot(data=coefs, x='term', y='estimate', hue='model', style='model', ax=ax)
+ax.axhline(0, linestyle='--', color='black', linewidth=1)
+ax.set_xlabel('Beta')
+ax.set_ylabel('Regression Coefficient')
+ax.set_title('OLS vs. Survey GLM Coefficients for BMI')
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+```
+
+The $\beta$'s are similar between models, but the survey GLM standard errors are larger — meaning the non-survey models produced overconfident tests.
+
+---
+
+## Creating Survey Estimates for Places
+
+One of the most useful applications of the BRFSS SMART data is calculating estimates for metropolitan areas.
+
+```{python}
+sub_place = brfss20[['obese', 'mmsaname', 'mmsawt', 'ststr', 'seqno']].dropna().copy()
+
+city_table = (sub_place
+              .groupby('mmsaname', observed=True)
+              .apply(lambda g: pd.Series({
+                  'obese_mean': (g['obese'] * g['mmsawt']).sum() / g['mmsawt'].sum(),
+                  'n': len(g)
+              }), include_groups=False)
+              .reset_index()
+              .sort_values('mmsaname'))
+
+city_table.head(10)
+```
+
+---
+
+# Categorical Outcomes
+
+In the vast majority of situations in your work as demographers, your outcome will either be of a qualitative nature or non-normally distributed, especially if you work with individual-level survey data.
+
+When we speak of qualitative outcomes, we generally are concerned with the observation of:
+
+* A particular behavior (marriage, migration, birth, death)
+* A transition (unemployed to employed, married to divorced)
+* A threshold characteristic (adoption of sterilization after ideal # of children is reached)
+
+In general, each of these outcomes would be coded as a binary variable (1 or 0) depending on whether the outcome of interest was observed.
+
+## Basics of Generalized Linear Models
+
+Up until now, we have been relying on linear statistical models which assumed the Normal distribution for our outcomes. A broader class of regression models, are [**_Generalized Linear Models_**](https://en.wikipedia.org/wiki/Generalized_linear_model), or GLMs, which allow for linear regression for outcomes that are not assumed to come from a Normal distribution.
+
+GLMs are a class of statistical models that link the mean of the specified distribution to a linear combination of covariates by some form of **_link function_**. For example, the Normal distribution has the mean, $\mu$, which is typically estimated using the **_linear mean function_**:
+
+$$\mu = \beta_0 + \beta_1 x_1$$
+
+Which describes the line that estimates the mean of the outcome variable as a linear function of the predictor variable $x_1$. This model uses an **_identity link_** meaning there is no transformation of the linear mean function as it is connected to the mean of the outcome.
+
+This can be written as:
+
+$$g(u) = g(E(Y)) = \beta_0 + \beta_1 x_1$$
+
+Where $g()$ is the link function, linking the mean of the Normal distribution to the linear mean function of the model.
+
+## Binary Outcome Variables
+
+The binomial distribution typically uses either a [logit](https://en.wikipedia.org/wiki/Logit) or [probit](https://en.wikipedia.org/wiki/Probit) link function. The *logit* transforms the probability $\pi \in [0,1]$ into the log-odds on $[-\infty, \infty]$:
+
+$$\text{log-odds}\, \pi = \log \left( \frac{\pi}{1-\pi} \right)$$
+
+Which can then be modeled as a linear function of covariates:
+
+$$\log \left( \frac{\pi}{1-\pi} \right) = \beta_0 + \beta_1 x_1$$
+
+## Logit and Probit Models
+
+For a Logistic model:
+
+$$E(y|x) = \frac{1}{1 + \exp\!\left({-\sum_k \beta_k x_{ik}}\right)}$$
+
+For the Probit model, the link function is the inverse cumulative Normal distribution:
+
+$$E(y|x) = \Phi\!\left(\sum_k \beta_k x_{ik}\right)$$
+
+In practice, these two models give very similar results. The logistic regression model has the more convenient **odds ratio** interpretation of its $\beta$'s.
+
+### Odds ratio interpretation
+
+A $\beta$ of 0.025 gives $\exp(\beta) = 1.025$ — for a 1-unit increase in $x$, the odds of $y=1$ are **2.5% higher**.
+A $\beta$ of $-0.15$ gives $\exp(-0.15) - 1 = -0.14$ — a **14% decrease** in the odds.
+
+---
+
+## Logit/Probit Regression Example
+
+### Example using BRFSS
+
+For this example I am using the 2020 CDC Behavioral Risk Factor Surveillance System (BRFSS) SMART metro area survey data.
+
+#### Data preparation for analysis
+
+```{python}
+analysis_cols = [
+    'badhealth', 'mmsaname', 'bmi', 'ageg', 'race_eth', 'marst',
+    'educ', 'white', 'black', 'hispanic', 'other', 'smoke', 'ins',
+    'mmsawt', 'ststr', 'seqno'
+]
+sub = brfss20[analysis_cols].dropna().copy()
+
+design = svy.Design(stratum='ststr', psu='seqno', wgt='mmsawt')
+```
+
+### Descriptive analysis
+
+First we examine the survey-weighted proportion of US adults with poor/fair self-rated health by education level and do a weighted chi-square test for independence.
+
+#### Helper: weighted mean by group
+
+```{python}
+def wtd_mean_by_group(df, y, by_col, weight_col='mmsawt'):
+    """Survey-weighted mean and approximate linearization SE by group."""
+    rows = []
+    for grp, gdf in df.groupby(by_col, observed=True):
+        gdf = gdf[[y, weight_col]].dropna()
+        w_mean = (gdf[y] * gdf[weight_col]).sum() / gdf[weight_col].sum()
+        resid  = gdf[y] - w_mean
+        se = ((gdf[weight_col] ** 2 * resid ** 2).sum() ** 0.5) / gdf[weight_col].sum()
+        rows.append({by_col: grp, y: w_mean, 'se': se})
+    return pd.DataFrame(rows)
+```
+
+#### Weighted chi-square test for independence
+
+```{python}
+def weighted_chisq(df, var1, var2, weight_col='mmsawt'):
+    """Weighted chi-square test using weighted contingency table counts."""
+    ct = df.groupby([var1, var2], observed=True)[weight_col].sum().unstack(fill_value=0)
+    chi2, p, dof, _ = chi2_contingency(ct)
+    return {'chi2': round(chi2, 3), 'p_value': p, 'df': dof}
+
+# bad health by education
+cat = wtd_mean_by_group(sub, 'badhealth', 'educ')
+print("Survey-weighted % poor/fair health by education:")
+print(cat.to_string(index=False))
+print()
+print("Weighted chi-square test (badhealth ~ educ):")
+print(weighted_chisq(sub, 'badhealth', 'educ'))
+```
+
+#### Plot estimates with standard errors
+
+```{python}
+fig, ax = plt.subplots(figsize=(7, 4))
+ax.errorbar(cat['educ'].astype(str), cat['badhealth'], yerr=1.96 * cat['se'],
+            fmt='o', capsize=4, color='steelblue')
+ax.set_xlabel('Education')
+ax.set_ylabel('% Fair/Poor Health')
+ax.set_title('Survey-Weighted % of US Adults with Fair/Poor Health by Education\nSource: CDC BRFSS SMART Data, 2020')
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+```
+
+#### Race/ethnicity by health
+
+```{python}
+dog = wtd_mean_by_group(sub, 'badhealth', 'race_eth')
+print("Weighted chi-square test (badhealth ~ race_eth):")
+print(weighted_chisq(sub, 'badhealth', 'race_eth'))
+
+fig, ax = plt.subplots(figsize=(7, 4))
+ax.errorbar(dog['race_eth'].astype(str), dog['badhealth'], yerr=1.96 * dog['se'],
+            fmt='o', capsize=4, color='steelblue')
+ax.set_ylim(0, 0.25)
+ax.set_xlabel('Race/Ethnicity')
+ax.set_ylabel('% Fair/Poor Health')
+ax.set_title('Survey-Weighted % with Fair/Poor Health by Race/Ethnicity\nSource: CDC BRFSS SMART Data, 2020')
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+```
+
+#### Race by education cross-tabulation
+
+```{python}
+rows = []
+for (race, educ), gdf in sub.groupby(['race_eth', 'educ'], observed=True):
+    gdf = gdf[['badhealth', 'mmsawt']].dropna()
+    if len(gdf) < 5:
+        continue
+    w_mean = (gdf['badhealth'] * gdf['mmsawt']).sum() / gdf['mmsawt'].sum()
+    resid  = gdf['badhealth'] - w_mean
+    se = ((gdf['mmsawt'] ** 2 * resid ** 2).sum() ** 0.5) / gdf['mmsawt'].sum()
+    rows.append({'race_eth': race, 'educ': str(educ), 'badhealth': w_mean, 'se': se})
+catdog = pd.DataFrame(rows)
+
+fig, ax = plt.subplots(figsize=(8, 5))
+palette = sns.color_palette(n_colors=catdog['race_eth'].nunique())
+for (race, grp), color in zip(catdog.groupby('race_eth'), palette):
+    ax.errorbar(grp['educ'], grp['badhealth'], yerr=1.96 * grp['se'],
+                fmt='o-', label=race, capsize=4, color=color)
+ax.set_xlabel('Education')
+ax.set_ylabel('% Fair/Poor Health')
+ax.set_title('% with Fair/Poor Health by Race/Ethnicity and Education')
+ax.legend(title='Race/Ethnicity')
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+```
+
+---
+
+## Fitting the Logistic Regression Model
+
+To fit the model to our survey data we use `svy` and specify `family='binomial'`. The default link function is the logit.
+
+```{python}
+sample, dummies = make_svy_sample(
+    sub, design,
+    cat_cols=['ageg', 'educ', 'race_eth'],
+    dummy_cols=['race_eth', 'educ', 'ageg']
+)
+predictors = dummies.columns.tolist()
+
+fit_logit = sample.glm.fit(y='badhealth', x=predictors, family='binomial')
+svy_glm_results(fit_logit)
+```
+
+### Odds ratios and confidence intervals
+
+Exponentiate the log-odds coefficients to get odds ratios and their 95% CIs.
+
+```{python}
+logit_res = svy_glm_results(fit_logit)
+logit_res = logit_res[logit_res['term'] != '_intercept_'].copy()
+logit_res[['OR', 'OR_low', 'OR_high']] = (
+    logit_res[['estimate', 'conf_low', 'conf_high']].apply(np.exp)
+)
+logit_res[['term', 'OR', 'OR_low', 'OR_high', 'p_value']]
+```
+
+### Plot odds ratios
+
+If the 95% CI crosses 1, the effect is not statistically significant.
+
+```{python}
+fig, ax = plt.subplots(figsize=(7, 6))
+ax.errorbar(
+    logit_res['OR'], logit_res['term'],
+    xerr=[logit_res['OR'] - logit_res['OR_low'], logit_res['OR_high'] - logit_res['OR']],
+    fmt='o', color='steelblue', capsize=4, markersize=6
+)
+ax.axvline(1, linestyle='--', color='red', linewidth=1)
+ax.set_xlabel('Odds Ratio')
+ax.set_title('Odds Ratios for Poor/Fair Self-Rated Health')
+plt.tight_layout()
+plt.show()
+```
+
+---
+
+## Probit Model
+
+The probit model uses the inverse normal CDF as its link function instead of the logit. Both models typically produce very similar patterns of effects.
+
+```{python}
+# svy binomial defaults to logit; fit probit with statsmodels for comparison
+fit_probit = smf.probit(
+    'badhealth ~ C(race_eth, Treatment("nhwhite")) + C(educ, Treatment("2hsgrad")) + C(ageg)',
+    data=sub
+).fit(disp=False)
+print(fit_probit.summary().tables[1])
+```
+
+---
+
+## Present Both Model Coefficients Side by Side
+
+```{python}
+# Survey logit results (svy)
+logit_coef = svy_glm_results(fit_logit)[['term', 'estimate', 'std_err', 'p_value']].rename(
+    columns={'estimate': 'logit_coef', 'std_err': 'logit_se', 'p_value': 'logit_p'}
+)
+logit_coef = logit_coef[logit_coef['term'] != '_intercept_'].reset_index(drop=True)
+
+# Unweighted probit results (statsmodels)
+probit_tbl = fit_probit.summary2().tables[1][['Coef.', 'Std.Err.', 'P>|z|']].reset_index()
+probit_tbl.columns = ['term', 'probit_coef', 'probit_se', 'probit_p']
+
+comparison = logit_coef.merge(probit_tbl, on='term', how='outer')
+comparison
+```
+
+Both models show the same patterns of effects: Hispanics, Black, and multi-race individuals show increased chances of reporting poor/fair health compared to Non-Hispanic whites (reference group). More education is associated with lower odds of poor/fair health, and older age groups have higher odds compared to the youngest group.
+
+---
+
+## Fitted Values and Predicted Probabilities
+
+To convey model results to a broad audience, it is often more effective to present **predicted probabilities** for specific types of individuals rather than reporting all the regression coefficients.
+
+For a white, college-educated young person, the probability of reporting poor health is:
+
+$$\Pr(\text{poor/fair health}) = \frac{1}{1 + \exp\!\left(\beta_0 + \beta_1 \cdot \text{white} + \beta_2 \cdot \text{young} + \beta_3 \cdot \text{college}\right)}$$
+
+We generate predicted probabilities over the grid of education levels using the survey logit model coefficients.
+
+```{python}
+# Build a prediction grid over educ × ageg, fixing race_eth at reference (nhwhite)
+from itertools import product as iproduct
+
+educ_levels = sub['educ'].cat.categories.tolist()
+ageg_levels = sorted(sub['ageg'].dropna().unique().tolist())
+race_ref    = 'nhwhite'
+
+grid_rows = [{'race_eth': race_ref, 'educ': e, 'ageg': a}
+             for e, a in iproduct(educ_levels, ageg_levels)]
+pred_grid = pd.DataFrame(grid_rows)
+
+# Use statsmodels logit (same data, unweighted) for predictions on the grid
+fit_logit_sm = smf.logit(
+    'badhealth ~ C(race_eth, Treatment("nhwhite")) + C(educ, Treatment("2hsgrad")) + C(ageg)',
+    data=sub
+).fit(disp=False)
+
+pred_grid['prob'] = fit_logit_sm.predict(pred_grid)
+pred_grid.head(10)
+```
+
+```{python}
+# Marginal probabilities averaged over ageg — one row per education level
+marg_educ = (pred_grid.groupby('educ', observed=True)['prob']
+             .mean()
+             .reset_index()
+             .rename(columns={'prob': 'pred_prob'}))
+print(marg_educ.to_string(index=False))
+```
+
+```{python}
+# Example: compare Hispanic, age group 5, college grad vs. NHWhite, college grad
+eg = pred_grid[
+    (pred_grid['educ'] == '4colgrad') &
+    (pred_grid['ageg'] == ageg_levels[int(len(ageg_levels)/2)])
+].copy()
+
+# Re-predict with race variation
+eg_hisp  = eg.copy(); eg_hisp['race_eth']  = 'hispanic'
+eg_white = eg.copy(); eg_white['race_eth'] = 'nhwhite'
+
+prob_hisp  = fit_logit_sm.predict(eg_hisp).mean()
+prob_white = fit_logit_sm.predict(eg_white).mean()
+
+print(f"Predicted probability of poor/fair health:")
+print(f"  Hispanic, college grad:    {prob_hisp:.3f}  ({prob_hisp*100:.1f}%)")
+print(f"  NHWhite, college grad:     {prob_white:.3f}  ({prob_white*100:.1f}%)")
+```
+
+These predicted probabilities are often a more effective way to convey model results than reporting all the regression coefficients. Even among college graduates, Hispanic respondents have a noticeably higher predicted probability of poor/fair health compared to Non-Hispanic whites.
