@@ -2,3 +2,16 @@
 .Rhistory
 .RData
 .Ruserdata
+
+# Data files built by R/get_mmsa.R and the weekly exercises
+data/*.xpt
+data/mmsa*.rds
+data/acs_pums_*.rds
+
+# Quarto output for the weekly materials
+/.quarto/
+weeks/*_files/
+data/ahrf_*.rds
+data/AHRF_*.zip
+data/dhs_model_ir.rds
+data/ZZIR62FL.DTA

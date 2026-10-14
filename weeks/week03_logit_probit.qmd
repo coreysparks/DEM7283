@@ -1,0 +1,368 @@
+---
+title: "DEM 5283/7283 Week 3: Binary Outcomes with Logit and Probit Models"
+subtitle: "Statistics for Demographic Data II"
+author: "Corey S. Sparks, PhD"
+date: last-modified
+bibliography: references.bib
+format:
+  html:
+    toc: true
+    toc-float: true
+    number-sections: false
+    self-contained: true
+    fig-width: 8
+    fig-height: 5
+execute:
+  engine: knitr
+  echo: true
+  warning: false
+  message: false
+---
+
+## Introduction
+
+Most of the outcomes demographers care about aren't continuous. Someone migrates or doesn't, has a birth this year or doesn't, dies before age 65 or doesn't, reports poor health or doesn't. Transitions (from employed to unemployed, from married to divorced) and thresholds (being obese, being in poverty) usually end up coded the same way, as a 1 or a 0. This week is about the workhorse models for those outcomes, the logit and the probit, fit to complex survey data.
+
+The models themselves are not hard to fit. The hard part, and the part I want you to spend your time on, is saying what the results mean. Logit coefficients are changes in log-odds, which nobody thinks in. Odds ratios are better, but they are routinely misread as risk ratios. So most of this document is about turning model output into predicted probabilities and average marginal effects, the quantities you should report in your papers [@mood2010; @breen2018].
+
+## Setup
+
+`marginaleffects` does the post-estimation work. It handles predicted probabilities, comparisons and marginal effects for almost any model in R, including `svyglm()`.
+
+```{r}
+#| label: packages
+library(tidyverse)
+library(here)
+library(survey)
+library(marginaleffects)
+library(modelsummary)
+library(sparkscolors)
+
+source(here("R", "get_mmsa.R"))
+source(here("R", "recode_mmsa.R"))
+```
+
+```{r}
+#| label: setup
+#| include: false
+options(survey.lonely.psu = "adjust")
+theme_set(
+  theme_minimal(base_size = 12) +
+    theme(text = element_text(colour = utsa_cols("midnight")),
+          panel.grid.major = element_line(colour = utsa_cols("smoke")),
+          panel.grid.minor = element_blank(),
+          legend.position = "bottom")
+)
+pct <- function(x, d = 1) paste0(format(round(100 * x, d), nsmall = d), "%")
+pts <- function(x, d = 1) format(round(100 * x, d), nsmall = d)
+```
+
+## Generalized linear models for binary outcomes
+
+### Why not the linear model?
+
+If $y_i$ is 1 or 0, its mean is a probability, $\pi_i = P(y_i = 1)$, and its variance is $\pi_i(1 - \pi_i)$. A linear model for $\pi_i$ (the **linear probability model**) has two problems. The variance depends on the mean, so the errors can't be homoskedastic, and nothing stops the fitted values from going below 0 or above 1. The linear probability model has defenders, mostly in economics, and I'll come back to it at the end, because its coefficients are often close to the average marginal effects from a logit. But for most demographic work we want a model that respects the bounds.
+
+### Link functions
+
+A **generalized linear model** (GLM) keeps the linear predictor, $\eta_i = \mathbf{x}_i'\boldsymbol\beta$, and connects it to the mean through a **link function** $g()$, so that $g(\pi_i) = \eta_i$. The link stretches the interval from 0 to 1 onto the whole real line. The **logit** link is the log of the odds:
+
+$$
+\text{logit}(\pi_i) = \log\left(\frac{\pi_i}{1 - \pi_i}\right) = \mathbf{x}_i'\boldsymbol\beta
+\quad\Longleftrightarrow\quad
+\pi_i = \frac{1}{1 + \exp(-\mathbf{x}_i'\boldsymbol\beta)}
+$$
+
+The **probit** link is the inverse of the standard normal cumulative distribution function, $\Phi^{-1}(\pi_i) = \mathbf{x}_i'\boldsymbol\beta$, so $\pi_i = \Phi(\mathbf{x}_i'\boldsymbol\beta)$.
+
+Both models can also be written as models for a latent propensity $y_i^* = \mathbf{x}_i'\boldsymbol\beta + \varepsilon_i$, where we only see $y_i = 1$ when $y_i^* > 0$. The logit assumes $\varepsilon$ has a logistic distribution (variance $\pi^2/3$), and the probit assumes a standard normal (variance 1). That's the whole difference between them, and it's why logit coefficients are about 1.6 to 1.8 times the size of probit coefficients for the same data. It's also the source of the nested model problem we'll take on in week 4.
+
+```{r}
+#| label: fig-links
+#| fig-cap: "The logit and probit curves map the linear predictor onto a probability. The probit is drawn with its predictor scaled by 1.7 so the two are comparable."
+tibble(eta = seq(-6, 6, by = 0.05)) |>
+  mutate(Logit = plogis(eta),
+         Probit = pnorm(eta / 1.7)) |>
+  pivot_longer(-eta, names_to = "link", values_to = "probability") |>
+  ggplot(aes(x = eta, y = probability, colour = link, linetype = link)) +
+  geom_line(linewidth = 1.2) +
+  scale_colour_utsa(palette = "primary") +
+  labs(x = "Linear predictor", y = "Probability", colour = NULL, linetype = NULL)
+```
+
+### Odds and odds ratios
+
+Exponentiating a logit coefficient gives an **odds ratio**. If $\beta_1 = 0.4$, then $\exp(0.4) = 1.49$, and a one-unit increase in $x_1$ multiplies the odds of $y = 1$ by 1.49, a 49% increase in the odds. A coefficient of $-0.15$ gives $\exp(-0.15) = 0.86$, a 14% decrease. Odds ratios are constant across the range of $x$, which is convenient, but odds are not probabilities, and that difference will come back below.
+
+## The data and some descriptive work
+
+The outcome is fair or poor self-rated health in the 2024 BRFSS SMART MMSA file. Self-rated health is one of the best single predictors of mortality we have, and it's asked in almost every health survey, which makes it a good teaching outcome. `recode_mmsa()` makes the variables from week 2.
+
+```{r}
+#| label: brfss
+brfss <- get_mmsa(2024) |> recode_mmsa()
+des <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt, data = brfss)
+```
+
+Before any model, look at the outcome by the main predictors. `svyciprop()` gives design-based confidence intervals for proportions.
+
+```{r}
+#| label: descriptives
+desc <- c("educ", "race_eth") |>
+  set_names() |>
+  map(\(v) {
+    res <- svyby(~badhealth, reformulate(v), design = des, FUN = svyciprop,
+                 vartype = "ci", na.rm = TRUE)
+    tibble(group = as.character(res[[v]]), estimate = coef(res),
+           ci_l = res$ci_l, ci_u = res$ci_u)
+  }) |>
+  list_rbind(names_to = "variable") |>
+  mutate(variable = if_else(variable == "educ", "Education", "Race and ethnicity"),
+         group = fct_inorder(group))
+
+svychisq(~badhealth + educ, design = des)
+```
+
+```{r}
+#| label: fig-descriptives
+#| fig-cap: "Share of adults reporting fair or poor health, with 95% confidence intervals, 2024 BRFSS SMART MMSA."
+desc |>
+  ggplot(aes(x = estimate, y = fct_rev(group))) +
+  geom_pointrange(aes(xmin = ci_l, xmax = ci_u), colour = utsa_cols("midnight")) +
+  facet_wrap(~variable, scales = "free_y", ncol = 1) +
+  scale_x_continuous(labels = scales::label_percent(), limits = c(0, NA)) +
+  labs(x = "Fair or poor health", y = NULL)
+```
+
+The education gradient is steep, and Hispanic adults report fair or poor health at a higher rate than any other group. Part of that is education, and part may be about how the question works across languages and cultures (a long-standing debate in the Hispanic health literature). The model below starts to separate the first part out.
+
+## Fitting logit and probit models
+
+Logit and probit models for survey data are just `svyglm()` with a binomial family. I use `quasibinomial()`, which gives exactly the same estimates as `binomial()` but doesn't warn about non-integer weights.
+
+```{r}
+#| label: fit-models
+fit_logit <- svyglm(badhealth ~ race_eth + educ + agec + female,
+                    design = des, family = quasibinomial())
+
+fit_probit <- svyglm(badhealth ~ race_eth + educ + agec + female,
+                     design = des, family = quasibinomial(link = "probit"))
+
+summary(fit_logit)
+```
+
+The coefficients are on the log-odds scale. Positive values mean higher odds of fair or poor health, so everything here goes in the direction the descriptive figures suggested. To test whether a whole set of dummies matters, use a design-based Wald test (likelihood ratio tests aren't valid with survey weights):
+
+```{r}
+#| label: wald
+regTermTest(fit_logit, ~race_eth, method = "Wald")
+```
+
+Here are the odds ratios next to the probit coefficients:
+
+```{r}
+#| label: tbl-models
+modelsummary(list("Logit (odds ratios)" = fit_logit, "Probit" = fit_probit),
+             exponentiate = c(TRUE, FALSE),
+             fmt = 3,
+             coef_omit = "Intercept",
+             coef_rename = \(x) str_remove_all(x, "race_eth|educ|agec"),
+             gof_map = "nobs",
+             title = "Models for fair or poor self-rated health")
+```
+
+```{r}
+#| label: or-values
+#| include: false
+or <- exp(coef(fit_logit))
+ratio <- coef(fit_logit)[-1] / coef(fit_probit)[-1]
+```
+
+College graduates have `r round(or[["educCollege graduate"]], 2)` times the odds of fair or poor health of adults without a high school diploma, so their odds are `r pct(1 - or[["educCollege graduate"]], 0)` lower. Hispanic adults have `r round(or[["race_ethHispanic"]], 2)` times the odds of non-Hispanic White adults with the same education, age and sex. The ratio of logit to probit coefficients runs from about `r round(quantile(ratio, 0.1), 1)` to `r round(quantile(ratio, 0.9), 1)` for most terms, so the two models say the same thing in different units.
+
+## From coefficients to probabilities
+
+### Predicted probabilities for particular people
+
+I like to talk about interesting cases. What's the predicted probability of fair or poor health for a 45-to-54-year-old woman, by race and ethnicity and education? `datagrid()` builds the "people," and `predictions()` computes their probabilities with confidence intervals.
+
+```{r}
+#| label: interesting-cases
+cases <- predictions(fit_logit,
+                     newdata = datagrid(race_eth = c("NH White", "NH Black", "Hispanic"),
+                                        educ = c("HS graduate", "College graduate"),
+                                        agec = "45-54",
+                                        female = 1))
+
+cases |>
+  as_tibble() |>
+  select(race_eth, educ, estimate, conf.low, conf.high) |>
+  knitr::kable(digits = 3)
+```
+
+```{r}
+#| label: case-values
+#| include: false
+cs <- as_tibble(cases)
+get_c <- function(r, e) cs$estimate[cs$race_eth == r & cs$educ == e]
+```
+
+For a Hispanic woman in her late 40s with a high school diploma, the model predicts a `r pct(get_c("Hispanic", "HS graduate"))` chance of reporting fair or poor health. For a non-Hispanic White woman with a college degree, it's `r pct(get_c("NH White", "College graduate"))`. Sentences like these are far easier for a reader to hold on to than "the odds ratio is `r round(or[["educCollege graduate"]], 2)`."
+
+### Average predictions
+
+Choosing interesting cases is a judgment call, and the results depend on what you hold the other variables at. **Average predictions** avoid the choice. For each level of education, set *everyone's* education to that level, keep everything else as observed, predict, and average over the sample with the survey weights.
+
+```{r}
+#| label: avg-predictions
+avg_predictions(fit_logit, variables = "educ", wts = "(weights)")
+```
+
+This is the answer to the question "what share of adults would report fair or poor health if everyone had this level of education, and nothing else about them changed?" It's a counterfactual quantity, and it's what most people have in mind when they talk about "the effect of education" in a model like this.
+
+### Average marginal effects
+
+The **average marginal effect** (AME) of a categorical predictor is the difference between two of these average predictions. For a continuous predictor, it's the average of the slope of the probability curve. Either way, it's on the probability scale.
+
+```{r}
+#| label: ames
+ame_logit <- avg_comparisons(fit_logit, variables = c("race_eth", "educ"),
+                             wts = "(weights)")
+ame_logit
+```
+
+```{r}
+#| label: ame-values
+#| include: false
+al <- as_tibble(ame_logit)
+ame_cg <- al$estimate[al$term == "educ" & str_detect(al$contrast, "College")]
+ame_h <- al$estimate[al$term == "race_eth" & str_detect(al$contrast, "Hispanic")]
+```
+
+A college degree, compared with not finishing high school, is associated with a `r pts(abs(ame_cg))` percentage point lower probability of fair or poor health, averaged over the population. Being Hispanic rather than non-Hispanic White is associated with a probability `r pts(ame_h)` points higher.
+
+::: {.callout-note}
+You'll also see **marginal effects at the mean** (MEMs), which compute the slope for a single made-up person with every variable at its mean. With categorical predictors, that person is a fraction Hispanic and a fraction college graduate, which describes nobody. AMEs average over real people instead, and they're the better default [@mood2010]. If you want effects for a specific kind of person, use `datagrid()` and say so.
+:::
+
+### Logit, probit, or a linear probability model?
+
+Here are the AMEs for education and race from the logit, the probit, and a linear probability model (which is just `svyglm()` with a Gaussian family, so its coefficients *are* differences in probability).
+
+```{r}
+#| label: compare-ames
+fit_lpm <- svyglm(badhealth ~ race_eth + educ + agec + female,
+                  design = des, family = gaussian())
+
+ame_all <- list(Logit = fit_logit, Probit = fit_probit, LPM = fit_lpm) |>
+  map(\(m) avg_comparisons(m, variables = c("race_eth", "educ"), wts = "(weights)")) |>
+  map(as_tibble) |>
+  list_rbind(names_to = "model") |>
+  mutate(model = fct_inorder(model),
+         contrast = str_remove(contrast, " - .*$"),
+         label = paste0(if_else(term == "educ", "Educ: ", "Race: "), contrast),
+         label = factor(label, levels = c(paste0("Educ: ", levels(brfss$educ)[-1]),
+                                          paste0("Race: ", levels(brfss$race_eth)[-1]))))
+```
+
+```{r}
+#| label: fig-compare-ames
+#| fig-cap: "Average marginal effects on the probability of fair or poor health from logit, probit and linear probability models. Reference groups are non-Hispanic White and less than high school."
+ame_all |>
+  ggplot(aes(x = estimate, y = fct_rev(label), colour = model, shape = model)) +
+  geom_vline(xintercept = 0, colour = utsa_cols("smoke")) +
+  geom_pointrange(aes(xmin = conf.low, xmax = conf.high),
+                  position = position_dodge(width = 0.6)) +
+  scale_colour_utsa() +
+  scale_x_continuous(labels = scales::label_number(scale = 100, suffix = " pts")) +
+  labs(x = "Average marginal effect", y = NULL, colour = NULL, shape = NULL)
+```
+
+The three models agree closely on the probability scale, which is the usual result when the outcome isn't too rare and the predictors are mostly categorical. That's the case for the linear probability model: easy to explain, and often the same answer. The case against it is that its individual predictions can fall outside 0 and 1, and its effects are forced to be the same for everyone, which matters when you care about how an effect differs across people with different baseline risks. My advice is to fit a logit or probit, report AMEs, and check that a linear probability model tells the same story.
+
+```{r}
+#| label: lpm-range
+lpm_fitted <- predict(fit_lpm)
+range(lpm_fitted)
+sum(lpm_fitted < 0)
+```
+
+Here `r sum(lpm_fitted < 0)` respondents get negative predicted probabilities. That's harmless for the AMEs, but it's a reminder that the linear probability model isn't a model of individual probabilities.
+
+## Odds ratios are not risk ratios
+
+One last thing, because I see it in published papers all the time. An odds ratio of 2 does *not* mean the outcome is twice as likely. When the outcome is rare (under about 10%), odds and probabilities are close and so are odds ratios and risk ratios. When it's common, the odds ratio is further from 1 than the risk ratio, sometimes by a lot. About 18% of adults report fair or poor health, so we're in the zone where it matters.
+
+`avg_comparisons()` with `comparison = "ratio"` computes the average risk ratio directly.
+
+```{r}
+#| label: risk-ratios
+rr <- avg_comparisons(fit_logit, variables = list(educ = c("Less than HS", "College graduate")),
+                      comparison = "ratio", wts = "(weights)")
+rr
+```
+
+```{r}
+#| label: rr-values
+#| include: false
+rr_val <- as_tibble(rr)$estimate
+```
+
+The odds ratio for a college degree was `r round(or[["educCollege graduate"]], 2)`, but the ratio of average predicted probabilities is `r round(rr_val, 2)`. "College graduates are `r pct(1 - rr_val, 0)` less likely to report fair or poor health" is a correct sentence. "College graduates are `r pct(1 - or[["educCollege graduate"]], 0)` less likely" is not, even though you could read it straight off the odds ratio. If you report odds ratios, call them odds ratios, and give the probabilities too.
+
+## Exercises
+
+These exercises are Homework 3.
+
+**1.** Fit a survey-weighted logit model for obesity (`obese`) with race and ethnicity, education, age group, sex and smoking status (`smoke`) as predictors. Report the odds ratios and the AMEs in one table or figure, and write two or three sentences interpreting the education results on the probability scale.
+
+```{r}
+#| label: ex-obesity
+#| eval: false
+# YOUR CODE HERE
+```
+
+<details>
+<summary>One way to start exercise 1</summary>
+
+```{r}
+#| label: ex-obesity-start
+#| eval: false
+fit_ob <- svyglm(obese ~ race_eth + educ + agec + female + smoke,
+                 design = des, family = quasibinomial())
+
+modelsummary(fit_ob, exponentiate = TRUE, coef_omit = "Intercept")
+
+avg_comparisons(fit_ob, variables = c("educ", "smoke"), wts = "(weights)")
+```
+
+</details>
+
+**2.** Using the obesity model, compute predicted probabilities for three "interesting cases" of your choosing with `datagrid()`. Explain why you picked them.
+
+```{r}
+#| label: ex-cases
+#| eval: false
+# YOUR CODE HERE
+```
+
+**3.** Add an interaction between education and sex to the fair or poor health model. Use `avg_predictions()` with `variables = c("educ", "female")` to show the predicted probabilities, and say whether the education gradient looks different for men and women. (Week 4 will show how to test this properly.)
+
+```{r}
+#| label: ex-interaction
+#| eval: false
+# YOUR CODE HERE
+```
+
+**4.** Compute the risk ratio and the odds ratio for current smoking (versus never smoking) from your obesity model. How far apart are they, and why?
+
+```{r}
+#| label: ex-rr
+#| eval: false
+# YOUR CODE HERE
+```
+
+## References
+
+::: {#refs}
+:::

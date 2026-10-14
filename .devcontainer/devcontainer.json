@@ -1,20 +1,26 @@
 {
-  "name": "R 4.5.3 + RStudio",
-  "image": "rocker/rstudio:4.5.3",
-  "forwardPorts": [8787],
-  "portsAttributes": {
-    "8787": {
-      "label": "RStudio",
-      "onAutoForward": "openBrowser"
-    }
-  },
-  "postStartCommand": "sudo rstudio-server start || true",
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "REditorSupport.r",
-        "quarto.quarto"
-      ]
-    }
-  }
+    "name": "R BRFSS MMSA Analysis",
+    "build": {
+        "context": "..",
+        "dockerfile": "../Dockerfile"
+    },
+    "workspaceMount": "source=${localWorkspaceFolder},target=/home/analyst/project,type=bind",
+    "workspaceFolder": "/home/analyst/project",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "REditorSupport.r",
+                "quarto.quarto",
+                "ms-python.python",
+                "ms-toolsai.jupyter"
+            ],
+            "settings": {
+                "r.rterm.linux": "/usr/local/bin/R",
+                "r.plot.useHttpgd": true,
+                "python.defaultInterpreterPath": "/opt/conda/envs/dem7283/bin/python",
+                "jupyter.kernels.filter": []
+            }
+        }
+    },
+    "postCreateCommand": "echo 'Container ready. Project is in /home/analyst/project, data files are in /home/analyst/data/'"
 }

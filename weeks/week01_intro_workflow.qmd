@@ -1,0 +1,308 @@
+---
+title: "DEM 5283/7283 Week 1: Course Introduction and a Reproducible Workflow"
+subtitle: "Statistics for Demographic Data II"
+author: "Corey S. Sparks, PhD"
+date: last-modified
+format:
+  html:
+    toc: true
+    toc-float: true
+    number-sections: false
+    self-contained: true
+execute:
+  engine: knitr
+  echo: true
+  warning: false
+  message: false
+---
+
+## Introduction
+
+Welcome to the second semester of statistics for demographers. The first course gave you the linear model and the logic of inference, and this course takes those tools into the places demographic data actually live, which is to say complex surveys, binary and categorical outcomes, counts and rates, people nested inside places, and the same people measured over time. Every week pairs a set of methods with a real data source, and the data source for most of the semester is the CDC's Behavioral Risk Factor Surveillance System (BRFSS), specifically the SMART metropolitan and micropolitan area (MMSA) file for 2024.
+
+This first week is about the plumbing. I want you to leave with a working project that holds your code and data, a Quarto document that runs from top to bottom, a record of the package versions you used, and a Git repository that tracks all of it. None of this is glamorous, but I have watched enough final papers fall apart the night before they were due (sometimes my own analyses, if I'm honest) to know that the workflow matters as much as the model.
+
+## Setup
+
+This document only needs a few packages. `here` finds files relative to the project root, so the same code runs on my machine, your laptop and the course container without editing paths. The `get_mmsa()` function in `R/get_mmsa.R` reads the 2024 BRFSS MMSA file, and I'll use it in every exercise this semester.
+
+```{r}
+#| label: packages
+library(tidyverse)
+library(here)
+library(sparkscolors)  # pak::pak("coreysparks/sparkscolors"), UTSA colors
+
+source(here("R", "get_mmsa.R"))
+```
+
+```{r}
+#| label: setup
+#| include: false
+theme_set(
+  theme_minimal(base_size = 12) +
+    theme(text = element_text(colour = utsa_cols("midnight")),
+          panel.grid.major = element_line(colour = utsa_cols("smoke")),
+          panel.grid.minor = element_blank())
+)
+```
+
+## How the course runs
+
+The course meets for sixteen weeks, with spring break in week 8 and final papers due in week 16. Readings for each week are listed on the syllabus. The topics are:
+
+| Week | Topic |
+|---|---|
+| 1 | Course introduction; reproducible workflow with Quarto, renv, and Git |
+| 2 | Complex survey design, weights, replicate variance |
+| 3 | Binary outcomes: logit and probit, predicted probabilities, average marginal effects |
+| 4 | Comparing nested logit models (KHB); prediction and cross validation |
+| 5 | Ordinal and multinomial models |
+| 6 | Counts and rates: Poisson, negative binomial, offsets, zero inflation |
+| 7 | Decomposition: Kitagawa and Oaxaca-Blinder |
+| 8 | Spring break |
+| 9 | Missing data and multiple imputation with survey designs |
+| 10 | Longitudinal models: GEE, fixed effects, within-between models |
+| 11 | Splines and GAMs |
+| 12 | Multilevel models I: centering, random slopes, level-specific weights |
+| 13 | Multilevel models II: GLMMs, growth curves, age-period-cohort models |
+| 14 | Causal inference foundations: DAGs and propensity score weighting |
+| 15 | Tree-based machine learning with tidymodels |
+| 16 | Final papers due |
+
+Two things are deliberately missing. Principal components no longer has its own week; if your final paper needs a composite index for places, I'll show you how to build and defend a standardized index when we get there. Event history models are also out, because they have their own full course, and when we reach longitudinal data in week 10 I'll point you to where that material picks up.
+
+## Software
+
+We use R for everything in this course. R is free, it is where most new methods for survey and demographic data show up first, and the community around it is, on balance, a helpful one. Install the current release of R (4.6.x as I write this), a current version of RStudio or Positron, and Git. Quarto ships with both RStudio and Positron, so you probably don't need a separate install.
+
+If you would rather not install anything, the course repository includes a development container. Opening the repository in a GitHub Codespace, or in VS Code with the Dev Containers extension, gives you R, Quarto and the BRFSS data already in place. This is also a nice fallback when a package refuses to compile on your laptop the week a homework is due.
+
+::: {.callout-note}
+Some exercises also have Python versions. They are there for students who work in Python, but R is the primary tool in this course, and a few of the methods we use (survey-weighted multinomial models and KHB comparisons, for example) don't have good Python equivalents.
+:::
+
+## A reproducible workflow
+
+When I say an analysis is reproducible, I mean that someone else (or you, six months from now, with no memory of what you did) can take your files, run them, and get the same numbers. In practice that takes four pieces:
+
+1. a **project** that keeps code, data and output together,
+2. a **Quarto document** that runs from the first line to the last with no hidden steps,
+3. **renv**, which records the package versions you used, and
+4. **Git**, which records every change you made and lets you share the whole thing on GitHub.
+
+I'll take these one at a time.
+
+### Projects and file paths
+
+The fastest way to break someone else's code is a line like `read.csv("C:/Users/ozd504/OneDrive/projects/data.csv")`. It works on exactly one computer in the world. An RStudio project (the `.Rproj` file at the top of this repository) or a Positron folder marks the project root, and the `here` package builds paths from that root.
+
+```{r}
+#| label: here-demo
+here()
+here("data", "MMSA2024_XPT.zip")
+```
+
+Your output will show a different root than mine, and that is the point: the second line finds the data file no matter where you cloned the repository. Every exercise this semester uses `here()` for file paths, and I'd like your homework to do the same.
+
+### Quarto documents
+
+A Quarto document (`.qmd`) mixes prose and code. The YAML header at the top controls the output, and each code chunk carries its options in `#|` comments. A minimal homework document looks like this:
+
+````markdown
+---
+title: "Homework 1"
+author: "Your Name"
+format:
+  html:
+    self-contained: true
+execute:
+  echo: true
+---
+
+## Setup
+
+```{{r}}
+#| label: setup
+library(tidyverse)
+library(here)
+```
+````
+
+The `self-contained: true` option packs the figures and styles into a single HTML file, so you can submit or share one file. Render the document with the Render button, with `quarto render homework1.qmd` in the terminal, or with `quarto::quarto_render("homework1.qmd")` from R. Rendering starts a fresh R session, so if your document only works because of something you ran in the console an hour ago, rendering will tell you. That's the feature, not a bug.
+
+### Recording package versions with renv
+
+Packages change. A function gets a new default, an argument gets renamed, or a package disappears from CRAN, and code that ran last spring stops running. `renv` gives each project its own package library and writes the exact versions into a lockfile, `renv.lock`, which you commit along with your code.
+
+```{r}
+#| label: renv-workflow
+#| eval: false
+renv::init()      # once per project: create the project library and lockfile
+renv::snapshot()  # after you install or update packages: record the versions
+renv::status()    # check whether the lockfile and library agree
+renv::restore()   # on a new machine: install the versions in renv.lock
+```
+
+The usual rhythm is to install what you need, get the analysis working, run `renv::snapshot()`, and commit `renv.lock`. When a classmate (or I) clone your repository, `renv::restore()` rebuilds your library.
+
+### Version control with Git and GitHub
+
+Git keeps a history of your project, and GitHub keeps a copy of that history online. If you have never used Git, the `usethis` package handles the setup from R:
+
+```{r}
+#| label: git-setup
+#| eval: false
+usethis::use_git_config(user.name = "Your Name",
+                        user.email = "you@my.utsa.edu")
+usethis::create_github_token()  # opens GitHub to make a personal access token
+gitcreds::gitcreds_set()        # paste the token here
+usethis::use_git()              # start tracking this project
+usethis::use_github()           # create the GitHub repository and push
+```
+
+After that, the daily work is three commands in the terminal (or the Git pane in RStudio and Positron):
+
+```{bash}
+#| label: git-daily
+#| eval: false
+git add homework1.qmd renv.lock
+git commit -m "Finish homework 1 descriptive tables"
+git push
+```
+
+Commit when something works, and write messages that tell future you what changed. "stuff" is not a commit message, I promise.
+
+::: {.callout-warning}
+Don't commit large data files or anything with restricted access. The BRFSS file is public, but the extracted file is several hundred megabytes, and the course repository keeps it and the cached copies out of Git with entries in `.gitignore`. If you use restricted data for your paper (and some of you will), keep it out of your repository entirely.
+:::
+
+## The course data
+
+Most examples this semester use the 2024 BRFSS SMART MMSA file. The BRFSS is a telephone survey of adults that every state runs with the CDC, and the SMART program (Selected Metropolitan/Micropolitan Area Risk Trends) reweights the respondents who live in metro and micro areas with enough respondents, so we can make estimates for places like San Antonio and not just for Texas. The data and documentation are on the [CDC SMART page](https://www.cdc.gov/brfss/smart/smart_2024.html), and you'll want the [variable layout](https://www.cdc.gov/brfss/annual_data/2024/pdf/MMSA_VarLayout_24-508.pdf) and the [calculated variables codebook](https://www.cdc.gov/brfss/annual_data/2024/pdf/2024-calculated-variables-version4-508.pdf) open whenever you recode anything.
+
+`get_mmsa()` reads the file. The first time you run it, it uses the zip file in `data/` (or downloads it from the CDC if the zip isn't there), cleans up the variable names, and saves a copy as an `.rds` file, so later reads take a few seconds instead of a minute.
+
+```{r}
+#| label: load-brfss
+brfss <- get_mmsa(2024)
+dim(brfss)
+```
+
+The variable names in the raw file are a mix of plain names (`GENHLTH`) and calculated variables that start with an underscore (`_BMI5`). `get_mmsa()` lower-cases everything and drops the underscores, so `_STSTR` becomes `ststr`. Keep that in mind when you read the codebook.
+
+```{r}
+#| label: brfss-overview
+overview <- brfss |>
+  summarise(respondents = n(),
+            places = n_distinct(mmsa),
+            strata = n_distinct(ststr),
+            weighted_adults = sum(mmsawt))
+overview
+```
+
+```{r}
+#| label: overview-values
+#| include: false
+fmt <- function(x) format(round(x), big.mark = ",")
+```
+
+So the file has `r fmt(overview$respondents)` respondents in `r overview$places` metro and micro areas, and the weights add up to about `r fmt(overview$weighted_adults / 1e6)` million adults. That last number is the first hint of what week 2 is about: each respondent stands in for a different number of people, and those numbers are not small.
+
+```{r}
+#| label: fig-weights
+#| fig-cap: "Distribution of the MMSA final weight. The x axis is on a log scale."
+brfss |>
+  ggplot(aes(x = mmsawt)) +
+  geom_histogram(bins = 60, fill = utsa_cols("midnight"), colour = "white") +
+  scale_x_log10(labels = scales::label_comma()) +
+  labs(x = "MMSA final weight (_MMSAWT)", y = "Respondents")
+```
+
+The weights run from about `r round(min(brfss$mmsawt))` to more than `r fmt(max(brfss$mmsawt))`. A respondent with a weight of 1,000 represents 1,000 adults in their metro area, and a respondent with a weight of 20 represents 20. If we ignore that, we are treating every respondent as if they count the same, and they don't.
+
+Here is the same idea for the six Texas areas in the file, comparing the number of respondents with the number of adults they represent.
+
+```{r}
+#| label: texas-counts
+tx_counts <- brfss |>
+  filter(str_detect(mmsaname, ", TX")) |>
+  mutate(place = str_remove(mmsaname, ", TX.*")) |>
+  group_by(place) |>
+  summarise(respondents = n(),
+            adults_represented = sum(mmsawt)) |>
+  mutate(adults_per_respondent = adults_represented / respondents) |>
+  arrange(desc(adults_represented))
+
+knitr::kable(tx_counts, digits = 0, format.args = list(big.mark = ","))
+```
+
+```{r}
+#| label: texas-ratios
+#| include: false
+per_resp <- function(p) fmt(tx_counts$adults_per_respondent[str_detect(tx_counts$place, p)])
+```
+
+The big metros get more respondents, but not in proportion to their size. Each Houston respondent stands in for about `r per_resp("^Houston")` adults on average, and each San Antonio respondent for about `r per_resp("^San Antonio")`. So a San Antonio respondent counts for less than half as much as a Houston respondent when we add things up. Next week we'll take this seriously and use the weights and the design of the survey to get estimates, and standard errors, that describe the population and not just the sample.
+
+## Exercises
+
+These exercises are Homework 1. Submit the link to your GitHub repository and the rendered HTML file.
+
+**1.** Create a new project for your homework this semester, either an RStudio project or a folder in Positron. Initialize Git and connect it to a new GitHub repository.
+
+```{r}
+#| label: ex-project
+#| eval: false
+# YOUR CODE HERE
+```
+
+**2.** Initialize `renv` in the project, install `tidyverse` and `here`, and take a snapshot. Show the output of `renv::status()`.
+
+```{r}
+#| label: ex-renv
+#| eval: false
+# YOUR CODE HERE
+```
+
+**3.** Copy `R/get_mmsa.R` into your project, read the 2024 MMSA data with it, and report the number of respondents and the sum of `mmsawt` for one metro area other than San Antonio. Use `here()` for every file path.
+
+```{r}
+#| label: ex-data
+#| eval: false
+# YOUR CODE HERE
+```
+
+<details>
+<summary>One solution for exercise 3</summary>
+
+```{r}
+#| label: ex-data-solution
+#| eval: false
+library(tidyverse)
+library(here)
+source(here("R", "get_mmsa.R"))
+
+brfss <- get_mmsa(2024)
+
+brfss |>
+  filter(str_detect(mmsaname, "^Austin")) |>
+  summarise(respondents = n(),
+            adults_represented = sum(mmsawt))
+```
+
+</details>
+
+**4.** End your document with a chunk that runs `sessionInfo()`, render the document to a self-contained HTML file, then commit and push the `.qmd` file, the rendered HTML and `renv.lock`.
+
+```{r}
+#| label: ex-session
+#| eval: false
+# YOUR CODE HERE
+```
+
+## Session information
+
+```{r}
+#| label: session-info
+sessionInfo()
+```

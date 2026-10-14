@@ -1,0 +1,616 @@
+---
+title: "DEM 5283/7283 Week 2: Complex Survey Design, Weights, and Replicate Variance"
+subtitle: "Statistics for Demographic Data II"
+author: "Corey S. Sparks, PhD"
+date: last-modified
+bibliography: references.bib
+format:
+  html:
+    toc: true
+    toc-float: true
+    number-sections: false
+    self-contained: true
+    fig-width: 8
+    fig-height: 5
+execute:
+  engine: knitr
+  echo: true
+  warning: false
+  message: false
+---
+
+## Introduction
+
+Most of what demographers know about health, work, migration and family life comes from surveys, and almost none of those surveys are simple random samples. They stratify, they cluster, they oversample small groups, and then they adjust the weights so the sample lines up with census totals. Every one of those choices changes how we should estimate a mean, a proportion or a regression coefficient, and how much uncertainty we should attach to it. If we ignore the design, the software will still give us numbers. They will just describe the sample and not the population, and the standard errors will usually be too small.
+
+This week I walk through the logic of survey weights and design variables, then use the 2024 BRFSS SMART MMSA data to show what changes, and what doesn't, when we take the design seriously. The last part covers replicate weights, which is how many federal surveys (the American Community Survey among them) ship their design information. Everything we do later in the semester (logit models, count models, multilevel models) builds on the design object you make this week.
+
+## Setup
+
+The `survey` package does the heavy lifting [@lumley2010]. `srvyr` lets us use it inside `dplyr` pipelines, `gtsummary` and `modelsummary` make tables, and `tidycensus` downloads ACS microdata with replicate weights.
+
+```{r}
+#| label: packages
+library(tidyverse)
+library(here)
+library(survey)
+library(srvyr)
+library(gtsummary)
+library(modelsummary)
+library(tidycensus)
+library(sparkscolors)  # pak::pak("coreysparks/sparkscolors"), UTSA colors
+
+source(here("R", "get_mmsa.R"))
+```
+
+```{r}
+#| label: setup
+#| include: false
+theme_set(
+  theme_minimal(base_size = 12) +
+    theme(text = element_text(colour = utsa_cols("midnight")),
+          panel.grid.major = element_line(colour = utsa_cols("smoke")),
+          panel.grid.minor = element_blank(),
+          legend.position = "bottom")
+)
+fmt <- function(x, d = 0) format(round(x, d), big.mark = ",", nsmall = d)
+pct <- function(x, d = 1) paste0(format(round(100 * x, d), nsmall = d), "%")
+```
+
+## Why survey design matters
+
+### Some vocabulary
+
+A few terms come up over and over, and it's worth pinning them down before we touch any data. @lohr2019 is my go-to reference for the theory here.
+
+The **target population** is the group the survey is designed to describe. For the BRFSS it is non-institutionalized adults living in households with a telephone. The **sampling frame** is the list we actually draw from, which for a telephone survey is the set of landline and cell phone numbers. The **sampling units** are what gets selected at each stage. In a two-stage design, like the Demographic and Health Surveys, the first-stage units (the **primary sampling units**, or PSUs) are villages or neighborhoods, and the second-stage units are households within them.
+
+**Strata** are groups the frame is split into before sampling, and the survey samples independently within each one. Stratifying usually makes estimates more precise, because it guarantees the sample covers each stratum. **Clusters** do the opposite. People in the same village tend to resemble one another, so 20 people from one village carry less information than 20 people from 20 villages, and clustering usually makes estimates less precise.
+
+### What a weight is
+
+If person $i$ had a probability $\pi_i$ of being selected, their base weight is
+
+$$
+w_i = \frac{1}{\pi_i}
+$$
+
+which is the number of people in the population that person stands in for. Surveys then adjust these base weights for nonresponse and rake or post-stratify them so that weighted totals match known population counts by age, sex, race and ethnicity, and so on. The BRFSS does all of this, and the final weight is the result [@cdc_smart2024].
+
+Here is the simplest possible example: five people, with weights.
+
+```{r}
+#| label: toy-weights
+toy <- tibble(y = c(4, 2, 1, 5, 2),
+              weight = c(1, 2, 4, 1, 2))
+toy
+
+toy |>
+  summarise(unweighted_mean = mean(y),
+            weighted_mean = weighted.mean(y, w = weight))
+```
+
+The person with `y = 1` has a weight of 4, so they count four times as much as the person with `y = 4`, and the weighted mean is pulled down. That's all a weight does to a point estimate. The harder part, and the part that takes special software, is getting the standard error right.
+
+## The BRFSS SMART MMSA design
+
+### Reading the data
+
+`get_mmsa()` reads the 2024 file and cleans up the names (see the week 1 materials). Keep the [calculated variables codebook](https://www.cdc.gov/brfss/annual_data/2024/pdf/2024-calculated-variables-version4-508.pdf) and the [variable layout](https://www.cdc.gov/brfss/annual_data/2024/pdf/MMSA_VarLayout_24-508.pdf) open while you work.
+
+```{r}
+#| label: load-brfss
+brfss <- get_mmsa(2024)
+```
+
+### Finding the design variables
+
+Every survey documents its design variables somewhere, and finding them is always the first job. For the MMSA file there are two: the stratum, `_STSTR` (`ststr` after cleaning), and the MMSA final weight, `_MMSAWT` (`mmsawt`). The MMSA weight is calibrated to each metro area's adult population, so it is the right weight for metro-level estimates. Don't use the state weight from the full BRFSS file with these data.
+
+You might go looking for a cluster variable and not find one. The state BRFSS files include `_PSU`, but it is just the respondent's sequence number. The BRFSS samples telephone numbers, not neighborhoods, so each respondent is their own PSU. In `survey` notation that is `ids = ~1`.
+
+Writing `ids = ~seqno` should be equivalent, but it shows a common error.
+
+```{r}
+#| label: nest-error
+#| error: true
+options(survey.lonely.psu = "adjust")
+
+svydesign(ids = ~seqno, strata = ~ststr, weights = ~mmsawt, data = brfss)
+```
+
+Sequence numbers start over in every state, so the same `seqno` shows up in more than one stratum. `nest = TRUE` tells `survey` that PSU labels are only unique within strata. Many surveys number their PSUs this way, and you will see this error again.
+
+```{r}
+#| label: nest-fix
+any(duplicated(brfss$seqno))
+
+des_nest <- svydesign(ids = ~seqno, strata = ~ststr, weights = ~mmsawt,
+                      data = brfss, nest = TRUE)
+```
+
+The `survey.lonely.psu` option deals with a different problem. A stratum with only one PSU has no within-stratum variance to estimate. The file has `r sum(table(brfss$ststr) == 1)` strata with a single respondent. Setting the option to `"adjust"` centers those strata at the overall mean, which is conservative. See `?surveyoptions` for the alternatives.
+
+### Recoding
+
+Now the recodes. Missing value codes (7 for "don't know", 9 for "refused") differ from variable to variable, so check the codebook every time. Here I use the calculated education and age variables, the three-group race and ethnicity measure `_RACEGR3`, and BMI, which is stored with two implied decimal places.
+
+```{r}
+#| label: recode
+brfss <- brfss |>
+  mutate(
+    badhealth = case_when(genhlth %in% 4:5 ~ 1,
+                          genhlth %in% 1:3 ~ 0),
+    female = if_else(sexvar == 2, 1, 0),
+    race_eth = factor(case_when(racegr3 == 1 ~ "NH White",
+                                racegr3 == 2 ~ "NH Black",
+                                racegr3 == 3 ~ "NH Other",
+                                racegr3 == 4 ~ "NH Multiracial",
+                                racegr3 == 5 ~ "Hispanic"),
+                      levels = c("NH White", "NH Black", "NH Other",
+                                 "NH Multiracial", "Hispanic")),
+    educ = factor(case_when(educag == 1 ~ "Less than HS",
+                            educag == 2 ~ "HS graduate",
+                            educag == 3 ~ "Some college",
+                            educag == 4 ~ "College graduate"),
+                  levels = c("Less than HS", "HS graduate",
+                             "Some college", "College graduate")),
+    agec = factor(ageg, levels = 1:6,
+                  labels = c("18-24", "25-34", "35-44", "45-54", "55-64", "65+")),
+    bmi = bmi5 / 100,
+    obese = if_else(bmi >= 30, 1, 0),
+    texas = str_detect(mmsaname, ", TX"),
+    place = str_remove(mmsaname, ", [A-Z]{2}(-[A-Z]{2})*, .*$")
+  )
+```
+
+::: {.callout-note}
+Notice that I recode the whole file and don't drop anyone yet. Respondents with missing values still carry design information, and when we want estimates for a subgroup, we'll tell the design about it (more on this below).
+:::
+
+## Three ways to analyze the same data
+
+I'll use one question to compare approaches: how does the share of adults reporting fair or poor health differ by education?
+
+### Ignoring the design
+
+This is what you get from ordinary tables, which treat the data as a simple random sample.
+
+```{r}
+#| label: naive-table
+naive_tab <- table(brfss$badhealth, brfss$educ)
+round(100 * prop.table(naive_tab, margin = 2), 1)
+
+chisq.test(naive_tab)
+```
+
+The gradient is strong: people with less education report worse health. But these are the proportions *in the sample*, and the test treats every respondent as an independent draw with equal probability of selection. Neither is true.
+
+### Weights only
+
+Weighting the table fixes the point estimates.
+
+```{r}
+#| label: weighted-table
+wt_tab <- xtabs(mmsawt ~ badhealth + educ, data = brfss)
+round(100 * prop.table(wt_tab, margin = 2), 1)
+```
+
+```{r}
+#| label: age-shares
+#| include: false
+old_unwt <- mean(brfss$ageg == 6)
+old_wt <- weighted.mean(brfss$ageg == 6, brfss$mmsawt)
+```
+
+The weighted prevalences are lower than the unweighted ones in every education group. The people who answer the BRFSS are, on average, in worse health than the adult population the weights describe. They're older, for one thing: `r pct(old_unwt)` of respondents are 65 or older, compared with `r pct(old_wt)` of the weighted population. The weights correct for that. This is the "bias" part of the argument for weighting, and it's why I won't accept unweighted descriptive statistics from survey data in your papers.
+
+### The full design
+
+Now we declare the design and let `survey` compute everything.
+
+```{r}
+#| label: design
+des <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt, data = brfss)
+des
+
+svyby(~badhealth, ~educ, design = des, FUN = svymean, na.rm = TRUE)
+```
+
+The point estimates match the weighted table, and now each one comes with a standard error that reflects the design. The design-based test of independence is the Rao-Scott adjusted chi-square [@rao_scott1984], which `survey` reports as an F statistic.
+
+```{r}
+#| label: rao-scott
+svychisq(~badhealth + educ, design = des)
+```
+
+### Comparing the standard errors
+
+To see what each piece of the design does, I make two more design objects: one that pretends the data are a simple random sample, and one that uses the weights but ignores the strata.
+
+```{r}
+#| label: se-compare
+des_srs <- svydesign(ids = ~1, weights = ~1, data = brfss)
+des_wt  <- svydesign(ids = ~1, weights = ~mmsawt, data = brfss)
+
+se_compare <- list("Simple random sample" = des_srs,
+                   "Weights only" = des_wt,
+                   "Weights and strata" = des) |>
+  map(\(d) svyby(~badhealth, ~educ, design = d, FUN = svymean, na.rm = TRUE)) |>
+  list_rbind(names_to = "design") |>
+  as_tibble() |>
+  mutate(design = fct_inorder(design))
+
+se_compare |>
+  select(design, educ, badhealth, se) |>
+  pivot_wider(names_from = design, values_from = c(badhealth, se)) |>
+  knitr::kable(digits = 4)
+```
+
+```{r}
+#| label: fig-se-compare
+#| fig-cap: "Standard error of the fair or poor health prevalence by education, under three assumptions about the design."
+se_compare |>
+  ggplot(aes(x = educ, y = se, fill = design)) +
+  geom_col(position = "dodge") +
+  scale_fill_utsa() +
+  labs(x = NULL, y = "Standard error", fill = NULL)
+```
+
+```{r}
+#| label: deff
+#| include: false
+overall <- svymean(~badhealth, des, na.rm = TRUE, deff = TRUE)
+deff_bh <- as.numeric(deff(overall))
+w <- brfss$mmsawt
+kish <- 1 + (sd(w) / mean(w))^2
+se_ratio <- se_compare |>
+  select(design, educ, se) |>
+  pivot_wider(names_from = design, values_from = se) |>
+  mutate(r_wt = `Weights only` / `Simple random sample`,
+         r_full = `Weights and strata` / `Weights only`)
+```
+
+Two things jump out. First, the standard errors from the design are about `r round(min(se_ratio$r_wt), 1)` to `r round(max(se_ratio$r_wt), 1)` times larger than the simple random sample ones. Second, almost all of that comes from the weights. Adding the strata barely moves anything (the ratio of the full-design to weights-only standard errors runs from `r round(min(se_ratio$r_full), 3)` to `r round(max(se_ratio$r_full), 3)`).
+
+That is specific to the BRFSS, and I don't want you to take the wrong lesson from it. In this survey the weights vary a lot, and unequal weights inflate variance. @kish1992 gave a handy approximation for the inflation, $1 + CV^2$ where $CV$ is the coefficient of variation of the weights, and for the MMSA file it is `r round(kish, 2)`. The design effect `survey` reports for the overall prevalence is `r round(deff_bh, 2)`. In other words, our `r fmt(nrow(brfss))` respondents carry about as much information as a simple random sample of `r fmt(nrow(brfss) / deff_bh)`. In a clustered survey like the DHS or the ACS, the clusters add their own inflation on top of this. So the rule doesn't change: always use the full design, even when it looks like one piece isn't doing much.
+
+### Subpopulations: subset the design, don't filter the data
+
+When you want an estimate for a subgroup, say obesity among Hispanic adults in San Antonio, the tempting move is to filter the data and then build a design from what's left. The right move is to build the design on the full data and then `subset()` it. The design-based variance depends on how many respondents fall in each stratum, and a subset keeps track of that while a filtered data frame forgets it.
+
+```{r}
+#| label: subset-vs-filter
+sa_hisp <- brfss$race_eth %in% "Hispanic" & str_detect(brfss$place, "^San Antonio")
+
+# the right way
+svymean(~obese, subset(des, sa_hisp), na.rm = TRUE)
+
+# the tempting way
+svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt,
+          data = filter(brfss, sa_hisp)) |>
+  svymean(~obese, design = _, na.rm = TRUE)
+```
+
+In fairness, the two answers here are nearly identical. Because every BRFSS respondent is their own PSU, filtering loses very little. In a clustered design the filtered version can be badly wrong, and filtering can also leave strata with a single PSU, which breaks the variance calculation. So `subset()` is the habit to build. `srvyr` does the same thing when you call `filter()` on a survey object (not on the data frame), which is one reason I like it.
+
+## Descriptive tables
+
+`srvyr` puts the design inside a `dplyr` pipeline. Grouping and summarizing work the way you'd expect, and `survey_mean()` returns the standard error (or a confidence interval) along with the estimate.
+
+```{r}
+#| label: srvyr-design
+brfss_svy <- brfss |>
+  as_survey_design(ids = 1, strata = ststr, weights = mmsawt)
+
+brfss_svy |>
+  filter(!is.na(educ)) |>
+  group_by(educ, female) |>
+  summarise(badhealth = survey_mean(badhealth, na.rm = TRUE, vartype = "ci"))
+```
+
+For a paper, `gtsummary` builds the familiar "Table 1" from a survey design, with weighted percentages and design-based tests.
+
+```{r}
+#| label: tbl-gtsummary
+brfss_svy |>
+  filter(!is.na(educ)) |>
+  select(educ, badhealth, obese, race_eth, agec) |>
+  tbl_svysummary(by = educ,
+                 label = list(badhealth ~ "Fair or poor health",
+                              obese ~ "Obese (BMI 30 or more)",
+                              race_eth ~ "Race and ethnicity",
+                              agec ~ "Age group"),
+                 statistic = list(all_categorical() ~ "{p}%"),
+                 missing = "no") |>
+  add_p() |>
+  modify_spanning_header(all_stat_cols() ~ "**Educational attainment**") |>
+  bold_labels()
+```
+
+The percentages are weighted, and the p-values come from Rao-Scott tests. This is the kind of descriptive table you should report.
+
+## Regression with survey data
+
+The same logic carries over to regression. I'll fit a linear model for BMI three ways: ordinary least squares, least squares with the weights, and `svyglm()` with the full design.
+
+```{r}
+#| label: regression
+f_bmi <- bmi ~ educ + agec + female + race_eth
+
+fit_ols <- lm(f_bmi, data = brfss)
+fit_wls <- lm(f_bmi, data = brfss, weights = mmsawt)
+fit_svy <- svyglm(f_bmi, design = des, family = gaussian())
+
+modelsummary(list("OLS" = fit_ols,
+                  "Weighted OLS" = fit_wls,
+                  "Survey design" = fit_svy),
+             gof_map = "nobs",
+             fmt = 3,
+             coef_rename = \(x) str_remove_all(x, "educ|agec|race_eth"),
+             title = "Linear models for BMI, 2024 BRFSS SMART MMSA")
+```
+
+The weighted model and the survey model have identical coefficients, and they differ from OLS because the weights change whose BMI we're describing. The standard errors are the interesting part. `lm()` with weights treats the weights as precision weights, which is a different statistical idea altogether, and its standard errors are not right for survey data. `svyglm()` uses a sandwich (robust) variance estimator that accounts for the weights and the design, the same family of estimators economists use for clustered data [@cameron_miller2015].
+
+```{r}
+#| label: fig-coefs
+#| fig-cap: "Coefficients and 95% confidence intervals for BMI under three estimators."
+coefs <- list("OLS" = fit_ols,
+              "Weighted OLS" = fit_wls,
+              "Survey design" = fit_svy) |>
+  map(\(m) broom::tidy(m, conf.int = TRUE)) |>
+  list_rbind(names_to = "model") |>
+  filter(term != "(Intercept)") |>
+  mutate(model = fct_inorder(model),
+         term = str_remove_all(term, "educ|agec|race_eth"),
+         term = fct_inorder(term))
+
+coefs |>
+  ggplot(aes(x = estimate, y = fct_rev(term), colour = model, shape = model)) +
+  geom_vline(xintercept = 0, colour = utsa_cols("smoke")) +
+  geom_pointrange(aes(xmin = conf.low, xmax = conf.high),
+                  position = position_dodge(width = 0.6)) +
+  scale_colour_utsa() +
+  labs(x = "Difference in BMI", y = NULL, colour = NULL, shape = NULL)
+```
+
+```{r}
+#| label: reg-ratio
+#| include: false
+se_reg <- coefs |>
+  select(model, term, std.error) |>
+  pivot_wider(names_from = model, values_from = std.error) |>
+  mutate(r = `Survey design` / OLS)
+fem <- coefs |> filter(term == "female")
+fem_ols <- filter(fem, model == "OLS")
+fem_svy <- filter(fem, model == "Survey design")
+```
+
+The survey standard errors are `r round(min(se_reg$r), 1)` to `r round(max(se_reg$r), 1)` times the OLS ones. With `r fmt(nobs(fit_svy))` respondents most of these effects stay clearly different from zero either way, and the big picture (BMI is lower among college graduates and peaks in middle age) doesn't change. But look at the coefficient for women. OLS says women's BMI is `r round(abs(fem_ols$estimate), 2)` points lower, with p = `r format.pval(fem_ols$p.value, digits = 2)`. The survey model puts the difference at `r round(abs(fem_svy$estimate), 2)` points with p = `r format.pval(fem_svy$p.value, digits = 2)`. Same data, same model, and the "finding" goes away once the standard error reflects the design. With a smaller sample or a smaller effect this happens often, so fit the right model from the start.
+
+## Estimates for places
+
+The point of the SMART file is estimates for metro areas. `svyby()` with `svyciprop()` gives prevalences with confidence intervals computed on the logit scale, which stay inside 0 and 1 for small groups.
+
+```{r}
+#| label: places
+tx_fit <- svyby(~obese, ~place, design = subset(des, texas),
+                FUN = svyciprop, vartype = c("se", "ci"), na.rm = TRUE)
+
+tx_obesity <- tibble(place = tx_fit$place,
+                     obese = coef(tx_fit),
+                     se = SE(tx_fit),
+                     ci_l = tx_fit$ci_l,
+                     ci_u = tx_fit$ci_u) |>
+  left_join(brfss |>
+              filter(texas, !is.na(obese)) |>
+              count(place, name = "n"),
+            by = "place") |>
+  mutate(rse = se / obese) |>
+  relocate(n, .after = place) |>
+  arrange(desc(obese))
+
+knitr::kable(tx_obesity, digits = 3, format.args = list(big.mark = ","))
+```
+
+```{r}
+#| label: fig-places
+#| fig-cap: "Adult obesity prevalence in Texas metro areas, 2024, with 95% confidence intervals. San Antonio is highlighted."
+tx_obesity |>
+  mutate(place = fct_reorder(place, obese),
+         highlight = str_detect(place, "^San Antonio")) |>
+  ggplot(aes(x = obese, y = place, colour = highlight)) +
+  geom_pointrange(aes(xmin = ci_l, xmax = ci_u), linewidth = 1, size = 0.6) +
+  scale_colour_manual(values = c(`FALSE` = utsa_cols("midnight")[[1]],
+                                 `TRUE` = utsa_cols("orange")[[1]]),
+                      guide = "none") +
+  scale_x_continuous(labels = scales::label_percent()) +
+  labs(x = "Obesity prevalence (BMI 30 or more)", y = NULL)
+```
+
+```{r}
+#| label: beaumont
+#| include: false
+bmt <- filter(tx_obesity, str_detect(place, "^Beaumont"))
+```
+
+Look at Beaumont-Port Arthur. It has the highest estimate, `r pct(bmt$obese)`, but it also has the fewest respondents (`r fmt(bmt$n)`) and by far the widest interval, from `r pct(bmt$ci_l)` to `r pct(bmt$ci_u)`. That interval overlaps every other Texas metro except Austin, so "Beaumont has the highest obesity rate in Texas" is a claim these data can't support. CDC suppresses MMSA estimates that rest on too few respondents or have intervals that are too wide, and you should check the methodology document for the current rule before you publish a metro-level number [@cdc_smart2024]. The relative standard error (the `rse` column, the standard error divided by the estimate) is a quick screen. Many agencies flag estimates with an RSE above 0.30.
+
+## Replicate weights
+
+So far `survey` has used **Taylor series linearization** to get standard errors. It approximates the variance of whatever we're estimating (a ratio, a regression coefficient) with a linear function whose variance we know how to compute from the strata and PSUs. It works well and it's the default for most software.
+
+The other approach is **replication**. You take the sample, make many slightly perturbed versions of it, compute your estimate in each one, and use the spread of those estimates as the standard error. The perturbations take a few common forms:
+
+1. **Balanced repeated replication (BRR)**, for designs with two PSUs per stratum, which keeps one PSU from each stratum in each replicate.
+2. **The jackknife**, which drops one PSU (or a group of them) at a time and reweights the rest.
+3. **The bootstrap**, which resamples PSUs with replacement within strata.
+4. **Successive difference replication (SDR)**, which the Census Bureau uses for the ACS and the CPS.
+
+Replication has two big advantages. It handles statistics that are hard to linearize (medians and other quantiles, for example), and it lets agencies publish design information without publishing strata and PSU codes that could help identify respondents. That second reason is why so many public-use files come with replicate weights and nothing else.
+
+### Making replicates from a design
+
+`as.svrepdesign()` turns a linearization design into a replicate design. Making 200 bootstrap replicates for all `r fmt(nrow(brfss))` respondents would mean carrying around 46 million replicate weights, so I'll do this for Texas only. Because BRFSS strata are defined within states, every Texas stratum is entirely inside the Texas data, so here building a design on the Texas rows loses nothing.
+
+```{r}
+#| label: tx-strata-check
+brfss |>
+  group_by(ststr) |>
+  summarise(share_texas = mean(texas)) |>
+  count(all_texas = share_texas == 1, any_texas = share_texas > 0)
+```
+
+```{r}
+#| label: bootstrap
+set.seed(7283)
+des_tx <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt,
+                    data = filter(brfss, texas))
+des_tx_boot <- as.svrepdesign(des_tx, type = "subbootstrap", replicates = 200)
+
+boot_se <- svyby(~obese, ~place, design = des_tx_boot, FUN = svymean,
+                 na.rm = TRUE) |>
+  as_tibble() |>
+  select(place, se_bootstrap = se)
+
+tx_obesity |>
+  select(place, obese, se_linearization = se) |>
+  left_join(boot_se, by = "place") |>
+  knitr::kable(digits = 4)
+```
+
+The two sets of standard errors are close, which is what we hope for, since they estimate the same thing in different ways. Rerun it with a different seed and the bootstrap column will wobble a little. That's Monte Carlo error from using 200 replicates, and it shrinks as you add replicates.
+
+### Data that come with replicate weights: the ACS
+
+The ACS public use microdata sample (PUMS) has no strata or PSU variables. It has a person weight, `PWGTP`, and 80 replicate weights, `PWGTP1` through `PWGTP80`, built with successive difference replication. `tidycensus` downloads them (you'll need a free [Census API key](https://api.census.gov/data/key_signup.html), set with `census_api_key()`), and `to_survey()` builds the replicate design with the scale factor the Census Bureau documents for these weights. The download is large, so I save a copy the first time.
+
+```{r}
+#| label: acs-download
+acs_file <- here("data", "acs_pums_tx2024.rds")
+
+if (!file.exists(acs_file)) {
+  tx_pums <- get_pums(variables = c("AGEP", "SEX", "POVPIP"),
+                      state = "TX",
+                      survey = "acs1",
+                      year = 2024,
+                      rep_weights = "person")
+  saveRDS(tx_pums, acs_file)
+}
+tx_pums <- readRDS(acs_file)
+```
+
+```{r}
+#| label: acs-design
+acs_svy <- tx_pums |>
+  mutate(age = as.numeric(AGEP),
+         povpip = as.numeric(POVPIP),
+         # POVPIP is income as a percent of the poverty line; -1 means not determined
+         poverty = case_when(povpip < 0 ~ NA_real_,
+                             povpip < 100 ~ 1,
+                             .default = 0),
+         age65 = as.numeric(age >= 65)) |>
+  to_survey(type = "person", design = "rep_weights")
+
+acs_svy
+```
+
+```{r}
+#| label: acs-estimates
+acs_est <- acs_svy |>
+  summarise(population = survey_total(),
+            poverty_rate = survey_mean(poverty, na.rm = TRUE),
+            share_65plus = survey_mean(age65))
+acs_est
+```
+
+```{r}
+#| label: acs-naive
+#| include: false
+povpip <- as.numeric(tx_pums$POVPIP)
+p_naive <- mean(povpip[povpip >= 0] < 100)
+n_pov <- sum(povpip >= 0)
+se_naive <- sqrt(p_naive * (1 - p_naive) / n_pov)
+```
+
+The printout calls this a JK1 design with 80 replicates. That is just how `survey` labels the variance formula: the Census Bureau's formula for these weights is $\frac{4}{80}\sum_{r=1}^{80}(\hat\theta_r - \hat\theta)^2$, and `to_survey()` sets the JK1 scale to $4/80$ so the two are the same.
+
+The weighted total puts the Texas population at `r fmt(acs_est$population / 1e6, 1)` million, with a standard error of `r fmt(acs_est$population_se)`. That isn't a bug. The ACS weights, including every replicate weight, are controlled to the Census Bureau's official population estimates, so they all add up to the same total and the total has no sampling variance. Totals for subgroups that aren't part of the controls (people in poverty, for example) do have sampling error. The poverty rate is `r pct(acs_est$poverty_rate)` with a standard error of `r round(100 * acs_est$poverty_rate_se, 2)` percentage points. If we ignored the design entirely, the unweighted rate in the sample would be `r pct(p_naive)` and the textbook standard error, $\sqrt{p(1-p)/n}$, would be `r round(100 * se_naive, 2)` points. The replicate standard error is the one to report, and it is what the Census Bureau's own published margins of error are built from (a 90% MOE is 1.645 times the standard error).
+
+::: {.callout-tip}
+Every survey documents its replicate method, the number of replicates, and the scale factor. `tidycensus` knows these for the ACS. For other surveys you'll set them yourself with `svrepdesign()` or `as_survey_rep()`, using the `type`, `scale`, `rscales` and `mse` arguments, and you should copy them from the codebook, not from someone else's code (including mine).
+:::
+
+## Summary
+
+Survey weights fix *bias*: they make estimates describe the population instead of whoever answered the phone. Design variables fix *precision*: they make standard errors reflect how the sample was actually drawn. In the BRFSS most of the precision story is about unequal weights, while in clustered surveys the clusters matter as much or more. Build the design object once, on the full data, subset it for subgroups, and pass it to every function you use. Replicate weights are another way to carry the same information, and for many federal surveys they are the only way you'll get it.
+
+## Exercises
+
+These exercises are Homework 2. Use the 2024 MMSA data and the `des` design object from this document unless the question says otherwise.
+
+**1.** Current smoking status is in `_SMOKER3` (`smoker3`), where codes 1 and 2 are current smokers and 9 is missing. Create a binary current smoking variable and estimate its prevalence by race and ethnicity three ways: unweighted, weighted without the design, and with the full design. Report the design effect for each group.
+
+```{r}
+#| label: ex-smoking
+#| eval: false
+# YOUR CODE HERE
+```
+
+<details>
+<summary>One solution for exercise 1</summary>
+
+```{r}
+#| label: ex-smoking-solution
+#| eval: false
+brfss <- brfss |>
+  mutate(smoker = case_when(smoker3 %in% 1:2 ~ 1,
+                            smoker3 %in% 3:4 ~ 0))
+des <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt, data = brfss)
+
+# unweighted
+brfss |>
+  group_by(race_eth) |>
+  summarise(smoker = mean(smoker, na.rm = TRUE))
+
+# weighted, no design (point estimates only)
+brfss |>
+  group_by(race_eth) |>
+  summarise(smoker = weighted.mean(smoker, w = mmsawt, na.rm = TRUE))
+
+# full design, with design effects
+svyby(~smoker, ~race_eth, design = des, FUN = svymean,
+      na.rm = TRUE, deff = TRUE)
+```
+
+</details>
+
+**2.** Pick a metro area outside Texas. Using `subset()`, estimate the prevalence of fair or poor health for men and women in that metro, with 95% confidence intervals from `svyciprop()`. Report the unweighted number of respondents in each group and say whether you'd be comfortable publishing each estimate.
+
+```{r}
+#| label: ex-metro
+#| eval: false
+# YOUR CODE HERE
+```
+
+**3.** Fit a survey-weighted linear model for BMI that adds an indicator for Texas residence to the model from this document. Compare the standard error of the Texas coefficient with the one from `lm()`, and explain in a sentence or two why they differ.
+
+```{r}
+#| label: ex-regression
+#| eval: false
+# YOUR CODE HERE
+```
+
+**4.** Using the Texas ACS replicate design, estimate the poverty rate for people age 65 and over and for everyone younger than 65. Report the 90% margin of error for each, the way the Census Bureau would.
+
+```{r}
+#| label: ex-acs
+#| eval: false
+# YOUR CODE HERE
+```
+
+## References
+
+::: {#refs}
+:::

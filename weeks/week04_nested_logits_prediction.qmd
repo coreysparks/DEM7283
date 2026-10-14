@@ -1,0 +1,491 @@
+---
+title: "DEM 5283/7283 Week 4: Comparing Nested Logit Models, and Logits for Prediction"
+subtitle: "Statistics for Demographic Data II"
+author: "Corey S. Sparks, PhD"
+date: last-modified
+bibliography: references.bib
+format:
+  html:
+    toc: true
+    toc-float: true
+    number-sections: false
+    self-contained: true
+    fig-width: 8
+    fig-height: 5
+execute:
+  engine: knitr
+  echo: true
+  warning: false
+  message: false
+---
+
+## Introduction
+
+Last week we fit logit and probit models and turned the coefficients into odds ratios, predicted probabilities and average marginal effects. This week has two parts, and they pull in different directions.
+
+The first part is about explanation. Demographers love nested models: enter race and ethnicity, then add education and income, and see how much the race coefficients shrink. It's how a lot of the literature on health disparities is written. But in a logit model that comparison isn't as simple as it looks, because the coefficients from the two models are on different scales. I'll show why, and then show two fixes: the KHB method and average marginal effects.
+
+The second part is about prediction. Here we don't care much about any one coefficient, we care about how well the model sorts people it has never seen. That calls for different tools (training and test data, cross-validation, thresholds and calibration), and I'll use the `tidymodels` framework for them [@kuhn_silge2022].
+
+## Setup
+
+```{r}
+#| label: packages
+library(tidyverse)
+library(here)
+library(survey)
+library(marginaleffects)
+library(modelsummary)
+library(tidymodels)
+library(probably)
+library(sparkscolors)
+
+source(here("R", "get_mmsa.R"))
+source(here("R", "recode_mmsa.R"))
+source(here("R", "get_dhs_model.R"))
+```
+
+```{r}
+#| label: setup
+#| include: false
+options(survey.lonely.psu = "adjust")
+theme_set(
+  theme_minimal(base_size = 12) +
+    theme(text = element_text(colour = utsa_cols("midnight")),
+          panel.grid.major = element_line(colour = utsa_cols("smoke")),
+          panel.grid.minor = element_blank(),
+          legend.position = "bottom")
+)
+fmt <- function(x, d = 0) format(round(x, d), big.mark = ",", nsmall = d)
+pct <- function(x, d = 1) paste0(format(round(100 * x, d), nsmall = d), "%")
+tidymodels_prefer()
+```
+
+## Part 1: Comparing nested logit models
+
+### The data and the question
+
+I'll use the 2024 BRFSS SMART MMSA data with the standard recodes from week 2 (they live in `R/recode_mmsa.R` now). The question is a classic one: how much of the difference in fair or poor self-rated health across racial and ethnic groups is associated with differences in education and income?
+
+```{r}
+#| label: brfss
+brfss <- get_mmsa(2024) |>
+  recode_mmsa() |>
+  mutate(complete = complete.cases(badhealth, race_eth, agec, female, educ, income))
+
+des <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt, data = brfss)
+des_cc <- subset(des, complete)
+```
+
+```{r}
+#| label: missing-income
+#| include: false
+miss_inc <- mean(is.na(brfss$income))
+```
+
+Nested models have to be fit to the same respondents, or the comparison is meaningless. Income is missing for `r pct(miss_inc)` of respondents (the BRFSS income question has a lot of "don't know" and "refused" answers), so I restrict both models to complete cases with `subset()`. Throwing away a fifth of the sample is not something I'd do in a paper, and in week 9 we'll impute those values instead.
+
+### The usual approach
+
+Model 1 has race and ethnicity plus age and sex. Model 2 adds education and income.
+
+```{r}
+#| label: nested-models
+m1 <- svyglm(badhealth ~ race_eth + agec + female,
+             design = des_cc, family = quasibinomial())
+m2 <- svyglm(badhealth ~ race_eth + agec + female + educ + income,
+             design = des_cc, family = quasibinomial())
+
+modelsummary(list("Model 1" = m1, "Model 2" = m2),
+             coef_omit = "agec|female|Intercept",
+             coef_rename = \(x) str_remove_all(x, "race_eth|educ|income"),
+             gof_map = "nobs", fmt = 3,
+             title = "Logit coefficients for fair or poor health")
+```
+
+I use `quasibinomial()` here because it gives the same estimates as `binomial()` without the warning about non-integer successes that survey weights cause. The block of SES variables clearly matters, and a design-based Wald test says so:
+
+```{r}
+#| label: wald-test
+regTermTest(m2, ~ educ + income, method = "Wald")
+```
+
+```{r}
+#| label: naive-change
+#| include: false
+re <- grep("race_eth", names(coef(m1)), value = TRUE)
+naive <- tibble(term = str_remove(re, "race_eth"),
+                m1 = coef(m1)[re],
+                m2 = coef(m2)[re]) |>
+  mutate(change = (m1 - m2) / m1)
+hisp <- filter(naive, term == "Hispanic")
+```
+
+The traditional reading goes like this. The Hispanic coefficient falls from `r round(hisp$m1, 3)` to `r round(hisp$m2, 3)` once we control for education and income, so SES "explains" about `r pct(hisp$change, 0)` of the Hispanic disadvantage in self-rated health. Similar stories for the other groups. That's the kind of sentence that ends up in a lot of abstracts. The problem is that the two coefficients aren't measured in the same units.
+
+### Why logit coefficients from nested models aren't comparable
+
+A logit model can be written as a model for an unobserved, continuous propensity $y^*$:
+
+$$
+y^*_i = \beta_0 + \beta_1 x_i + \varepsilon_i, \qquad y_i = 1 \text{ if } y^*_i > 0
+$$
+
+We never see $y^*$, so its scale is arbitrary, and the logit model pins it down by fixing the variance of $\varepsilon$ at $\pi^2/3$. What we actually estimate is $\beta_1 / \sigma$, the coefficient divided by the standard deviation of the error. When we add a predictor that explains some of $y^*$, the true error variance shrinks, the model rescales everything so the error variance is $\pi^2/3$ again, and every coefficient gets bigger, *even if the new predictor has nothing to do with $x$* [@mood2010; @breen2018].
+
+A quick simulation shows it. Here `z` is generated independently of `x`, so adding it to the model should change nothing about the effect of `x`.
+
+```{r}
+#| label: scale-simulation
+set.seed(7283)
+n <- 100000
+sim <- tibble(x = rnorm(n),
+              z = rnorm(n),
+              y = rbinom(n, 1, plogis(1 * x + 2 * z)))
+
+c(without_z = coef(glm(y ~ x, data = sim, family = binomial))[["x"]],
+  with_z = coef(glm(y ~ x + z, data = sim, family = binomial))[["x"]])
+```
+
+The true coefficient on `x` is 1. Leave out `z` and we estimate about 0.6, and that has nothing to do with confounding, because `z` is unrelated to `x`. It's purely rescaling. In a nested comparison like ours, the change in the race coefficient between Model 1 and Model 2 mixes two things: the real confounding (or mediation) by SES, which we want, and this rescaling, which we don't. The rescaling works *against* finding attenuation, so naive comparisons tend to understate how much the SES variables account for.
+
+### The KHB method
+
+@khb2012 proposed a fix that is simple once you see it. The trouble is that Model 1 and Model 2 explain different amounts of the variance in $y^*$. So build a version of Model 1 that explains exactly as much as Model 2 does. Take each SES variable, regress it on the race and control variables, and keep the residuals. The residuals carry all the information in the SES variables *except* the part that overlaps with race. Put them in Model 1 in place of the SES variables, and now the "reduced" model and the full model have the same fit and the same scale, but the race coefficient in the reduced model still hasn't been adjusted for SES.
+
+There's a `khb` command in Stata, but I'm not aware of a maintained R package, and it only takes a few lines to do by hand.
+
+```{r}
+#| label: khb
+cc <- brfss |> filter(complete)
+
+# SES dummies, and the design matrix for race and the controls
+Z <- model.matrix(~ educ + income, data = cc)[, -1]
+X <- model.matrix(~ race_eth + agec + female, data = cc)
+
+# residualize each SES dummy on X, using the survey weights
+Z_resid <- apply(Z, 2, \(z) resid(lm.wfit(X, z, w = cc$mmsawt)))
+colnames(Z_resid) <- paste0("r_", make.names(colnames(Z)))
+
+brfss_khb <- brfss
+brfss_khb[colnames(Z_resid)] <- NA_real_
+brfss_khb[brfss_khb$complete, colnames(Z_resid)] <- Z_resid
+
+des_khb <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt,
+                     data = brfss_khb) |>
+  subset(complete)
+
+f_khb <- reformulate(c("race_eth", "agec", "female", colnames(Z_resid)),
+                     response = "badhealth")
+m1_khb <- svyglm(f_khb, design = des_khb, family = quasibinomial())
+```
+
+```{r}
+#| label: khb-table
+khb_tab <- naive |>
+  mutate(m1_khb = coef(m1_khb)[re],
+         change_khb = (m1_khb - m2) / m1_khb,
+         rescaling = m1_khb / m1)
+
+khb_tab |>
+  select(term,
+         `Model 1 (naive)` = m1,
+         `Model 1 (KHB)` = m1_khb,
+         `Model 2` = m2,
+         `Change, naive` = change,
+         `Change, KHB` = change_khb) |>
+  knitr::kable(digits = 3)
+```
+
+```{r}
+#| label: khb-values
+#| include: false
+hisp_k <- filter(khb_tab, term == "Hispanic")
+```
+
+The naive and KHB versions of the Model 1 coefficients are close here, so the KHB change for Hispanic respondents (`r pct(hisp_k$change_khb, 0)`) is almost the same as the naive one (`r pct(hisp_k$change, 0)`). I want to be honest about that: in this example the rescaling problem turns out to be small. The KHB and naive Model 1 coefficients are almost the same, which tells us education and income add little to what the model explains on the latent scale beyond race, age and sex. The simulation above shows it isn't small in general. When the variables you add are strong predictors of the outcome, the naive comparison can understate the change by a lot, and you can't know which situation you're in without checking. So check.
+
+::: {.callout-note}
+KHB standard errors for the difference need a delta-method calculation, which the Stata command does for you. In R, the most direct route is to repeat the calculation over replicate weights (`as.svrepdesign()`, from week 2) and use the spread of the differences. Exercise 2 asks you to do this for a smaller sample.
+:::
+
+### Average marginal effects
+
+The other fix is to stop comparing log-odds altogether. Average marginal effects (AMEs) are differences in predicted probabilities, averaged over the sample, and probabilities have the same scale in every model [@mood2010]. The `marginaleffects` package computes them for `svyglm()` models, with the survey weights used in the averaging.
+
+```{r}
+#| label: ames
+ame <- list("Model 1" = m1, "Model 2" = m2) |>
+  map(\(m) avg_comparisons(m, variables = "race_eth", wts = "(weights)")) |>
+  map(as_tibble) |>
+  list_rbind(names_to = "model") |>
+  mutate(contrast = str_remove(contrast, " - NH White"))
+
+ame |>
+  select(model, contrast, estimate, std.error, conf.low, conf.high) |>
+  knitr::kable(digits = 3)
+```
+
+```{r}
+#| label: fig-ames
+#| fig-cap: "Average marginal effects of race and ethnicity on the probability of fair or poor health, relative to non-Hispanic White adults, before and after adjusting for education and income."
+ame |>
+  ggplot(aes(x = estimate, y = contrast, colour = model, shape = model)) +
+  geom_vline(xintercept = 0, colour = utsa_cols("smoke")) +
+  geom_pointrange(aes(xmin = conf.low, xmax = conf.high),
+                  position = position_dodge(width = 0.5)) +
+  scale_colour_utsa(palette = "primary") +
+  scale_x_continuous(labels = scales::label_number(scale = 100, suffix = " pts")) +
+  labs(x = "Difference in probability of fair or poor health", y = NULL,
+       colour = NULL, shape = NULL)
+```
+
+```{r}
+#| label: ame-values
+#| include: false
+ame_h <- ame |> filter(contrast == "Hispanic")
+```
+
+Now the result reads in percentage points, which is what most readers think in anyway. Before adjusting for SES, Hispanic adults are `r round(100 * ame_h$estimate[1], 1)` percentage points more likely than non-Hispanic White adults to report fair or poor health. After adjustment the gap is `r round(100 * ame_h$estimate[2], 1)` points. I'd report the AMEs next to (or in place of) the odds ratios in a paper, and I'll expect them in yours.
+
+### Comparing effects across groups
+
+The same scaling problem shows up when you compare a coefficient across groups, for example the education gradient for men versus women in separate models. If the residual variance differs between the groups, the logit coefficients differ even when the underlying effects don't [@allison1999]. AMEs sidestep this too. Here I fit the model separately for men and women and compare the AME of a college degree (versus a high school diploma) on the probability scale.
+
+```{r}
+#| label: ame-by-group
+educ_ame <- c(Men = 0, Women = 1) |>
+  map(\(s) svyglm(badhealth ~ educ + race_eth + agec,
+                  design = subset(des, female == s),
+                  family = quasibinomial())) |>
+  map(\(m) avg_comparisons(m, wts = "(weights)",
+                           variables = list(educ = c("HS graduate", "College graduate")))) |>
+  map(as_tibble) |>
+  list_rbind(names_to = "sex")
+
+educ_ame |> select(sex, estimate, std.error, conf.low, conf.high) |>
+  knitr::kable(digits = 3)
+```
+
+Men and women are separate subsamples, so the difference between the two AMEs has a standard error of roughly $\sqrt{SE_1^2 + SE_2^2}$:
+
+```{r}
+#| label: ame-by-group-test
+educ_ame |>
+  summarise(difference = diff(estimate),
+            se = sqrt(sum(std.error^2))) |>
+  mutate(z = difference / se,
+         p = 2 * pnorm(-abs(z)))
+```
+
+```{r}
+#| label: ame-sex-values
+#| include: false
+ame_m <- educ_ame$estimate[educ_ame$sex == "Men"]
+ame_w <- educ_ame$estimate[educ_ame$sex == "Women"]
+```
+
+Compared with a high school diploma, a college degree goes with a probability of fair or poor health that is `r round(abs(100 * ame_m), 1)` points lower for men and `r round(abs(100 * ame_w), 1)` points lower for women. The difference between the two is small and not statistically significant, and because both are on the probability scale, that comparison means what it says.
+
+## Part 2: Logistic regression for prediction
+
+### Explanation versus prediction
+
+Everything so far has been about the coefficients. In prediction we flip that around. The question is how well a model sorts *new* cases into the right category, and a model can predict well with coefficients that mean nothing causally, or predict badly with coefficients that are perfectly good estimates. Demographers do more prediction than we sometimes admit: imputing missing values, building propensity scores (week 14) and flagging likely nonrespondents all depend on it.
+
+The key rule is that you judge a predictive model on data it wasn't fit to. A model always looks better on its own training data, and how much better depends on how flexible it is.
+
+### The data
+
+For this part I'll use the DHS model dataset. It looks like a real Demographic and Health Survey but describes no real country, so it's free to use. The outcome is whether a woman currently uses a modern contraceptive method, among women who are sexually active and not pregnant.
+
+```{r}
+#| label: dhs
+dhs <- get_dhs_model() |>
+  filter(v213 == 0, v536 %in% 1:3) |>
+  mutate(modern = factor(if_else(v313 == 3, "yes", "no"), levels = c("yes", "no")),
+         age = v012,
+         children = v218,
+         educ = factor(v106, 0:3, c("None", "Primary", "Secondary", "Higher")),
+         wealth = factor(v190, 1:5, c("Poorest", "Poorer", "Middle", "Richer", "Richest")),
+         rural = factor(v025, 1:2, c("Urban", "Rural")),
+         region = factor(v024)) |>
+  select(modern, age, children, educ, wealth, rural, region)
+
+count(dhs, modern) |> mutate(share = n / sum(n))
+```
+
+I put "yes" first because `yardstick` treats the first factor level as the event of interest. I'm also ignoring the survey design in this part. That's common in prediction work, because the goal is to sort individuals, not to estimate a population quantity. But if you want performance measures that describe the *population* (say, sensitivity among all women in the country), you'd use the weights, and `tidymodels` supports case weights for that.
+
+### Training and test data
+
+`initial_split()` holds out 20% of the data as a test set that we won't touch until the very end. Stratifying the split on the outcome keeps the share of modern method users the same in both pieces.
+
+```{r}
+#| label: split
+set.seed(7283)
+dhs_split <- initial_split(dhs, prop = 0.8, strata = modern)
+dhs_train <- training(dhs_split)
+dhs_test <- testing(dhs_split)
+```
+
+### A recipe and a workflow
+
+A **recipe** describes the preprocessing (dummy variables, a quadratic for age), a **model specification** says what kind of model to fit, and a **workflow** bundles the two so the same steps get applied to every piece of data.
+
+```{r}
+#| label: workflow
+dhs_recipe <- recipe(modern ~ ., data = dhs_train) |>
+  step_dummy(all_nominal_predictors()) |>
+  step_poly(age, degree = 2)
+
+logit_wf <- workflow(dhs_recipe, logistic_reg())
+```
+
+### Cross-validation
+
+To get an honest estimate of performance without touching the test set, we use 10-fold cross-validation on the training data. The data are split into 10 pieces, and the model is fit 10 times, each time on 9 pieces and evaluated on the one left out.
+
+```{r}
+#| label: cv
+dhs_folds <- vfold_cv(dhs_train, v = 10, strata = modern)
+
+dhs_metrics <- metric_set(roc_auc, brier_class, accuracy, sensitivity, specificity)
+
+logit_cv <- fit_resamples(logit_wf, resamples = dhs_folds, metrics = dhs_metrics,
+                          control = control_resamples(save_pred = TRUE))
+
+collect_metrics(logit_cv)
+```
+
+```{r}
+#| label: cv-values
+#| include: false
+cvm <- collect_metrics(logit_cv)
+get_m <- function(m) cvm$mean[cvm$.metric == m]
+base_rate <- mean(dhs_train$modern == "yes")
+```
+
+These metrics measure different things:
+
+- **Accuracy** is the share classified correctly at a threshold of 0.5.
+- **Sensitivity** is the share of modern method users the model catches.
+- **Specificity** is the share of non-users it correctly leaves alone.
+- **The area under the ROC curve (AUC)** is the probability that a randomly chosen user gets a higher predicted probability than a randomly chosen non-user. It doesn't depend on any threshold.
+- **The Brier score** is the mean squared difference between the predicted probability and the 0/1 outcome, so lower is better.
+
+Here is the humbling part. Accuracy is `r pct(get_m("accuracy"))`, which sounds fine until you notice that only `r pct(base_rate)` of women use a modern method. A "model" that predicts "no" for everyone would be right `r pct(1 - base_rate)` of the time. Our model barely beats that, and its sensitivity is `r pct(get_m("sensitivity"))`, so it misses most users. The AUC of `r round(get_m("roc_auc"), 2)` says the model does carry real information. The 0.5 threshold is just a bad way to use it when the outcome is this uncommon.
+
+### Choosing a threshold
+
+The threshold is a decision, not a statistical result, and it should reflect what the two kinds of error cost. A program trying to reach every woman with an unmet need for family planning might accept a lot of false positives to avoid missing anyone. `probably::threshold_perf()` shows the tradeoff using the cross-validated predictions.
+
+```{r}
+#| label: fig-threshold
+#| fig-cap: "Cross-validated sensitivity and specificity across classification thresholds. Youden's J is their sum minus one."
+cv_preds <- collect_predictions(logit_cv)
+
+thresholds <- threshold_perf(cv_preds, modern, .pred_yes,
+                             thresholds = seq(0.05, 0.75, by = 0.01),
+                             metrics = metric_set(sensitivity, specificity, j_index))
+
+best_j <- thresholds |>
+  filter(.metric == "j_index") |>
+  slice_max(.estimate, n = 1, with_ties = FALSE)
+
+thresholds |>
+  ggplot(aes(x = .threshold, y = .estimate, colour = .metric, linetype = .metric)) +
+  geom_line(linewidth = 1) +
+  geom_vline(xintercept = best_j$.threshold, colour = utsa_cols("smoke")) +
+  scale_colour_utsa() +
+  labs(x = "Threshold", y = "Estimate", colour = NULL, linetype = NULL)
+```
+
+Youden's J, which weights sensitivity and specificity equally, peaks at a threshold of `r best_j$.threshold`. That's close to the share of users in the data, which is a common and sensible starting point when the outcome is uncommon.
+
+### Calibration
+
+A model can rank people well and still get the probabilities wrong. **Calibration** asks whether, among women with a predicted probability around 0.3, about 30% actually use a modern method. If the predicted probabilities are going to be used as probabilities (as risk scores, or in propensity score weights in week 14), calibration matters as much as discrimination.
+
+```{r}
+#| label: fig-calibration
+#| fig-cap: "Calibration of the cross-validated predictions. Points are deciles of predicted probability; the diagonal is perfect calibration."
+cv_preds |>
+  mutate(bin = ntile(.pred_yes, 10)) |>
+  group_by(bin) |>
+  summarise(predicted = mean(.pred_yes),
+            observed = mean(modern == "yes"),
+            n = n()) |>
+  ggplot(aes(x = predicted, y = observed)) +
+  geom_abline(colour = utsa_cols("smoke"), linewidth = 1) +
+  geom_line(colour = utsa_cols("midnight")) +
+  geom_point(colour = utsa_cols("orange"), size = 3) +
+  coord_equal(xlim = c(0, 0.7), ylim = c(0, 0.7)) +
+  labs(x = "Mean predicted probability", y = "Observed share using a modern method")
+```
+
+The points sit close to the diagonal, which is typical of logistic regression fit to a reasonably large sample. Flexible machine learning models (week 15) often discriminate better and calibrate worse, so check both.
+
+### The test set, once
+
+Now, and only now, we fit the final model to all of the training data and evaluate it on the test set. `last_fit()` does both steps.
+
+```{r}
+#| label: last-fit
+final_fit <- last_fit(logit_wf, split = dhs_split, metrics = dhs_metrics)
+collect_metrics(final_fit)
+```
+
+The test-set numbers are close to the cross-validated ones, which is what we hope to see. If they had been much worse, that would be a sign of overfitting, or of a test set that differs from the training data in some way. And the rule matters: if you look at the test set, change the model, and look again, it's no longer a test set.
+
+::: {.callout-warning}
+A predictive model is only as fair as the data and the decision it feeds. A model that is well calibrated overall can be poorly calibrated for a particular group, and a threshold that looks fine on average can miss most of the people in a group the program most needs to reach. Before a model like this informs anyone's access to services, check its performance separately by region, wealth and education. Exercise 4 starts on this.
+:::
+
+## Exercises
+
+These exercises are Homework 4.
+
+**1.** Repeat the nested comparison in Part 1 for obesity (`obese`) as the outcome. Report the naive and KHB changes in the race and ethnicity coefficients, and the AMEs from both models. Is the rescaling problem bigger or smaller than it was for self-rated health? Why might that be?
+
+```{r}
+#| label: ex-khb-obesity
+#| eval: false
+# YOUR CODE HERE
+```
+
+**2.** Get a standard error for the KHB change in the Hispanic coefficient. Restrict the data to the Texas metro areas, convert the design to 100 bootstrap replicates with `as.svrepdesign()`, and repeat the KHB calculation within each replicate using `withReplicates()` or a loop over the replicate weights.
+
+```{r}
+#| label: ex-khb-se
+#| eval: false
+# YOUR CODE HERE
+```
+
+<details>
+<summary>A hint for exercise 2</summary>
+
+After `rep_des <- as.svrepdesign(...)`, `weights(rep_des, "analysis")` gives you a matrix of replicate weights with one column per replicate. Fit the residualizing regressions and both logit models with each column as the weight (`glm()` with `weights =` gives the same point estimates as `svyglm()`), save the change for each replicate, and take the standard deviation, scaled as `svrVar()` would.
+
+</details>
+
+**3.** Add wealth by residence (`wealth * rural`) and the number of children ever born (`v201`) to the DHS prediction model. Does the cross-validated AUC improve? What about the Brier score?
+
+```{r}
+#| label: ex-predict
+#| eval: false
+# YOUR CODE HERE
+```
+
+**4.** Using the cross-validated predictions from the final model, compute sensitivity and specificity at the Youden threshold separately for urban and rural women. Write two or three sentences about what the difference would mean for a program that used this model to target outreach.
+
+```{r}
+#| label: ex-fairness
+#| eval: false
+# YOUR CODE HERE
+```
+
+## References
+
+::: {#refs}
+:::
