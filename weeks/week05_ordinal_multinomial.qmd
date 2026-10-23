@@ -21,7 +21,7 @@ execute:
 
 ## Introduction
 
-The binary logit is flexible, because almost anything can be squeezed into a yes or no. But squeezing throws information away. Self-rated health has five ordered categories, and collapsing them into "fair or poor" versus everything else treats a move from excellent to good the same as no move at all. Other outcomes have categories with no order at all: which method of contraception a woman uses, which of several places a migrant moves to, how a family arranges child care.
+The binary logit is flexible, because almost anything can be squeezed into a yes or no. But squeezing throws information away. Self-rated health has five ordered categories, and collapsing them into "fair or poor" versus everything else treats a move from excellent to good the same as no move at all. The same is true of a political scale that runs from very liberal to very conservative, or a question with "strongly agree" through "strongly disagree." Other outcomes have categories with no order at all: which method of contraception a woman uses, which of several labor markets a migrant moves to, how a family arranges child care, how someone gets to work. Demographers sometimes call these alternative decision-making processes, because the person (in principle) chooses one option from a set.
 
 This week covers the two standard models for these outcomes. The **ordinal logit** (the proportional odds model) is for ordered categories, and the **multinomial logit** is for unordered ones. Both are generalizations of the binary logit, both can be fit to complex survey data, and both are much easier to explain with predicted probabilities than with coefficients. I'll lean on predicted probabilities throughout, for the same reasons as last week.
 
@@ -73,13 +73,56 @@ svymean(~genhlth3, des, na.rm = TRUE)
 
 ### The proportional odds model
 
-Think of an unobserved, continuous health propensity $y^*$ (the same latent variable idea from last week), and suppose we only see which of $J$ intervals it falls in. The cut points between intervals are $\zeta_1 < \zeta_2 < \dots < \zeta_{J-1}$. The proportional odds model is a set of $J-1$ binary logits for the cumulative probabilities:
+Suppose an outcome has $J$ ordered categories, and person $i$ has the response $y_i = j$ for one of $j = 1, \dots, J$. With ordered categories, it's easier to work with the **cumulative probabilities**, $\Pr(y_i \le j)$, than with the probabilities of each category, because they increase as we move up the categories:
+
+$$
+\Pr(y_i \le 1) < \Pr(y_i \le 2) < \dots < \Pr(y_i \le J) = 1
+$$
+
+Since the last one is always 1, we only need to model $J - 1$ of them. The probability of any single category comes from subtracting adjacent cumulative probabilities, and the probability of the top category comes from the complement rule, $\Pr(y_i = J) = 1 - \Pr(y_i \le J - 1)$.
+
+To connect these to a linear function of covariates, think of an unobserved, continuous health propensity $y^*$ (the same latent variable idea from last week), and suppose we only see which of $J$ intervals it falls in. The cut points between intervals are $\zeta_1 < \zeta_2 < \dots < \zeta_{J-1}$.
+
+```{r}
+#| label: fig-latent
+#| fig-cap: "The latent trait model for an ordinal outcome. We observe only which interval of the unobserved propensity a person falls in; the area in each interval is the probability of that category."
+cuts <- c(-1, 0.6)
+tibble(z = seq(-3.5, 3.5, by = 0.01), density = dlogis(z, scale = 0.6)) |>
+  mutate(category = cut(z, c(-Inf, cuts, Inf),
+                        labels = c("Excellent/very good", "Good", "Fair/poor"))) |>
+  ggplot(aes(x = z, y = density)) +
+  geom_area(aes(fill = category), alpha = 0.9) +
+  geom_line(colour = utsa_cols("midnight"), linewidth = 1) +
+  geom_vline(xintercept = cuts, colour = utsa_cols("midnight"), linetype = "dashed") +
+  annotate("text", x = cuts, y = 0.46, label = c("zeta[1]", "zeta[2]"), parse = TRUE,
+           hjust = -0.3, size = 5, colour = utsa_cols("midnight")) +
+  scale_fill_manual(values = utsa_pal("blues", interpolate = TRUE)(4)[2:4]) +
+  labs(x = "Latent health propensity (y*)", y = "Density", fill = NULL)
+```
+
+The proportional odds model is a set of $J-1$ binary logits for the cumulative probabilities:
 
 $$
 \text{logit}\, P(y_i \le j) = \zeta_j - \mathbf{x}_i'\boldsymbol\beta, \qquad j = 1, \dots, J-1
 $$
 
 Each split of the outcome gets its own intercept $\zeta_j$, but the coefficients $\boldsymbol\beta$ are the same for every split. That is the **proportional odds** (or parallel lines) assumption. It says that education, say, shifts the odds of being in a worse category by the same factor whether we're comparing fair or poor to everything better, or good or worse to excellent or very good. With three categories there are only two splits, so the assumption is easy to look at directly.
+
+On the log-odds scale, the assumption means the model is a set of parallel lines, one for each split, with different intercepts and the same slope.
+
+```{r}
+#| label: fig-parallel
+#| fig-cap: "The proportional odds model on the log-odds scale: each cumulative split has its own intercept, but the effect of x is the same for every split."
+tibble(x = seq(0, 6, by = 0.1)) |>
+  cross_join(tibble(split = c("P(y > 1)", "P(y > 2)"), intercept = c(1, -1.5))) |>
+  mutate(log_odds = intercept + 0.4 * x) |>
+  ggplot(aes(x = x, y = log_odds, colour = split, linetype = split)) +
+  geom_line(linewidth = 1.2) +
+  scale_colour_utsa(palette = "primary") +
+  labs(x = "x", y = "Cumulative log odds", colour = NULL, linetype = NULL)
+```
+
+The model is attractive because each $\beta$ has a single, consistent interpretation. The assumption can be a weak one in practice, though, because some covariates may affect certain transitions more than others, and I'll show how to check it below.
 
 ```{r}
 #| label: svyolr
@@ -205,6 +248,14 @@ You'll see the Brant test recommended for checking proportional odds. It's a fin
 
 ### The multinomial logit model
 
+The natural distribution for an outcome with $J$ unordered categories is the multivariate extension of the binomial, the **multinomial**. If $\pi_1, \pi_2, \dots, \pi_J$ are the probabilities of the categories (with $\sum_j \pi_j = 1$), and we observe $y_1$ outcomes in the first category, $y_2$ in the second and so on, with $\sum_j y_j = n$, then
+
+$$
+f(\mathbf{y} \mid n) = \frac{n!}{y_1!\, y_2! \cdots y_J!}\, \pi_1^{y_1} \pi_2^{y_2} \cdots \pi_J^{y_J}
+$$
+
+With $J = 2$ this is just the binomial. For an individual respondent, $n = 1$, and one of the $y_j$ is 1 and the rest are 0.
+
 When the categories have no natural order, we pick one as the reference and model the log odds of each other category relative to it. With $J$ categories there are $J-1$ equations, each with its own set of coefficients:
 
 $$
@@ -315,6 +366,74 @@ One caution: only `r n_higher` women in the sample have higher education, so the
 ::: {.callout-warning}
 These predicted probabilities don't come with standard errors. `nnet::multinom()` with `marginaleffects` will give you standard errors, but they treat the weights as if the data were a simple random sample, and with clustered DHS data they are much too small. For design-based intervals on predicted probabilities, repeat the calculation over replicate weights (exercise 3).
 :::
+
+## Back to self-rated health: ordered or not?
+
+Nothing stops us from fitting a multinomial model to an ordered outcome. It just ignores the ordering, and it spends a lot more parameters doing so: two full sets of coefficients instead of one set plus two cut points. Comparing it with the ordinal models is a useful check on how much the proportional odds structure is costing us.
+
+```{r}
+#| label: srh-multinomial
+brfss_mn <- brfss |>
+  mutate(genhlth_u = factor(genhlth3, ordered = FALSE))
+des_mn <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt, data = brfss_mn)
+
+fit_srh_mn <- svy_vglm(genhlth_u ~ race_eth + educ + agec + female, design = des_mn,
+                       family = multinomial(refLevel = "Excellent/very good"))
+
+round(exp(fit_srh_mn$coef[grep("^educ|^race_ethHispanic", names(fit_srh_mn$coef))]), 2)
+```
+
+```{r}
+#| label: srh-mn-values
+#| include: false
+rr <- exp(fit_srh_mn$coef)
+```
+
+Here the reference category is excellent or very good health, so every coefficient ending in `:1` compares good health with excellent or very good, and every one ending in `:2` compares fair or poor health with excellent or very good. College graduates have `r round(rr[["educCollege graduate:1"]], 2)` times the relative risk of good (rather than excellent or very good) health compared with adults who didn't finish high school, and `r round(rr[["educCollege graduate:2"]], 2)` times the relative risk of fair or poor health. Education matters for both comparisons, and much more for the second. That's the same thing the split logits showed us, seen from a different angle.
+
+The way to compare the three models is through their predicted probabilities. I use the same set-everyone's-education-and-average approach as for the DHS model, on the respondents used to fit the models.
+
+```{r}
+#| label: srh-compare
+srh_cc <- brfss_mn |>
+  filter(complete.cases(genhlth_u, race_eth, educ, agec, female))
+
+avg_probs <- function(fit, data) {
+  levels(data$educ) |>
+    set_names() |>
+    map(\(e) {
+      nd <- mutate(data, educ = factor(e, levels = levels(data$educ)))
+      p <- predict(fit, newdata = nd, type = "response")
+      tibble(outcome = colnames(p),
+             probability = colSums(p * data$mmsawt) / sum(data$mmsawt))
+    }) |>
+    list_rbind(names_to = "educ")
+}
+
+srh_pred <- list("Proportional odds" = fit_vpo$fit,
+                 "Partial proportional odds" = fit_ppo$fit,
+                 "Multinomial" = fit_srh_mn$fit) |>
+  map(\(f) avg_probs(f, srh_cc)) |>
+  list_rbind(names_to = "model") |>
+  mutate(model = fct_inorder(model),
+         educ = factor(educ, levels = levels(brfss$educ)),
+         outcome = factor(outcome, levels = levels(brfss$genhlth3)))
+
+srh_pred |>
+  pivot_wider(names_from = model, values_from = probability) |>
+  arrange(outcome, educ) |>
+  knitr::kable(digits = 3)
+```
+
+```{r}
+#| label: srh-compare-values
+#| include: false
+srh_diff <- srh_pred |>
+  pivot_wider(names_from = model, values_from = probability) |>
+  mutate(d = abs(`Proportional odds` - Multinomial))
+```
+
+The three models tell the same story. The two ordinal models are nearly identical, and the proportional odds and multinomial predictions never differ by more than `r round(100 * max(srh_diff$d), 1)` percentage points. With only three categories and a large sample, the proportional odds model is a good summary of the education gradient, even though we know from the Wald test that the assumption doesn't hold exactly for age. So the choice among them comes down to what you want to say. The proportional odds model gives one coefficient per variable and is the easiest to explain. The partial proportional odds model relaxes the assumption only where the data say it needs relaxing. The multinomial is the most flexible, but it throws away the ordering and gives you twice as many coefficients to interpret.
 
 ## Exercises
 

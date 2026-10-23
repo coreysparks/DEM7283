@@ -3,6 +3,7 @@ title: "DEM 5283/7283 Week 1: Course Introduction and a Reproducible Workflow"
 subtitle: "Statistics for Demographic Data II"
 author: "Corey S. Sparks, PhD"
 date: last-modified
+bibliography: references.bib
 format:
   html:
     toc: true
@@ -71,15 +72,97 @@ The course meets for sixteen weeks, with spring break in week 8 and final papers
 
 Two things are deliberately missing. Principal components no longer has its own week; if your final paper needs a composite index for places, I'll show you how to build and defend a standardized index when we get there. Event history models are also out, because they have their own full course, and when we reach longitudinal data in week 10 I'll point you to where that material picks up.
 
+### My assumptions about you
+
+In statistics we always make assumptions, they are often wrong, and we adapt to our mistakes daily. Here are mine about the people in this room. You took the first course (or something like it), so you know what a regression coefficient and a standard error are. You're interested in demography or population research, as a student or as someone who works with population data. You may have used SAS, SPSS or Stata before and are curious about R, or you may be an R user from some other strange and exotic discipline who wants to see how demographers work. And you want to see *how* to do things, rather than being bombarded with theoretical and often unnecessary gate-keeping mathematical treatments of statistical models. There will be some equations, but every one of them is there because it helps you read the output or avoid a mistake.
+
+This course is not a review of all of statistics, and it's not an encyclopedic tour of the R language. I imagine the latter is on the same scale of hopelessness as the search for the Holy Grail, and I'm not falling on my sword here, folks.
+
 ## Software
 
-We use R for everything in this course. R is free, it is where most new methods for survey and demographic data show up first, and the community around it is, on balance, a helpful one. Install the current release of R (4.6.x as I write this), a current version of RStudio or Positron, and Git. Quarto ships with both RStudio and Positron, so you probably don't need a separate install.
+### Why R?
+
+We use R for everything in this course. I've used R for more than twenty years. I was also trained in SPSS and SAS along the way, by various mentors, some of whom tried to get me to learn general-purpose languages like Delphi (of all things), Perl or Basic, and I've been chastised for not knowing the depths of Python. But R is a nimble and rigorous platform to *do* demography, and my top three reasons for teaching it are these:
+
+1. **It's free.** Why should we pass more costs along to people, especially students? Being free also makes R code accessible to people all over the world, including the colleagues at statistical offices and universities we collaborate with.
+2. **It's where new methods show up first.** The R ecosystem has more than 20,000 packages on CRAN alone, and many of them represent the leading edge of data analysis, visualization and data science. Methods for survey data, small area estimation and demographic analysis often appear in R years before they show up in commercial software.
+3. **It has a supportive community.** There are debates about how friendly some R users are to newcomers, but after twenty-plus years in the R community I've personally helped hundreds of users and been helped by many others. The open source nature of R lends itself to sharing ideas and code.
+
+If you're coming to R from SAS, there is no data step and there are no procs. @kleinman_horton2014 is a very useful crosswalk between the two programs. If you're coming from SPSS and you've been using the point-and-click method, be prepared for a steep learning curve. If you've been writing SPSS syntax, you're at least used to writing code. Stata users have fewer published crosswalks, but I have always thought Stata and R were very similar in spirit, and most of what you know about `svyset` and `margins` carries over directly to the `survey` and `marginaleffects` packages we'll use.
+
+### What to install
+
+Install the current release of R (4.6.x as I write this), a current version of RStudio or Positron, and Git. Install R first, then the editor. On Windows, also install [Rtools](https://cran.r-project.org/bin/windows/Rtools/) (the version that matches your R release), because it gives you the C++ and Fortran compilers that some packages need. Quarto ships with both RStudio and Positron, so you probably don't need a separate install.
+
+Both editors give you the same four panes, more or less: a source editor where you write code (run the current line or a highlighted block with Ctrl-Enter, or Cmd-Enter on a Mac), a console where results, warnings and errors show up, an environment pane listing the objects you've created, and a pane for files, plots and help. In R a warning doesn't necessarily mean something went wrong. It's R's polite way of telling you to pay attention. An error does mean something went wrong, very often a missing `)` or a misspelled name. I routinely type `lenght` for `length`, and R routinely tells me about it.
 
 If you would rather not install anything, the course repository includes a development container. Opening the repository in a GitHub Codespace, or in VS Code with the Dev Containers extension, gives you R, Quarto and the BRFSS data already in place. This is also a nice fallback when a package refuses to compile on your laptop the week a homework is due.
 
 ::: {.callout-note}
 Some exercises also have Python versions. They are there for students who work in Python, but R is the primary tool in this course, and a few of the methods we use (survey-weighted multinomial models and KHB comparisons, for example) don't have good Python equivalents.
 :::
+
+### Packages and functions
+
+R keeps its functions in packages, and we will install a lot of them. Most live on CRAN, the Comprehensive R Archive Network, which is the official repository. Others live on Bioconductor, R-universe or GitHub, especially while they're being developed (my `sparkscolors` package is one of those). CRAN also organizes packages into [Task Views](https://cran.r-project.org/web/views/), thematic lists maintained by people who work in an area. There isn't one for demography, but the [Official Statistics and Survey Statistics](https://cran.r-project.org/web/views/OfficialStatistics.html), [Social Sciences](https://cran.r-project.org/web/views/SocialSciences.html) and [Spatial](https://cran.r-project.org/web/views/Spatial.html) views cover most of what we do, and the `ctv` package can install every package in a view at once.
+
+You install a package once, but you load it with `library()` every time you start a new session.
+
+```{r}
+#| label: install-demo
+#| eval: false
+install.packages("survey")   # once
+library(survey)              # every session
+
+update.packages(ask = FALSE) # every so often, for bug fixes and new features
+```
+
+Different packages sometimes use the same name for different functions. Base R's `stats` package has a `lag()` for time series, and `dplyr` has a `lag()` that works on vectors and takes different arguments. Whichever package you loaded last wins, and R prints a message about the conflict when you load it. When you want to be sure which one you're getting, use the `package::function()` form, like `stats::lag()` or `dplyr::lag()`. You'll see me do this throughout the course, and you'll also see it inside the helper functions in `R/`, where it means the function works without loading the whole package. Package authors deal with this too: `car::recode()` was renamed `car::Recode()` so it wouldn't collide with `dplyr::recode()`, because the two are so often used in the same analysis.
+
+A function is just a bit of code with **arguments**. Some arguments are required, and some have defaults you can change. Here is a function that finds the mean of a vector:
+
+```{r}
+#| label: mymean
+mymean <- function(x, na.rm = FALSE) {
+  if (na.rm) x <- x[!is.na(x)]
+  sum(x) / length(x)
+}
+
+mymean(c(1, 2, 3))
+mymean(c(1, 2, NA, 3))
+mymean(c(1, 2, NA, 3), na.rm = TRUE)
+```
+
+The `na.rm = FALSE` default means the function returns `NA` if any value is missing, which is exactly what base R's `mean()` does, and it's one of the most common surprises for new R users. Many R functions either fail or quietly drop cases when there are `NA`s, so check the help file to see what a function does with missing values. In general, if you find yourself writing the same code over and over, write a function. Save it in a script and `source()` it, the way the exercises `source()` the files in `R/`. If you get serious about it, put it in a package [@wickham_bryan2023].
+
+### Getting help
+
+I wish I had a nickel for every time I ran into a problem trying to do something in R. Here is where I look:
+
+1. If you know the function, `?svyglm` opens its help page. Read the whole thing at least once. The help page lists every argument (this is where the alternative specifications of a model live), gives the citations for the methods, and ends with examples you can run.
+2. If you don't know the function, `??"survey design"` searches the help pages of every installed package.
+3. Package vignettes (`browseVignettes("survey")`) are longer tutorials written by the authors, and they're often the best documentation there is.
+4. [Stack Overflow](https://stackoverflow.com/questions/tagged/r) and [Cross Validated](https://stats.stackexchange.com) have answers to most questions you'll have. Many answers are snarky, wrong, or written for an old version of a package, so *caveat emptor*.
+5. AI assistants can be genuinely helpful for explaining an error message or a block of code. They also make up function arguments with total confidence. Run what they give you, read the help page for anything unfamiliar, and never paste restricted data into one.
+6. Your local R guru or user group. There may be an R user just down the hall. Even after twenty years I learn something every time I talk to someone about how they use R.
+
+When you ask a person for help, include a **reproducible example**: the smallest bit of code and data that shows the problem. The `reprex` package makes one for you. Half the time, building the example is how you find the bug.
+
+Last, there is almost always **more than one way to do something** in R. Reading a CSV file can be done by a handful of functions in different packages. If someone tells you there's only one way to do something in R, they're usually wrong.
+
+### Data formats
+
+R reads and writes its own formats and those of every other statistics package. The native formats are `.rds`, which holds a single object (`saveRDS()` and `readRDS()`), and `.RData`, which can hold several (`save()` and `load()`). I prefer `.rds`, because you choose the name of the object when you read it back in, and that's what `get_mmsa()` uses for its cached copy of the BRFSS. Text files are read with `read.csv()` or `readr::read_csv()`. The `haven` package reads and writes SAS (`.sas7bdat` and transport `.xpt` files), Stata (`.dta`) and SPSS (`.sav` and `.por`) files, and it's what reads the BRFSS transport file and the DHS Stata file we'll use.
+
+```{r}
+#| label: haven-demo
+#| eval: false
+library(haven)
+dhs <- read_dta(here("data", "ZZIR62FL.DTA"))
+brfss_raw <- read_xpt(unzip(here("data", "MMSA2024_XPT.zip"), exdir = tempdir()))
+```
+
+R also has packages for Excel (`readxl`), JSON, shapefiles and other spatial formats (`sf`), and SQL databases (`DBI`), and for talking to Mplus, Stan and various GIS programs.
 
 ## A reproducible workflow
 
@@ -244,6 +327,114 @@ per_resp <- function(p) fmt(tx_counts$adults_per_respondent[str_detect(tx_counts
 
 The big metros get more respondents, but not in proportion to their size. Each Houston respondent stands in for about `r per_resp("^Houston")` adults on average, and each San Antonio respondent for about `r per_resp("^San Antonio")`. So a San Antonio respondent counts for less than half as much as a Houston respondent when we add things up. Next week we'll take this seriously and use the weights and the design of the survey to get estimates, and standard errors, that describe the population and not just the sample.
 
+## A refresher on describing data
+
+The first course covered descriptive statistics, but it's worth a quick tour of how I do this in R, because these are the tools you'll use every week. One warning before we start: everything in this section ignores the survey weights. These are descriptions of the *sample*, and that's fine for getting to know a data file and checking recodes, but they are not estimates for the population. Week 2 fixes that.
+
+### A first look at a variable
+
+BMI is stored with two implied decimal places (a value of 2734 means 27.34), and self-rated health is coded 1 (excellent) to 5 (poor), with 7 and 9 for "don't know" and "refused." Always check the codebook for codes like these before you summarize anything.
+
+```{r}
+#| label: refresher-recode
+brfss <- brfss |>
+  mutate(bmi = bmi5 / 100,
+         genhlth = if_else(genhlth %in% 1:5, genhlth, NA_real_),
+         sex = factor(sexvar, levels = 1:2, labels = c("Male", "Female")),
+         agec = factor(ageg, levels = 1:6,
+                       labels = c("18-24", "25-34", "35-44", "45-54", "55-64", "65+")))
+```
+
+`summary()` is the fastest first look. For a numeric variable it gives the five-number summary plus the mean, and it counts the `NA`s, and for a factor it gives a frequency table.
+
+```{r}
+#| label: refresher-summary
+summary(brfss$bmi)
+summary(brfss$agec)
+```
+
+I find this very useful when I'm first exploring a data file, because it shows the minimum and maximum right away, and that's where impossible values and leftover missing codes show up. Alternatives that summarize a whole data frame include `skimr::skim()` and `Hmisc::describe()`.
+
+The mean and median need to be told what to do with missing values, and the variance and standard deviation do too.
+
+```{r}
+#| label: refresher-center
+mean(brfss$bmi)
+mean(brfss$bmi, na.rm = TRUE)
+median(brfss$bmi, na.rm = TRUE)
+sd(brfss$bmi, na.rm = TRUE)
+```
+
+### Frequency tables
+
+`table()` counts the observations in each category, and with two variables it makes a cross-tabulation. One of my favorite things in base R is the `I()` function, which evaluates whatever is inside it, so you can build a binary variable on the fly:
+
+```{r}
+#| label: refresher-table
+table(brfss$genhlth, useNA = "ifany")
+table(obese = I(brfss$bmi >= 30), brfss$sex)
+```
+
+`I(brfss$bmi >= 30)` is `TRUE` for anyone with a BMI of 30 or more, and `table()` counts the `TRUE`s and `FALSE`s for men and women. `prop.table()` turns counts into proportions, and `xtabs()` does the same job with a formula interface, which we'll use next week to make weighted tables.
+
+### The tidyverse
+
+Most of the code in this course uses the **tidyverse** [@wickham2019], a collection of packages that share a philosophy about how data and code should fit together. The two workhorses are `dplyr`, for manipulating data, and `ggplot2`, for graphics. Both are covered in depth in *R for Data Science* [@wickham_r4ds2023], so here I'll just show how they show up in my own workflow.
+
+`dplyr` is built around a small number of verbs: `filter()` keeps rows, `select()` keeps columns, `mutate()` makes new variables, `group_by()` splits the data into groups (the same idea as SAS's `by` processing), and `summarise()` collapses each group to a row. The pipe, `|>`, passes the result of one step to the next, so you only name the data once, and you don't need `$` to get at the variables. I often say that I can do something in about 10 lines of R that takes 50 in SAS, and with `dplyr` it's fewer still.
+
+```{r}
+#| label: refresher-dplyr
+brfss |>
+  filter(!is.na(bmi), !is.na(sex)) |>
+  mutate(obese = bmi >= 30) |>
+  group_by(sex, agec) |>
+  summarise(n = n(),
+            mean_bmi = mean(bmi),
+            pct_obese = 100 * mean(obese),
+            .groups = "drop")
+```
+
+That reads almost like a sentence: take the BRFSS, keep people with BMI and sex recorded, flag obesity, group by sex and age, and give me the count, the mean BMI and the percent obese in each group. `across()` applies the same summary to several variables at once:
+
+```{r}
+#| label: refresher-across
+brfss |>
+  group_by(sex) |>
+  summarise(across(c(bmi, genhlth), \(x) mean(x, na.rm = TRUE)))
+```
+
+### Basic ggplot
+
+A `ggplot()` has three parts. The first is the data and the **aesthetic mapping**, set with `aes()`, which says which variables go on which axes (and, later, which ones set color, fill or shape). The second is one or more **geometries**, which say how to draw the data. The third is the annotation: titles, axis labels and scales. Each piece is added with `+`, and the data can be piped straight in.
+
+```{r}
+#| label: fig-refresher-hist
+#| fig-cap: "Distribution of BMI, 2024 BRFSS SMART MMSA respondents (unweighted)."
+brfss |>
+  filter(!is.na(bmi)) |>
+  ggplot(aes(x = bmi)) +
+  geom_histogram(bins = 60, fill = utsa_cols("midnight"), colour = "white") +
+  labs(x = "Body mass index", y = "Respondents")
+```
+
+Box and whisker plots are a graphical version of Tukey's five-number summary, and they're a good way to compare a continuous variable across the levels of a categorical one. `coord_flip()` turns them on their side, and `facet_wrap()` makes a separate panel for each level of another variable, which lets you see whether a pattern is the same across groups.
+
+```{r}
+#| label: fig-refresher-box
+#| fig-cap: "BMI by age group and sex, 2024 BRFSS SMART MMSA respondents (unweighted)."
+brfss |>
+  filter(!is.na(bmi), !is.na(sex)) |>
+  ggplot(aes(x = agec, y = bmi)) +
+  geom_boxplot(fill = utsa_cols("river_mist"), colour = utsa_cols("midnight"),
+               outlier.alpha = 0.1) +
+  facet_wrap(~sex) +
+  coord_flip() +
+  labs(x = "Age group", y = "Body mass index")
+```
+
+Median BMI rises through middle age and falls after 65 for both men and women, and the long right tail shows up as the cloud of outliers at every age. Is this everything R will do for describing data? No. Is this the only way to do it? Never. I'm constantly surprised by how many new functions I see students using in their own work, and it reminds me how much of the R ecosystem I have yet to explore.
+
 ## Exercises
 
 These exercises are Homework 1. Submit the link to your GitHub repository and the rendered HTML file.
@@ -292,7 +483,15 @@ brfss |>
 
 </details>
 
-**4.** End your document with a chunk that runs `sessionInfo()`, render the document to a self-contained HTML file, then commit and push the `.qmd` file, the rendered HTML and `renv.lock`.
+**4.** For the metro area you chose in exercise 3, use `dplyr` to make a table of the number of respondents, the mean BMI and the percent who report fair or poor health (`genhlth` of 4 or 5) by sex and age group, and make one `ggplot` figure that shows how BMI differs by age. Remember that these are unweighted descriptions of the sample, and say so in a sentence.
+
+```{r}
+#| label: ex-describe
+#| eval: false
+# YOUR CODE HERE
+```
+
+**5.** End your document with a chunk that runs `sessionInfo()`, render the document to a self-contained HTML file, then commit and push the `.qmd` file, the rendered HTML and `renv.lock`.
 
 ```{r}
 #| label: ex-session
@@ -306,3 +505,8 @@ brfss |>
 #| label: session-info
 sessionInfo()
 ```
+
+## References
+
+::: {#refs}
+:::

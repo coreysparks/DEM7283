@@ -1,0 +1,395 @@
+---
+title: "DEM 5283/7283 Week 10: Longitudinal Models"
+subtitle: "Statistics for Demographic Data II"
+author: "Corey S. Sparks, PhD"
+date: last-modified
+bibliography: references.bib
+format:
+  html:
+    toc: true
+    toc-float: true
+    number-sections: false
+    self-contained: true
+    fig-width: 8
+    fig-height: 5
+execute:
+  engine: knitr
+  echo: true
+  warning: false
+  message: false
+---
+
+## Introduction
+
+Everything so far has used cross-sectional data: each person is observed once. Longitudinal (or panel) data follow the same people over time, and that changes two things. First, observations on the same person are correlated, so the independence assumption behind every model so far is wrong, and the standard errors will be too. Second, and more interesting, we can compare a person to *themselves* at different times, which lets us hold constant everything about them that doesn't change, whether we measured it or not.
+
+This week covers both. **Generalized estimating equations** (GEEs) handle the correlation and give population-average effects. **Fixed effects** models use only the changes within each person. **Random effects** models do something in between, and the **within-between** model shows you exactly what that "something" is, by estimating the within-person and between-person effects separately. The example is children's math scores and family poverty from kindergarten through fifth grade.
+
+## Setup
+
+`geepack` fits GEEs [@halekoh2006], `fixest` fits fixed effects models quickly [@berge_fixest], and `lme4` fits random effects models [@bates2015], which we'll use much more in weeks 12 and 13.
+
+```{r}
+#| label: packages
+library(tidyverse)
+library(here)
+library(geepack)
+library(fixest)
+library(lme4)
+library(modelsummary)
+library(sparkscolors)  # pak::pak("coreysparks/sparkscolors"), UTSA colors
+```
+
+```{r}
+#| label: setup
+#| include: false
+theme_set(
+  theme_minimal(base_size = 12) +
+    theme(text = element_text(colour = utsa_cols("midnight")),
+          panel.grid.major = element_line(colour = utsa_cols("smoke")),
+          panel.grid.minor = element_blank(),
+          legend.position = "bottom")
+)
+fmt <- function(x, d = 0) format(round(x, d), big.mark = ",", nsmall = d)
+pct <- function(x, d = 1) paste0(format(round(100 * x, d), nsmall = d), "%")
+```
+
+## The data: ECLS-K:2011
+
+The Early Childhood Longitudinal Study, Kindergarten Class of 2010-11 [@ecls_k2011] followed a nationally representative sample of children from kindergarten through fifth grade, testing them in math and reading and interviewing their parents at nine rounds. The full public-use file has 18,174 children and over 26,000 variables, so I made a smaller file with the variables we need (the script is `R/make_eclsk_subset.R`).
+
+I'll use the six spring rounds where the parent interview measured family poverty: spring of kindergarten (round 2), first grade (4), second grade (6), third grade (7), fourth grade (8) and fifth grade (9). The weight is the K-5 longitudinal weight, `w9c29p_9a0`, which is positive only for children who took part in every round, so it adjusts for attrition as well as for the design.
+
+ECLS-K codes missing values as negative numbers (-1 for not applicable, -7 for refused, -8 for don't know, -9 for not ascertained), so the first step is to turn those into `NA`.
+
+### Time-constant and time-varying variables
+
+Panel data have two kinds of variables. **Time-constant** (or time-invariant) variables have one value per child: sex, race and ethnicity, the design variables. **Time-varying** variables are measured at each round: the test scores, age, and poverty. In the file, the time-varying ones have one column per round, with the round number in the name, like `x2mscalk5` and `x4mscalk5` for the math scores in rounds 2 and 4. That's **wide** format.
+
+```{r}
+#| label: data-wide
+neg_to_na <- function(x) if_else(x < 0, NA_real_, as.numeric(x))
+
+eclsk_wide <- readRDS(here("data", "eclsk2011_k5.rds")) |>
+  filter(w9c29p_9a0 > 0) |>
+  transmute(childid,
+            # time-constant
+            wt = w9c29p_9a0,
+            stratum = w9c29p_9astr,
+            psu = paste(w9c29p_9astr, w9c29p_9apsu),
+            female = if_else(x_chsex_r == 2, 1, 0),
+            race = factor(case_when(x_raceth_r == 1 ~ "White",
+                                    x_raceth_r == 2 ~ "Black",
+                                    x_raceth_r %in% 3:4 ~ "Hispanic",
+                                    x_raceth_r == 5 ~ "Asian",
+                                    x_raceth_r > 5 ~ "Other"),
+                          levels = c("White", "Black", "Hispanic", "Asian", "Other")),
+            # time-varying: math score, age in years, family below the poverty line
+            math_2 = neg_to_na(x2mscalk5), math_4 = neg_to_na(x4mscalk5),
+            math_6 = neg_to_na(x6mscalk5), math_7 = neg_to_na(x7mscalk5),
+            math_8 = neg_to_na(x8mscalk5), math_9 = neg_to_na(x9mscalk5),
+            age_2 = neg_to_na(x2kage_r) / 12, age_4 = neg_to_na(x4age) / 12,
+            age_6 = neg_to_na(x6age) / 12, age_7 = neg_to_na(x7age) / 12,
+            age_8 = neg_to_na(x8age) / 12, age_9 = neg_to_na(x9age) / 12,
+            poor_2 = as.numeric(neg_to_na(x2povty) == 1),
+            poor_4 = as.numeric(neg_to_na(x4povty_i) == 1),
+            poor_6 = as.numeric(neg_to_na(x6povty_i) == 1),
+            poor_7 = as.numeric(neg_to_na(x7povty_i) == 1),
+            poor_8 = as.numeric(neg_to_na(x8povty_i) == 1),
+            poor_9 = as.numeric(neg_to_na(x9povty_i) == 1))
+
+nrow(eclsk_wide)
+```
+
+The poverty variables have three categories (below the poverty line, 100-199% of it, and 200% or more), and I've made an indicator for being below the line.
+
+### Reshaping to long format
+
+Every model this week wants **long** format: one row per child per round, with one column for each variable. `pivot_longer()` does that.
+
+```{r}
+#| label: data-long
+eclsk <- eclsk_wide |>
+  pivot_longer(cols = matches("_[0-9]$"),
+               names_to = c(".value", "round"),
+               names_sep = "_") |>
+  mutate(round = as.integer(round)) |>
+  filter(!is.na(math), !is.na(age), !is.na(poor), !is.na(race)) |>
+  arrange(childid, round)
+
+eclsk |>
+  select(childid, round, age, math, poor, female, race) |>
+  head(8) |>
+  knitr::kable(digits = 2)
+```
+
+::: {.callout-note title="Code explanation: `pivot_longer()` with `.value`"}
+1. `cols = matches("_[0-9]$")` picks the columns whose names end in an underscore and a digit: all the time-varying ones. The time-constant columns stay as they are and get repeated on every row for that child.
+2. `names_sep = "_"` splits each name at the underscore, so `math_4` becomes `"math"` and `"4"`.
+3. `names_to = c(".value", "round")` says what to do with the two pieces. `".value"` is a special name that means "the first piece is the name of the new column the value goes in," so all the `math_` columns become one `math` column, all the `age_` columns become one `age` column, and so on. The second piece goes in a new column called `round`.
+
+This is why I named the time-varying variables `name_round`. A consistent naming scheme turns a messy reshape into one function call.
+:::
+
+That leaves `r fmt(nrow(eclsk))` child-rounds for `r fmt(n_distinct(eclsk$childid))` children. Here is what math growth looks like for the first ten children.
+
+```{r}
+#| label: fig-spaghetti
+#| fig-cap: "Math scores across rounds for ten ECLS-K:2011 children."
+first10 <- unique(eclsk$childid)[1:10]
+
+eclsk |>
+  filter(childid %in% first10) |>
+  ggplot(aes(x = age, y = math, group = childid)) +
+  geom_line(colour = utsa_cols("midnight"), alpha = 0.6) +
+  geom_point(colour = utsa_cols("midnight"), size = 1) +
+  labs(x = "Age (years)", y = "Math scale score")
+```
+
+Every child's scores go up, but they start in different places and grow at different rates. Children who start high tend to stay high, and that's the correlation we need to deal with.
+
+## Why ordinary regression gets this wrong
+
+Fit an ordinary regression, ignoring that each child appears up to six times, and look at the correlation between a child's residuals in different rounds.
+
+```{r}
+#| label: residual-correlation
+fit_ols <- lm(math ~ factor(round) + poor + female + race, data = eclsk, weights = wt)
+
+resid_cor <- eclsk |>
+  mutate(resid = residuals(fit_ols)) |>
+  select(childid, round, resid) |>
+  pivot_wider(names_from = round, values_from = resid, names_prefix = "round_") |>
+  select(-childid) |>
+  cor(use = "pairwise.complete.obs")
+
+round(resid_cor, 2)
+```
+
+If the observations were independent, these would all be near zero. They're between `r round(min(resid_cor), 2)` and `r round(max(resid_cor[lower.tri(resid_cor)]), 2)`, and they get smaller as the rounds get further apart. A child who does better than the model predicts in kindergarten keeps doing better. Ignoring that does two things to the standard errors. For time-constant predictors like race, each child counts as six observations when they're really closer to one, so the standard errors are too small. For time-varying predictors, the comparison is partly within children, and the correlation actually helps, so ordinary regression can overstate the standard errors.
+
+## Generalized estimating equations
+
+### The model
+
+GEEs, introduced by @liang_zeger1986, are regression models for the *mean* response, treating the correlation within a person (or cluster) as a nuisance. They don't specify a full probability distribution for the data, only the mean, through a link function, and a "working" guess at how the observations on the same person are correlated. They aren't fit by maximum likelihood. Instead, they solve the estimating equations
+
+$$U(\beta) = \sum_{i=1}^n D_i' V_i^{-1}(y_i - \mu_i(\beta)) = 0$$
+
+where $y_i$ is the vector of outcomes for person $i$, $\mu_i(\beta)$ is the model's mean for them, $D_i$ is the derivative of the mean with respect to the coefficients, and $V_i$ is the working covariance matrix. The cookbook version:
+
+1. Fit an ordinary regression, assuming independence.
+2. Compute the residuals and estimate the working correlation among them.
+3. Refit the regression, giving correlated observations less weight.
+4. Repeat until the coefficients stop changing.
+
+The coefficients are **population-average** (or marginal) effects: how the mean outcome in the population changes with $x$. The standard errors are "robust" (sandwich) standard errors, which are valid even if the working correlation is wrong, as long as there are enough people.
+
+### Working correlation structures
+
+For three rounds, the four common choices of working correlation are:
+
+**Independence**, which is ordinary regression:
+$$\begin{bmatrix} 1 & 0 & 0 \\ 0 & 1 & 0 \\ 0 & 0 & 1 \end{bmatrix}$$
+
+**Exchangeable**, where every pair of rounds is correlated by the same amount:
+$$\begin{bmatrix} 1 & \rho & \rho \\ \rho & 1 & \rho \\ \rho & \rho & 1 \end{bmatrix}$$
+
+**First-order autoregressive, AR(1)**, where the correlation shrinks with the distance between rounds:
+$$\begin{bmatrix} 1 & \rho & \rho^2 \\ \rho & 1 & \rho \\ \rho^2 & \rho & 1 \end{bmatrix}$$
+
+**Unstructured**, where every pair gets its own correlation:
+$$\begin{bmatrix} 1 & \rho_1 & \rho_2 \\ \rho_1 & 1 & \rho_3 \\ \rho_2 & \rho_3 & 1 \end{bmatrix}$$
+
+The residual correlations above shrink with distance, which looks like AR(1), but they don't shrink as fast as $\rho^2, \rho^3, \ldots$ would, so exchangeable might do as well.
+
+### Fitting GEEs
+
+```{r}
+#| label: gee
+f_math <- math ~ factor(round) + poor + female + race
+
+eclsk <- eclsk |> mutate(w = wt / mean(wt))
+
+gee_ind <- geeglm(f_math, id = childid, waves = round, corstr = "independence",
+                  data = eclsk, weights = w)
+gee_exch <- geeglm(f_math, id = childid, waves = round, corstr = "exchangeable",
+                   data = eclsk, weights = w)
+gee_ar1 <- geeglm(f_math, id = childid, waves = round, corstr = "ar1",
+                  data = eclsk, weights = w)
+
+modelsummary(list("Independence" = gee_ind, "Exchangeable" = gee_exch, "AR(1)" = gee_ar1),
+             coef_omit = "round", gof_map = "nobs", stars = TRUE)
+```
+
+::: {.callout-note title="Code explanation: `geeglm()`"}
+1. `id = childid` says which rows belong to the same cluster (here, the same child). The data must be sorted so that each child's rows are together, which is why I used `arrange(childid, round)`.
+2. `waves = round` says which round each row is, so the AR(1) structure knows which rounds are adjacent even when a child is missing one.
+3. `corstr` is the working correlation structure.
+4. `weights = w` uses the longitudinal weight, rescaled to average 1 (as in week 7, the scale doesn't change the estimates, but it keeps the algorithm stable).
+:::
+
+The working correlation is `r round(gee_exch$geese$alpha, 2)` for the exchangeable model and `r round(gee_ar1$geese$alpha, 2)` for AR(1). The coefficient for poverty is `r round(coef(gee_ind)["poor"], 2)` with independence, `r round(coef(gee_exch)["poor"], 2)` with exchangeable correlation and `r round(coef(gee_ar1)["poor"], 2)` with AR(1). With independence, poverty is mostly a comparison *between* children, poor and not poor. With a correlation structure, the model leans more on children whose poverty status changes, and the coefficient shrinks. Keep that in mind; it's the main story of this week.
+
+### Choosing a correlation structure
+
+GEEs aren't fit by maximum likelihood, so there's no AIC or likelihood ratio test. @pan2001 proposed the QIC, an information criterion built on the quasi-likelihood, and @hin_wang2009 proposed the CIC, which is designed for comparing working correlations with the same mean model. Smaller is better for both.
+
+```{r}
+#| label: qic
+bind_rows(Independence = QIC(gee_ind), Exchangeable = QIC(gee_exch), `AR(1)` = QIC(gee_ar1),
+          .id = "structure") |>
+  select(structure, QIC, CIC) |>
+  knitr::kable(digits = 1, format.args = list(big.mark = ","))
+```
+
+Here the two criteria disagree: QIC prefers the exchangeable structure, and CIC prefers AR(1). That happens, and it's a reminder that the working correlation is a working assumption. The robust standard errors protect you if it's wrong, so don't agonize.
+
+::: {.callout-warning title="What about the survey design?"}
+ECLS-K children were sampled in PSUs (groups of counties) and schools, and `geeglm()` only knows about the clustering of rounds within children. The robust standard errors account for that, but not for the clustering of children within PSUs. The `fixest` models below can cluster at the PSU level, and that's the safer choice for published work.
+:::
+
+## Fixed effects
+
+### Comparing children to themselves
+
+Write the model for child $i$ at round $t$ with a separate intercept for each child, $\alpha_i$:
+
+$$y_{it} = \alpha_i + \beta x_{it} + \tau_t + \varepsilon_{it}$$
+
+The $\alpha_i$ absorb everything about the child that doesn't change over time: their sex, their race, their parents' education, the neighborhood they started school in, their genes, their motivation in kindergarten, whether we measured it or not. You can't estimate the effect of a time-constant variable in this model, because it's perfectly collinear with the child's intercept. What's left is the effect of *changes* in $x$ within children. Mechanically, fixed effects estimation subtracts each child's mean from every variable, $y_{it} - \bar y_i$ and $x_{it} - \bar x_i$, and runs regression on what's left. @allison2009 is a short, clear introduction.
+
+So in the fixed effects model, the poverty coefficient answers: when a child's family falls below the poverty line, how does that child's math score change compared to their own scores in other years? Only the `r fmt(eclsk |> group_by(childid) |> summarise(v = n_distinct(poor)) |> filter(v > 1) |> nrow())` children whose poverty status changed at some point contribute to that estimate.
+
+```{r}
+#| label: fixed-effects
+fe <- feols(math ~ poor | childid + round, data = eclsk, weights = ~wt, cluster = ~psu)
+ols <- feols(math ~ poor + female + race | round, data = eclsk, weights = ~wt, cluster = ~psu)
+
+etable(ols, fe, headers = c("Pooled OLS", "Child fixed effects"))
+```
+
+::: {.callout-note title="Code explanation: `feols()`"}
+1. Everything after the `|` in the formula is a fixed effect. `| childid + round` gives every child their own intercept and every round its own intercept, without printing thousands of coefficients. `feols()` removes them by demeaning, which is why it's so fast.
+2. `weights = ~wt` uses the longitudinal weight.
+3. `cluster = ~psu` computes standard errors clustered at the PSU, the highest level of the sampling design, which also allows for correlation among the rounds for each child (since every child is inside one PSU). I made `psu` unique by pasting the stratum and PSU numbers together, because PSU numbers repeat across strata.
+4. `etable()` makes a side-by-side table of `fixest` models.
+:::
+
+The pooled regression says children in poor families score `r round(abs(coef(ols)["poor"]), 1)` points lower in math. The fixed effects model says that when a child's family becomes poor, their math score changes by `r round(coef(fe)["poor"], 2)` points, with a standard error of `r round(se(fe)["poor"], 2)`, which is no detectable change at all. The large gap between poor and non-poor children is almost all a difference *between* children, not a consequence of a family's poverty status in a given year.
+
+## Random effects and the within-between model
+
+### Random effects
+
+A random effects model also gives each child their own intercept, but treats the intercepts as draws from a normal distribution, $\alpha_i \sim N(\alpha, \sigma^2_\alpha)$, instead of estimating each one. (This is the multilevel model of weeks 12 and 13, with rounds nested in children.) It can estimate time-constant effects, and it's more efficient, but it comes with an assumption: the child intercepts have to be unrelated to the predictors. If poorer families also differ in ways that affect math scores and that we haven't measured (and they do), that assumption fails, and the random effects coefficient is a mix of the within-child and between-child relationships.
+
+```{r}
+#| label: random-effects
+re <- lmer(math ~ factor(round) + poor + female + race + (1 | childid), data = eclsk)
+fixef(re)["poor"]
+```
+
+The random effects estimate, `r round(fixef(re)["poor"], 2)`, sits between the fixed effects estimate and the pooled one. That's not a coincidence: it's a weighted average of the within and between relationships.
+
+### The within-between model
+
+@mundlak1978, @allison2009 and @bell_jones2015 suggest a model that keeps the advantages of both. Split the time-varying predictor into two parts: each child's average over the study, $\bar x_i$, and their deviation from their own average in each round, $x_{it} - \bar x_i$. Put both in the model.
+
+$$y_{it} = \beta_0 + \beta_W (x_{it} - \bar x_i) + \beta_B \bar x_i + \gamma z_i + \tau_t + u_i + \varepsilon_{it}$$
+
+$\beta_W$ is the **within** effect, and it's the same as the fixed effects estimate (exactly the same in a balanced panel, and very close in an unbalanced one like this). $\beta_B$ is the **between** effect: how children who are poorer on average differ from children who are less poor on average. And because the child intercepts aren't swept out, the model can still include time-constant variables $z_i$.
+
+You can fit it as a random effects model with `lmer()`, which gives you the variance of the child intercepts. But `lmer()` can't use survey weights (its `weights` argument means something else, as we'll see in week 12), so to compare it with the weighted fixed effects model, I'll fit the same mean model with `feols()`, using the weights and clustering the standard errors by PSU.
+
+```{r}
+#| label: within-between
+eclsk <- eclsk |>
+  group_by(childid) |>
+  mutate(poor_mean = mean(poor),
+         poor_within = poor - poor_mean) |>
+  ungroup()
+
+wb <- feols(math ~ poor_within + poor_mean + female + race | round,
+            data = eclsk, weights = ~wt, cluster = ~psu)
+
+tibble(model = c("Pooled OLS", "Random effects (unweighted)", "Fixed effects",
+                 "Within-between: within", "Within-between: between"),
+       estimate = c(coef(ols)["poor"], fixef(re)["poor"], coef(fe)["poor"],
+                    coef(wb)["poor_within"], coef(wb)["poor_mean"]),
+       se = c(se(ols)["poor"], sqrt(vcov(re)["poor", "poor"]), se(fe)["poor"],
+              se(wb)["poor_within"], se(wb)["poor_mean"])) |>
+  knitr::kable(digits = 2)
+```
+
+::: {.callout-note title="Code explanation: group-mean centering"}
+`group_by(childid)` followed by `mutate()` computes things *within* each child. `mean(poor)` is the share of rounds in which that child's family was poor, and `poor - poor_mean` is how far each round is from the child's own average. `ungroup()` turns the grouping off so later steps work on the whole data set. You'll see the same move in week 12, where it's called group-mean centering.
+:::
+
+The within effect, `r round(coef(wb)["poor_within"], 2)`, is essentially the fixed effects estimate. The between effect is `r round(coef(wb)["poor_mean"], 1)`: a child who was poor in every round scores about `r round(abs(coef(wb)["poor_mean"]), 0)` points lower than a child who was never poor. That's an enormous difference, about `r round(abs(coef(wb)["poor_mean"]) / sd(eclsk$math[eclsk$round == 2]), 1)` standard deviations of the spring kindergarten scores. The pooled and random effects estimates were averages of these two very different numbers, and neither one described either of them.
+
+### What does it mean?
+
+Two readings, and the data can't fully decide between them. The between effect is consistent with long-run disadvantage: children who grow up poor arrive at kindergarten behind and stay behind, and a year's change in family income doesn't undo years of accumulated differences. It's also consistent with selection: families that are poor differ from other families in many ways besides income, and some of those affect test scores. The within effect, which rules out every time-constant difference between families, says that short-run changes in poverty status don't move math scores much in the same year. Neither number is "the effect of poverty," but together they tell you far more than either the pooled or the random effects coefficient does.
+
+::: {.callout-tip}
+Fixed effects only remove *time-constant* confounders. If something changes along with poverty (a parent losing a job, a divorce, a move), it's still a confounder. And fixed effects estimates use only the people who change, who may not be typical: here, families that move in and out of poverty.
+:::
+
+## Where this goes next
+
+Everything this week models a repeated *measurement*. If the outcome is an *event* (a birth, a death, a divorce, a move), the data are organized as person-period records, with one row per person per period at risk, and a discrete-time hazard model is a logit model on that file. That's the next step, and it's the subject of the event history course.
+
+## Summary
+
+Longitudinal data violate the independence assumption, and ordinary regression gets the standard errors wrong. GEEs estimate population-average effects with a working correlation and robust standard errors. Fixed effects models compare each person to themselves, removing every time-constant confounder, but can't estimate time-constant effects. Random effects models are efficient but assume the person effects are unrelated to the predictors, and when they aren't, the coefficients mix within and between relationships. The within-between model separates the two explicitly and is usually the best place to start. In this example, the gap in math scores between poor and non-poor children is large, but it's almost entirely between children, not within them.
+
+## Exercises
+
+These exercises are Homework 10.
+
+**1.** Repeat the fixed effects and within-between models using reading scores (`x2rscalk5`, `x4rscalk5`, and so on) instead of math. Do you reach the same conclusion?
+
+```{r}
+#| label: ex-reading
+#| eval: false
+# YOUR CODE HERE
+```
+
+**2.** Add an interaction between `poor_within` and `race` to the within-between model. Is the within-child association of poverty with math scores different across groups?
+
+```{r}
+#| label: ex-interaction
+#| eval: false
+# YOUR CODE HERE
+```
+
+**3.** Refit the fixed effects model with standard errors clustered by child (`cluster = ~childid`) instead of by PSU. How much do the standard errors change, and which would you report?
+
+```{r}
+#| label: ex-cluster
+#| eval: false
+# YOUR CODE HERE
+```
+
+<details>
+<summary>One solution for exercise 3</summary>
+
+```{r}
+#| label: ex-cluster-solution
+#| eval: false
+fe_child <- feols(math ~ poor | childid + round, data = eclsk, weights = ~wt, cluster = ~childid)
+etable(fe, fe_child, headers = c("Clustered by PSU", "Clustered by child"))
+```
+
+Children within the same PSU are correlated with each other, not just with themselves, so clustering by PSU is the right level. The rule is to cluster at the highest level of the sampling design.
+
+</details>
+
+**4.** Make an indicator for food insecurity from `x2fsstat2`, `x4fsstat2` and `x9fsstat2` (codes 2 and 3 are food insecure), reshape it with the math scores from rounds 2, 4 and 9, and estimate the within and between associations of food insecurity with math scores.
+
+```{r}
+#| label: ex-food
+#| eval: false
+# YOUR CODE HERE
+```

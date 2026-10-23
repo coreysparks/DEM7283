@@ -36,6 +36,7 @@ library(here)
 library(survey)
 library(marginaleffects)
 library(modelsummary)
+library(gtsummary)
 library(sparkscolors)
 
 source(here("R", "get_mmsa.R"))
@@ -59,6 +60,24 @@ pts <- function(x, d = 1) format(round(100 * x, d), nsmall = d)
 
 ## Generalized linear models for binary outcomes
 
+### From the linear model to the GLM
+
+Up to now you've mostly relied on linear models that assume a Normal distribution for the outcome. A broader class, **generalized linear models** or GLMs [@nelder_wedderburn1972], allows regression for outcomes that aren't Normal. Every GLM has three parts: a probability distribution suited to the outcome, a **linear predictor** made of the coefficients and covariates, and a **link function** that connects the mean of the distribution to the linear predictor. The linear model is a GLM, too. Its mean is $\mu$, and the linear predictor is connected to it directly:
+
+$$
+g(\mu) = g(E(Y)) = \beta_0 + \beta_1 x_1, \qquad g(\mu) = \mu
+$$
+
+That's the **identity link**: no transformation at all. It works for the Normal because the Normal can take any value from $-\infty$ to $\infty$, so a straight line can't wander off the scale of the data. Other distributions have narrower ranges, and their links transform the mean so the linear predictor stays on the right scale.
+
+For a binary outcome, the distribution is the binomial, which you've probably met in a basic statistics course (remember the coin flips?). It gets used in two ways. When each person has a single "trial," with an outcome of 1 or 0, it's called the **Bernoulli** distribution, and that's the logistic regression you've probably seen before. When we have $y$ events out of $n$ trials, which is the basic makeup of a demographic rate (deaths out of people at risk, low birth weight births out of all births), we have what I call the **count-based binomial**. Either way the mean is a probability, $\pi$, and the model is
+
+$$
+\Pr(y = 1) = \frac{y}{n} = \pi = \text{some function of the predictors}
+$$
+
+This week is about the Bernoulli case, with individual survey respondents. We'll use the count-based binomial for rates in places in week 6.
+
 ### Why not the linear model?
 
 If $y_i$ is 1 or 0, its mean is a probability, $\pi_i = P(y_i = 1)$, and its variance is $\pi_i(1 - \pi_i)$. A linear model for $\pi_i$ (the **linear probability model**) has two problems. The variance depends on the mean, so the errors can't be homoskedastic, and nothing stops the fitted values from going below 0 or above 1. The linear probability model has defenders, mostly in economics, and I'll come back to it at the end, because its coefficients are often close to the average marginal effects from a logit. But for most demographic work we want a model that respects the bounds.
@@ -73,7 +92,9 @@ $$
 \pi_i = \frac{1}{1 + \exp(-\mathbf{x}_i'\boldsymbol\beta)}
 $$
 
-The **probit** link is the inverse of the standard normal cumulative distribution function, $\Phi^{-1}(\pi_i) = \mathbf{x}_i'\boldsymbol\beta$, so $\pi_i = \Phi(\mathbf{x}_i'\boldsymbol\beta)$.
+It's worth walking through that one step at a time. The **odds** of an event are the probability it happens divided by the probability it doesn't, $\pi / (1 - \pi)$. A probability is stuck between 0 and 1, but the odds run from 0 to $\infty$, and taking the log of the odds stretches that onto the whole real line, from $-\infty$ to $\infty$. Now a linear function of the covariates can't go out of bounds, and we can write the model as $\text{logit}(\pi) = \beta_0 + \beta_1 x_1$ without worrying about the boundary problem.
+
+The **probit** link is the inverse of the standard normal cumulative distribution function, $\Phi^{-1}(\pi_i) = \mathbf{x}_i'\boldsymbol\beta$, so $\pi_i = \Phi(\mathbf{x}_i'\boldsymbol\beta)$. A third link, the **complementary log-log**, $\log(-\log(1 - \pi_i)) = \mathbf{x}_i'\boldsymbol\beta$, is asymmetric, and it comes up mostly when the binary outcome is really whether an event happened in an interval of time, which is why you'll see it again in your event history course.
 
 Both models can also be written as models for a latent propensity $y_i^* = \mathbf{x}_i'\boldsymbol\beta + \varepsilon_i$, where we only see $y_i = 1$ when $y_i^* > 0$. The logit assumes $\varepsilon$ has a logistic distribution (variance $\pi^2/3$), and the probit assumes a standard normal (variance 1). That's the whole difference between them, and it's why logit coefficients are about 1.6 to 1.8 times the size of probit coefficients for the same data. It's also the source of the nested model problem we'll take on in week 4.
 
@@ -92,7 +113,13 @@ tibble(eta = seq(-6, 6, by = 0.05)) |>
 
 ### Odds and odds ratios
 
-Exponentiating a logit coefficient gives an **odds ratio**. If $\beta_1 = 0.4$, then $\exp(0.4) = 1.49$, and a one-unit increase in $x_1$ multiplies the odds of $y = 1$ by 1.49, a 49% increase in the odds. A coefficient of $-0.15$ gives $\exp(-0.15) = 0.86$, a 14% decrease. Odds ratios are constant across the range of $x$, which is convenient, but odds are not probabilities, and that difference will come back below.
+Because we modeled the log of the odds, the coefficients are on the log-odds scale, not a linear one. We can read their signs directly (a positive $\beta$ raises the odds of $y = 1$, a negative one lowers them), but the usual interpretation is the **odds ratio**, which you get by exponentiating the coefficient. The percent change in the odds for a one-unit change in $x_1$ is
+
+$$
+\%\Delta \text{ odds} = 100 \times \left(\exp(\beta_1) - 1\right)
+$$
+
+So a $\beta_1$ of 0.025 gives $\exp(0.025) = 1.025$, and a one-unit increase in $x_1$ raises the odds of $y$ by 2.5%. If $\beta_1 = 0.4$, then $\exp(0.4) = 1.49$, a 49% increase in the odds. A negative coefficient works the same way: $\beta_1 = -0.15$ gives $\exp(-0.15) - 1 = -0.14$, a 14% decrease. Odds ratios are constant across the range of $x$, which is convenient, but odds are not probabilities, and that difference will come back below.
 
 ## The data and some descriptive work
 
@@ -136,6 +163,28 @@ desc |>
 
 The education gradient is steep, and Hispanic adults report fair or poor health at a higher rate than any other group. Part of that is education, and part may be about how the question works across languages and cultures (a long-standing debate in the Hispanic health literature). The model below starts to separate the first part out.
 
+Before the model, though, it's worth looking at the two variables together. `svyby()` with two grouping variables gives the prevalence for every combination of race and ethnicity and education.
+
+```{r}
+#| label: fig-race-educ
+#| fig-cap: "Share of adults reporting fair or poor health by race and ethnicity and education, with 95% confidence intervals."
+race_educ <- svyby(~badhealth, ~race_eth + educ, design = des, FUN = svymean,
+                   na.rm = TRUE)
+
+race_educ |>
+  as_tibble() |>
+  mutate(ci_l = badhealth - 1.96 * se, ci_u = badhealth + 1.96 * se) |>
+  ggplot(aes(x = educ, y = badhealth, colour = race_eth, shape = race_eth,
+             group = race_eth)) +
+  geom_line(position = position_dodge(width = 0.4)) +
+  geom_pointrange(aes(ymin = ci_l, ymax = ci_u), position = position_dodge(width = 0.4)) +
+  scale_colour_utsa() +
+  scale_y_continuous(labels = scales::label_percent()) +
+  labs(x = NULL, y = "Fair or poor health", colour = NULL, shape = NULL)
+```
+
+The education gradient shows up in every group, and within each level of education the racial and ethnic differences are much smaller than they were overall. The overall Hispanic-White gap is more than 10 percentage points, and within education groups it's closer to 3 to 5. That's the descriptive version of what the model will tell us: some, but not all, of the Hispanic disadvantage is about education.
+
 ## Fitting logit and probit models
 
 Logit and probit models for survey data are just `svyglm()` with a binomial family. I use `quasibinomial()`, which gives exactly the same estimates as `binomial()` but doesn't warn about non-integer weights.
@@ -178,13 +227,53 @@ or <- exp(coef(fit_logit))
 ratio <- coef(fit_logit)[-1] / coef(fit_probit)[-1]
 ```
 
-College graduates have `r round(or[["educCollege graduate"]], 2)` times the odds of fair or poor health of adults without a high school diploma, so their odds are `r pct(1 - or[["educCollege graduate"]], 0)` lower. Hispanic adults have `r round(or[["race_ethHispanic"]], 2)` times the odds of non-Hispanic White adults with the same education, age and sex. The ratio of logit to probit coefficients runs from about `r round(quantile(ratio, 0.1), 1)` to `r round(quantile(ratio, 0.9), 1)` for most terms, so the two models say the same thing in different units.
+College graduates have `r round(or[["educCollege graduate"]], 2)` times the odds of fair or poor health of adults without a high school diploma, so their odds are `r pct(1 - or[["educCollege graduate"]], 0)` lower. Hispanic adults have `r round(or[["race_ethHispanic"]], 2)` times the odds of non-Hispanic White adults with the same education, age and sex. The ratio of logit to probit coefficients runs from about `r round(quantile(ratio, 0.1), 1)` to `r round(quantile(ratio, 0.9), 1)` for most terms, so the two models say the same thing in different units. Both show higher chances of fair or poor health for every group compared with non-Hispanic White adults (the reference group), most of all for Hispanic and multiracial adults, a steady decline with each step up in education compared with not finishing high school, and a steady rise with age compared with adults under 25.
+If you do report odds ratios, report them with confidence intervals. `tbl_regression()` from `gtsummary` exponentiates the coefficients, computes design-based intervals, and lays out the reference groups clearly:
+
+```{r}
+#| label: tbl-or
+tbl_regression(fit_logit, exponentiate = TRUE,
+               label = list(race_eth ~ "Race and ethnicity", educ ~ "Education",
+                            agec ~ "Age group", female ~ "Female")) |>
+  bold_labels()
+```
+
+A picture is often easier to digest. On the odds ratio scale, an interval that crosses 1 means the effect isn't statistically different from zero. I put the axis on a log scale, because an odds ratio of 0.5 is as far from 1 as an odds ratio of 2.
+
+```{r}
+#| label: fig-or
+#| fig-cap: "Odds ratios and 95% confidence intervals for fair or poor health. The axis is on a log scale."
+broom::tidy(fit_logit, conf.int = TRUE, exponentiate = TRUE) |>
+  filter(term != "(Intercept)") |>
+  mutate(term = str_remove_all(term, "race_eth|educ|agec"),
+         term = fct_inorder(term)) |>
+  ggplot(aes(x = estimate, y = fct_rev(term))) +
+  geom_vline(xintercept = 1, colour = utsa_cols("smoke"), linewidth = 1) +
+  geom_pointrange(aes(xmin = conf.low, xmax = conf.high), colour = utsa_cols("midnight")) +
+  scale_x_log10() +
+  labs(x = "Odds ratio", y = NULL)
+```
 
 ## From coefficients to probabilities
 
 ### Predicted probabilities for particular people
 
-I like to talk about interesting cases. What's the predicted probability of fair or poor health for a 45-to-54-year-old woman, by race and ethnicity and education? `datagrid()` builds the "people," and `predictions()` computes their probabilities with confidence intervals.
+As I often say, I like to talk about interesting cases. To do that, we need the fitted probability for a particular kind of person, and getting it just means "solving the equation" for the model at the values of $x$ that describe that person. For a non-Hispanic White woman age 45 to 54 with a college degree, everything but the intercept, the college dummy, the age dummy and the female dummy is zero, so
+
+$$
+\Pr(\text{fair/poor health}) = \frac{1}{1 + \exp\left[-(\beta_0 + \beta_{\text{college}} + \beta_{45\text{-}54} + \beta_{\text{female}})\right]}
+$$
+
+Here it is by hand:
+
+```{r}
+#| label: by-hand
+b <- coef(fit_logit)
+eta <- b[["(Intercept)"]] + b[["educCollege graduate"]] + b[["agec45-54"]] + b[["female"]]
+plogis(eta)   # plogis() is the inverse logit, 1 / (1 + exp(-eta))
+```
+
+Doing that for many kinds of people gets tedious, and it doesn't give you a confidence interval. So what's the predicted probability of fair or poor health for a 45-to-54-year-old woman, by race and ethnicity and education? `datagrid()` builds the "people," and `predictions()` computes their probabilities with confidence intervals.
 
 ```{r}
 #| label: interesting-cases
@@ -207,7 +296,7 @@ cs <- as_tibble(cases)
 get_c <- function(r, e) cs$estimate[cs$race_eth == r & cs$educ == e]
 ```
 
-For a Hispanic woman in her late 40s with a high school diploma, the model predicts a `r pct(get_c("Hispanic", "HS graduate"))` chance of reporting fair or poor health. For a non-Hispanic White woman with a college degree, it's `r pct(get_c("NH White", "College graduate"))`. Sentences like these are far easier for a reader to hold on to than "the odds ratio is `r round(or[["educCollege graduate"]], 2)`."
+For a Hispanic woman in her late 40s with a high school diploma, the model predicts a `r pct(get_c("Hispanic", "HS graduate"))` chance of reporting fair or poor health. For a non-Hispanic White woman with a college degree, it's `r pct(get_c("NH White", "College graduate"))`, the same number we got by hand. Sentences like these are far easier for a reader to hold on to than "the odds ratio is `r round(or[["educCollege graduate"]], 2)`."
 
 ### Average predictions
 

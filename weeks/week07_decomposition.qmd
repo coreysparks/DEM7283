@@ -1,0 +1,561 @@
+---
+title: "DEM 5283/7283 Week 7: Decomposition"
+subtitle: "Statistics for Demographic Data II"
+author: "Corey S. Sparks, PhD"
+date: last-modified
+bibliography: references.bib
+format:
+  html:
+    toc: true
+    toc-float: true
+    number-sections: false
+    self-contained: true
+    fig-width: 8
+    fig-height: 5
+execute:
+  engine: knitr
+  echo: true
+  warning: false
+  message: false
+---
+
+## Introduction
+
+Almost every interesting demographic finding starts as a difference between two groups. Texas has a higher death rate than California. Women earn less than men. Hispanic adults are more likely to be uninsured than non-Hispanic White adults. The first question anyone asks about a difference like that is *why*, and the first honest answer is usually "partly because the groups are made up of different kinds of people, and partly because the same kinds of people have different outcomes in the two groups." Decomposition methods put numbers on those two parts.
+
+This week covers the two workhorses. **Kitagawa decomposition** splits a difference in crude rates into a part due to the rates themselves and a part due to population composition, using aggregate data like the death counts from week 6. **Oaxaca-Blinder decomposition** does the same thing with microdata and a regression model, splitting a gap in means into a part *explained* by differences in characteristics and a part that is *unexplained*. I'll finish with the extension to binary outcomes, where the regression is a logit and the arithmetic needs a little more care. Along the way you'll use the survey weights and replicate weights from week 2, because a decomposition is just another estimate, and it needs a standard error.
+
+## Setup
+
+We need the Texas and California mortality data from week 6, the IPUMS ACS extract for Texas from week 2, and the BRFSS. The `oaxaca` package does the linear decomposition in one line [@hlavac_oaxaca], but I'll do most of the work by hand, so you can see what's inside.
+
+```{r}
+#| label: packages
+library(tidyverse)
+library(here)
+library(survey)
+library(ipumsr)
+library(oaxaca)
+library(sparkscolors)  # pak::pak("coreysparks/sparkscolors"), UTSA colors
+
+source(here("R", "get_mmsa.R"))
+source(here("R", "recode_mmsa.R"))
+```
+
+```{r}
+#| label: setup
+#| include: false
+options(survey.lonely.psu = "adjust")
+theme_set(
+  theme_minimal(base_size = 12) +
+    theme(text = element_text(colour = utsa_cols("midnight")),
+          panel.grid.major = element_line(colour = utsa_cols("smoke")),
+          panel.grid.minor = element_blank(),
+          legend.position = "bottom")
+)
+fmt <- function(x, d = 0) format(round(x, d), big.mark = ",", nsmall = d)
+pct <- function(x, d = 1) paste0(format(round(100 * x, d), nsmall = d), "%")
+```
+
+## Why decompose?
+
+Demographers have been decomposing differences for as long as there have been rates to compare. The logic goes back to standardization, which you saw in week 6: a crude death rate mixes the risk of dying at each age with the number of people at each age, and if two populations have different age structures, their crude rates can mislead you. Standardization answers one counterfactual question ("what would Texas's death rate be with California's age structure?"). Decomposition answers a slightly different one: of the actual difference between the two crude rates, *how much* comes from the rates and *how much* from the age structure?
+
+Every decomposition in this document has the same shape:
+
+$$\text{difference} = \text{part due to composition} + \text{part due to rates (or coefficients)}$$
+
+Different fields use different names for the two parts. Demographers say **composition** and **rate** effects. Economists, who developed the regression version, say **explained** (or endowments) and **unexplained** (or coefficients). They're the same idea.
+
+Before we start, one warning that I'll repeat at the end. A decomposition is *accounting*, not causal inference. It tells you how a difference is arithmetically put together, given a model. It does not tell you what would happen if you changed someone's education or moved them to California. We'll come back to that distinction in week 14.
+
+## Part 1: Kitagawa decomposition
+
+### The idea
+
+A crude death rate is a weighted average of age-specific death rates, where the weights are the shares of the population in each age group. If $c_i$ is the share of the population in age group $i$ and $m_i$ is the death rate in that group, then
+
+$$CDR = \sum_i c_i m_i$$
+
+For two populations $A$ and $B$, @kitagawa1955 showed that the difference in crude rates can be split exactly into two parts:
+
+$$CDR_A - CDR_B = \underbrace{\sum_i \frac{c_{iA} + c_{iB}}{2}(m_{iA} - m_{iB})}_{\text{rate effect}} + \underbrace{\sum_i \frac{m_{iA} + m_{iB}}{2}(c_{iA} - c_{iB})}_{\text{composition effect}}$$
+
+The rate effect asks how different the death rates are, weighting each age by its average share of the two populations. The composition effect asks how different the age structures are, weighting each age by its average death rate. Using the averages of the two populations, rather than one or the other, is what makes the two parts add up exactly to the total, with nothing left over. You can check the algebra yourself: multiply out the two sums and the cross terms cancel. @preston2001 walk through it, and @das_gupta1993 extends it to rates with more than two factors (age, sex and race at once, for example).
+
+### Texas and California
+
+Here are the 2016 deaths and populations by age from week 6.
+
+```{r}
+#| label: txca-data
+age_levels <- c("< 1 year", "1-4 years", "5-9 years", "10-14 years", "15-19 years",
+                "20-24 years", "25-34 years", "35-44 years", "45-54 years",
+                "55-64 years", "65-74 years", "75-84 years", "85+ years")
+
+txca <- read_tsv(here("data", "CMF_TX_CA_age.txt"), na = c("", "Not Applicable", "Suppressed"),
+                 show_col_types = FALSE) |>
+  rename(state = State, age = `Age Group`, deaths = Deaths, population = Population) |>
+  filter(age != "Not Stated") |>
+  mutate(age = factor(age, levels = age_levels),
+         deaths = as.numeric(deaths), population = as.numeric(population)) |>
+  select(state, age, deaths, population)
+```
+
+To do the decomposition, we need the age shares $c_i$ and the rates $m_i$ for each state, side by side in one row per age group.
+
+```{r}
+#| label: kitagawa
+kit <- txca |>
+  group_by(state) |>
+  mutate(c = population / sum(population),   # share of the population in each age group
+         m = 1e5 * deaths / population) |>    # deaths per 100,000
+  ungroup() |>
+  select(state, age, c, m) |>
+  pivot_wider(names_from = state, values_from = c(c, m)) |>
+  mutate(rate_effect = (c_Texas + c_California) / 2 * (m_Texas - m_California),
+         comp_effect = (m_Texas + m_California) / 2 * (c_Texas - c_California))
+
+kit_total <- kit |>
+  summarise(cdr_texas = sum(c_Texas * m_Texas),
+            cdr_california = sum(c_California * m_California),
+            difference = cdr_texas - cdr_california,
+            rate_effect = sum(rate_effect),
+            comp_effect = sum(comp_effect))
+
+knitr::kable(kit_total, digits = 1)
+```
+
+::: {.callout-note title="Code explanation: `pivot_wider()` with two value columns"}
+The data start out "long," with one row for each state and age group (26 rows). The formula needs Texas and California values next to each other, so we want them "wide," with one row per age group (13 rows).
+
+1. `names_from = state` says the new columns should be named after the values of `state`.
+2. `values_from = c(c, m)` says to spread out two columns at once, the shares and the rates. When there's more than one, `pivot_wider()` names the new columns by gluing the variable name to the state name with an underscore: `c_Texas`, `c_California`, `m_Texas` and `m_California`.
+3. After that, each line of the Kitagawa formula is one `mutate()`, and each sum is one `summarise()`.
+
+`pivot_longer()` goes the other way, and you'll use it below to get the data back into long form for plotting.
+:::
+
+The crude death rate in Texas was `r fmt(kit_total$cdr_texas, 1)` per 100,000, and in California `r fmt(kit_total$cdr_california, 1)`, a difference of only `r fmt(kit_total$difference, 1)`. Looked at that way, the two states are nearly the same. The decomposition says otherwise. Texas's higher age-specific death rates would have made its crude rate `r fmt(kit_total$rate_effect, 1)` points higher, but its younger population pulled it back down by `r fmt(abs(kit_total$comp_effect), 1)`. Two big effects in opposite directions add up to a small difference. That's the same story as the age-standardized rate ratio of about 1.19 in week 6, but now it's in the units of the crude rate, and it adds up.
+
+The age-specific contributions show where each effect comes from.
+
+```{r}
+#| label: fig-kitagawa
+#| fig-cap: "Contributions of each age group to the difference in crude death rates between Texas and California, 2016, deaths per 100,000."
+kit |>
+  select(age, `Rate effect` = rate_effect, `Composition effect` = comp_effect) |>
+  pivot_longer(-age, names_to = "component", values_to = "contribution") |>
+  ggplot(aes(x = age, y = contribution, fill = component)) +
+  geom_col(position = "dodge") +
+  geom_hline(yintercept = 0, colour = utsa_cols("midnight")) +
+  scale_fill_utsa(palette = "primary") +
+  labs(x = "Age group", y = "Contribution (deaths per 100,000)", fill = NULL) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+The rate effect is positive at every age, so Texans die at higher rates than Californians across the whole life course, and the biggest contributions are from 55 to 84, where both the rate differences and the population shares are large. The composition effect is almost all at the oldest ages: California has a larger share of people over 85, and since that's where the death rate is highest, that alone is worth `r fmt(abs(kit$comp_effect[kit$age == "85+ years"]), 1)` deaths per 100,000.
+
+::: {.callout-tip}
+Two practical points. First, the age groups matter. Wide open-ended groups like 85+ hide age differences *within* the group, and those leak into the rate effect. Second, the same machinery works for any rate that's a weighted average of group-specific rates: a total fertility rate across marital statuses, a poverty rate across family types, an employment rate across education groups. If you can write it as $\sum c_i m_i$, you can decompose it.
+:::
+
+## Part 2: Oaxaca-Blinder decomposition
+
+### From rates to regressions
+
+Kitagawa works with a handful of categories. With microdata, we usually want to account for many characteristics at once, some continuous, and that's where a regression comes in. @oaxaca1973 and @blinder1973 independently proposed the same idea, in the same year, for the same question: how much of the gap in wages between groups is due to differences in productive characteristics, and how much is due to the groups being paid differently for the same characteristics?
+
+Fit the same linear regression separately to two groups, $A$ and $B$:
+
+$$y_{iA} = X_{iA}\beta_A + \varepsilon_{iA} \qquad y_{iB} = X_{iB}\beta_B + \varepsilon_{iB}$$
+
+Because a linear regression with an intercept goes through the means, the mean outcome in each group is its mean characteristics times its coefficients, $\bar y_A = \bar X_A \beta_A$. So the gap is
+
+$$\bar y_A - \bar y_B = \bar X_A \beta_A - \bar X_B \beta_B$$
+
+Now add and subtract a set of reference coefficients $\beta^*$ and rearrange:
+
+$$\bar y_A - \bar y_B = \underbrace{(\bar X_A - \bar X_B)\beta^*}_{\text{explained}} + \underbrace{\bar X_A(\beta_A - \beta^*) + \bar X_B(\beta^* - \beta_B)}_{\text{unexplained}}$$
+
+The **explained** part is how much the gap would be if both groups were paid according to the same coefficients, so the only thing that differs is their characteristics. The **unexplained** part is everything else: differences in the coefficients, including the intercepts. It's the same structure as Kitagawa, with $\bar X$ playing the part of composition and $\beta$ the part of the rates.
+
+### Choosing the reference coefficients
+
+The decomposition is exact for any $\beta^*$, but the split between explained and unexplained depends on which one you choose. This is the **index number problem**, and it's the same reason Kitagawa used the average of the two populations. There are four common choices:
+
+1. $\beta^* = \beta_A$, the coefficients of the advantaged group, as in @oaxaca1973. It treats group $A$'s wage structure as the "fair" one.
+2. $\beta^* = \beta_B$, the coefficients of the disadvantaged group.
+3. The coefficients from a pooled regression on both groups [@neumark1988].
+4. The coefficients from a pooled regression that also includes a group indicator [@jann2008; @fortin2011]. Without the indicator, the pooled coefficients absorb some of the group difference, and part of the unexplained gap gets mislabeled as explained.
+
+I'll use the fourth as the main specification and show how much the others move things. There's no right answer here, so you should always say which one you used.
+
+### The gender gap in wages in Texas
+
+I'll use the IPUMS extract of the 2024 ACS for Texas from week 2, and decompose the gap in log annual wages between men and women who were employed and between 25 and 64. Log wages are the convention, because the coefficients become approximate percent differences and the gap in mean log wages is (roughly) a percent gap.
+
+```{r}
+#| label: ipums-read
+ddi <- read_ipums_ddi(here("data", "usa_00014.xml"))
+ipums <- read_ipums_micro(ddi, data_file = here("data", "usa_00014_tx.dat.gz"),
+                          verbose = FALSE)
+
+wages <- ipums |>
+  filter(EMPSTAT == 1, between(AGE, 25, 64),
+         INCWAGE > 0, INCWAGE < 999998) |>      # 999998 and 999999 are missing and N/A
+  mutate(lnwage = log(INCWAGE),
+         female = as.numeric(SEX == 2),
+         educ = cut(EDUC, breaks = c(-1, 5, 6, 8, 10, 11),
+                    labels = c("Less than HS", "HS graduate", "Some college",
+                               "Bachelor's", "Graduate")),
+         race_eth = case_when(HISPAN %in% 1:4 ~ "Hispanic",
+                              RACE == 1 ~ "NH White",
+                              RACE == 2 ~ "NH Black",
+                              RACE %in% 4:6 ~ "NH Asian",
+                              .default = "NH Other"),
+         race_eth = fct_relevel(factor(race_eth), "NH White"),
+         # first two digits of the SOC code = the 23 major occupation groups
+         occ = factor(substr(OCCSOC, 1, 2)))
+
+wages |>
+  group_by(female) |>
+  summarise(n = n(),
+            mean_lnwage = weighted.mean(lnwage, PERWT),
+            geometric_mean_wage = exp(mean_lnwage),
+            bachelors_plus = weighted.mean(educ %in% c("Bachelor's", "Graduate"), PERWT),
+            mean_age = weighted.mean(AGE, PERWT)) |>
+  knitr::kable(digits = 3, format.args = list(big.mark = ","))
+```
+
+::: {.callout-warning}
+My extract doesn't have hours or weeks worked, so these are *annual* wages, and part of any gap between men and women in annual wages is a gap in how much they work. A real analysis would add usual hours (`UHRSWORK`) and weeks worked (`WKSWORK2`) to the extract, and either model hourly wages or restrict to full-time, full-year workers. Exercise 2 asks you to think about what that does to the decomposition.
+:::
+
+Women in this sample are *more* likely than men to have a bachelor's degree, and the two groups have the same average age. So education and age won't explain the gap, and if anything, education will work against it.
+
+### The decomposition by hand
+
+To decompose, we need the weighted mean of every column of the design matrix in each group, and the coefficients from three weighted regressions: one for men, one for women, and one pooled with a female indicator. I'll write it as a function of the weights, because in a minute we'll run it 80 more times with the replicate weights to get standard errors.
+
+```{r}
+#| label: ob-function
+f_wage <- lnwage ~ educ + AGE + I(AGE^2) + race_eth + occ
+X <- model.matrix(f_wage, data = wages)
+y <- wages$lnwage
+men <- wages$female == 0
+
+# weighted least squares: solve (X'WX) b = X'Wy
+wls <- function(X, y, w) {
+  b <- solve(crossprod(X, X * w), crossprod(X, y * w))
+  drop(b)
+}
+
+# the weighted mean of each column of X
+wmeans <- function(X, w) colSums(X * w) / sum(w)
+
+ob_decomp <- function(w) {
+  b_men   <- wls(X[men, ], y[men], w[men])
+  b_women <- wls(X[!men, ], y[!men], w[!men])
+  b_pool  <- wls(cbind(X, female = wages$female), y, w)[colnames(X)]
+  x_men   <- wmeans(X[men, ], w[men])
+  x_women <- wmeans(X[!men, ], w[!men])
+
+  explained <- (x_men - x_women) * b_pool          # one value per column of X
+  c(gap         = sum(x_men * b_men) - sum(x_women * b_women),
+    explained   = sum(explained),
+    unexplained = sum(x_men * (b_men - b_pool) + x_women * (b_pool - b_women)),
+    education   = sum(explained[str_detect(names(explained), "^educ")]),
+    age         = sum(explained[str_detect(names(explained), "AGE")]),
+    race_eth    = sum(explained[str_detect(names(explained), "^race_eth")]),
+    occupation  = sum(explained[str_detect(names(explained), "^occ")]),
+    # the explained part with the other reference coefficients
+    explained_men_ref   = sum((x_men - x_women) * b_men),
+    explained_women_ref = sum((x_men - x_women) * b_women))
+}
+
+ob <- ob_decomp(wages$PERWT)
+round(ob, 4)
+```
+
+::: {.callout-note title="Code explanation: regression with matrices"}
+`lm()` would fit these regressions, but writing the decomposition needs the pieces of the regression (the design matrix and the coefficient vector), and it's simpler to get them directly.
+
+1. `model.matrix(f_wage, data = wages)` turns the formula into the matrix $X$ that `lm()` builds behind the scenes: a column of 1s for the intercept, a column of 0/1 dummies for every level of each factor except the reference, and the numeric columns. You saw it once in week 4.
+2. `wls()` is weighted least squares written out. The coefficients solve $(X'WX)b = X'Wy$, where $W$ holds the weights. `crossprod(X, X * w)` computes $X'WX$ (multiplying each row of `X` by its weight first), and `solve()` solves the system. This is what `lm(..., weights = w)` does, and you can check that they agree. I wrote it out because `lm()` refuses negative weights, and a handful of the ACS replicate weights are negative, which the Census Bureau's variance formula allows.
+3. `wmeans()` gives the weighted mean of every column of `X`. For a dummy, that's the weighted share of people in that category.
+4. `explained` multiplies the difference in means by the coefficient, column by column, so it's a vector with one contribution per variable. `str_detect(names(explained), "^educ")` finds the columns whose names start with "educ", and summing them gives the contribution of education as a whole.
+5. `[colnames(X)]` drops the female coefficient from the pooled regression, because it's not part of the reference wage structure.
+:::
+
+The gap in mean log wages is `r round(ob["gap"], 3)`, which means men's geometric mean wage is about `r pct(exp(ob["gap"]) - 1, 0)` higher than women's. Of that gap, only `r round(ob["explained"], 3)` is explained by the characteristics in the model, and `r round(ob["unexplained"], 3)`, or `r pct(ob["unexplained"] / ob["gap"], 0)` of it, is unexplained.
+
+The detailed explained part shows why. Education *reduces* the gap by `r round(abs(ob["education"]), 3)`, because women are more educated, and women would earn more than men if that were the only difference. Occupation *adds* `r round(ob["occupation"], 3)`, because men and women work in different occupations, and men's are better paid. Age and race and ethnicity contribute almost nothing, because men and women in the labor force are about the same age and come from the same population. So the small explained total is really two moderate effects that mostly cancel, the same pattern as Texas and California.
+
+### Standard errors with replicate weights
+
+Week 2 showed that replication is just running the same calculation with each replicate weight and plugging the results into the Census Bureau's formula. A decomposition is a calculation like any other, so we can do exactly that.
+
+```{r}
+#| label: ob-replicates
+ob_reps <- map(1:80, \(r) ob_decomp(wages[[paste0("REPWTP", r)]])) |>
+  bind_rows()
+
+ob_se <- sqrt(4 / 80 * colSums((ob_reps - matrix(ob, 80, length(ob), byrow = TRUE))^2))
+
+ob_table <- tibble(component = names(ob), estimate = ob, se = ob_se) |>
+  mutate(lower = estimate - 1.96 * se, upper = estimate + 1.96 * se)
+knitr::kable(ob_table, digits = 4)
+```
+
+The `matrix(ob, 80, length(ob), byrow = TRUE)` part repeats the full-sample results 80 times, so they line up with the 80 rows of replicate results and can be subtracted all at once. Every component is precisely estimated, which shouldn't be surprising with `r fmt(nrow(wages))` workers. The point is that you *can* get a design-based standard error for a decomposition, and you should report one.
+
+### The choice of reference matters
+
+Here's the explained part under the three reference coefficients.
+
+```{r}
+#| label: ob-reference
+tibble(reference = c("Pooled, with group indicator", "Men's coefficients", "Women's coefficients"),
+       explained = ob[c("explained", "explained_men_ref", "explained_women_ref")]) |>
+  mutate(share_of_gap = explained / ob["gap"]) |>
+  knitr::kable(digits = 3)
+```
+
+The share of the gap that's "explained" ranges from `r pct(min(ob[c("explained", "explained_men_ref", "explained_women_ref")]) / ob["gap"], 0)` to `r pct(max(ob[c("explained", "explained_men_ref", "explained_women_ref")]) / ob["gap"], 0)`, depending on whose wage structure you take as the benchmark. The conclusion (most of the gap is not explained by these characteristics) holds under all three, but the numbers move, which is why you report the reference you used.
+
+### The detailed unexplained part, and why I didn't report it
+
+You'll see papers that split the unexplained part by variable too, as $\bar X_{kA}(\beta_{kA} - \beta^*_k)$ for each $k$. For continuous variables that's fine. For categorical ones, it isn't: the contribution of a set of dummies to the unexplained part changes when you change the omitted category, even though the model is the same [@oaxaca_ransom1999]. The intercept changes too, so you can move "unexplained" from the intercept to education and back by picking a different reference group. @yun2005 proposed a normalization that makes the detailed results invariant to the choice. My advice is to report the detailed *explained* part, which doesn't have this problem, and the unexplained part as a total, unless you have a good reason to do more.
+
+### And the unexplained part is not "discrimination"
+
+The unexplained part is often called discrimination, and it's tempting, but it's really a residual. It contains discrimination, if there is any, but also every difference between the groups that the model leaves out. Here, the biggest omission is hours worked, and others are years of actual work experience, field of study, and job tenure. Some of what's "explained" may not be innocent either: if women are steered into lower-paying occupations, controlling for occupation explains away part of the gap that is itself the result of unequal treatment. So decide what you put on the right-hand side based on what question you're asking, and say it.
+
+::: {.callout-tip title="The `oaxaca` package"}
+The `oaxaca` package does all of this in one call, with a formula like `y ~ x1 + x2 | group`, and bootstrap standard errors.
+
+```{r}
+#| label: oaxaca-package
+ob_pkg <- oaxaca(lnwage ~ educ + AGE + I(AGE^2) + race_eth + occ | female,
+                 data = wages, R = NULL)   # R = NULL skips the bootstrap
+ob_pkg$y
+ob_pkg$twofold$overall[, c("group.weight", "coef(explained)", "coef(unexplained)")]
+```
+
+Each row of `twofold$overall` is a different reference: `group.weight` of 0 and 1 use one group's coefficients, and -1 is the pooled regression with the group indicator. But the package has no argument for survey weights, so its gap of `r round(ob_pkg$y$y.diff, 3)` is the unweighted one, and it doesn't match the weighted gap of `r round(ob["gap"], 3)`. It's a good tool for checking your own calculation on unweighted data, but for survey data, the function above is what you want.
+:::
+
+## Part 3: Binary outcomes
+
+### Why the linear formula doesn't work
+
+With a logit or probit model, the mean of the outcome isn't the model evaluated at the mean characteristics. In symbols, $\overline{F(X\beta)} \neq F(\bar X\beta)$, where $F$ is the logistic function from week 3. So the neat linear split breaks. @fairlie2005 gives the fix: instead of multiplying means by coefficients, compute the average *predicted probability* under a counterfactual. Using the coefficients from group $B$ (the reference),
+
+$$\bar P_A - \bar P_B = \underbrace{\left[\frac{1}{n_A}\sum_{i \in A} F(X_i\hat\beta_B) - \bar P_B\right]}_{\text{explained}} + \underbrace{\left[\bar P_A - \frac{1}{n_A}\sum_{i \in A} F(X_i\hat\beta_B)\right]}_{\text{unexplained}}$$
+
+The middle term is the counterfactual: the share of group $A$ we'd expect to have the outcome if they kept their own characteristics but had group $B$'s relationship between characteristics and outcome. With survey data, every average here is a weighted average. A logit with an intercept, fit by (weighted) maximum likelihood, reproduces the group's own weighted mean exactly, so $\bar P_B$ can be either the observed share or the average prediction.
+
+### Health insurance among Hispanic and NH White adults
+
+Back to the BRFSS. The outcome is having no health insurance, for adults 18 to 64 (nearly everyone 65 and over has Medicare), and the groups are Hispanic and non-Hispanic White adults in all of the metro areas in the 2024 MMSA file. As in week 2, I build the design on the whole file and subset it, so the variance calculation knows about everyone.
+
+```{r}
+#| label: brfss-data
+brfss <- get_mmsa() |>
+  recode_mmsa() |>
+  mutate(uninsured = 1 - insured,
+         hispanic = as.numeric(race_eth == "Hispanic"),
+         in_sample = race_eth %in% c("NH White", "Hispanic") &
+           agec %in% c("18-24", "25-34", "35-44", "45-54", "55-64") &
+           !is.na(uninsured) & !is.na(educ) & !is.na(income) & !is.na(female))
+
+des <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt, data = brfss)
+des_sub <- subset(des, in_sample)
+
+svyby(~uninsured, ~race_eth, design = des_sub, FUN = svymean) |>
+  knitr::kable(digits = 4)
+```
+
+```{r}
+#| label: fairlie-function
+f_ins <- uninsured ~ educ + income + agec + female
+
+fairlie <- function(w, data) {
+  keep <- data$in_sample & w > 0
+  data <- data[keep, ]
+  data$w <- w[keep] / mean(w[keep])   # rescale the weights to average 1
+  hisp <- data$hispanic == 1
+
+  fit_white <- glm(f_ins, family = quasibinomial, data = data[!hisp, ], weights = w)
+  p_white <- weighted.mean(data$uninsured[!hisp], data$w[!hisp])
+  p_hisp  <- weighted.mean(data$uninsured[hisp], data$w[hisp])
+  # Hispanic adults' characteristics, NH White adults' coefficients
+  p_counter <- weighted.mean(predict(fit_white, newdata = data[hisp, ], type = "response"),
+                             data$w[hisp])
+
+  c(gap = p_hisp - p_white,
+    explained = p_counter - p_white,
+    unexplained = p_hisp - p_counter)
+}
+
+fair <- fairlie(brfss$mmsawt, brfss)
+round(fair, 4)
+```
+
+::: {.callout-note title="Code explanation: the `fairlie()` function"}
+1. The function takes a vector of weights for *everyone* in the file and the full data. That's the form `withReplicates()` needs in the next chunk.
+2. `keep` drops people outside the analysis sample. For the replicate weights, it also drops people whose weight is 0 in that replicate (the bootstrap leaves some PSUs out).
+3. `data$w <- w[keep] / mean(w[keep])` rescales the weights to average 1. That doesn't change any estimate, but `glm()` fails to converge with the raw BRFSS weights, which run into the thousands. `svyglm()` does the same rescaling internally, which is why you've never had to think about it.
+4. `family = quasibinomial` is a logit model that doesn't complain when weights make the "number of trials" non-integer. The coefficients are the same as with `binomial`.
+5. `predict(fit_white, newdata = data[hisp, ], type = "response")` takes the model fit to NH White adults and computes a predicted probability for each Hispanic adult. That's the counterfactual.
+:::
+
+The gap in uninsurance is `r round(100 * fair["gap"], 1)` percentage points. If Hispanic adults kept their education, income, age and sex but had NH White adults' relationship between those things and insurance, the gap would shrink by `r round(100 * fair["explained"], 1)` points, so `r pct(fair["explained"] / fair["gap"], 0)` of the gap is explained by these characteristics. The other `r round(100 * fair["unexplained"], 1)` points are unexplained.
+
+### Standard errors with bootstrap replicates
+
+There's no simple formula for the variance of a counterfactual average prediction, but replication doesn't need one. The BRFSS doesn't come with replicate weights, so we make them from the design with `as.svrepdesign()`, and `withReplicates()` runs our function once per replicate. I'm using 50 bootstrap replicates to keep the rendering time down, and this chunk is cached, so it only runs again if the code changes.
+
+```{r}
+#| label: fairlie-bootstrap
+#| cache: true
+set.seed(7283)
+des_boot <- as.svrepdesign(des, type = "subbootstrap", replicates = 50)
+fair_boot <- withReplicates(des_boot, fairlie)
+fair_boot
+```
+
+::: {.callout-note title="Code explanation: `as.svrepdesign()` and `withReplicates()`"}
+1. `as.svrepdesign()` turns the linearization design into a replicate design. With `type = "subbootstrap"`, each replicate resamples PSUs with replacement within each stratum and adjusts the weights, which is the bootstrap from the list in week 2. Why not the jackknife? It would work for a smooth statistic like this one, but the jackknife drops one PSU at a time, and in the BRFSS every respondent is their own PSU, so we'd need one replicate per respondent, about `r fmt(nrow(brfss) / 1000)` thousand of them.
+2. `withReplicates(design, fn)` calls `fn(w, data)` once with the full-sample weights and once for each set of replicate weights, then combines the results with the right variance formula for the design type. The function has to take the weights first and the data second, which is why I wrote `fairlie()` that way.
+3. `set.seed()` makes the random resampling repeatable. A different seed gives slightly different standard errors; that's Monte Carlo error, and more replicates make it smaller.
+:::
+
+### Which characteristics matter?
+
+@fairlie2005 gets the contributions of individual variables by swapping them one at a time between matched samples, which is fiddly. @yun2004 proposed a simpler approximation: split the explained part in proportion to each variable's contribution in the *linear* version, $(\bar X_{kA} - \bar X_{kB})\hat\beta_{kB}$, evaluated with the logit coefficients.
+
+```{r}
+#| label: yun-weights
+in_s <- droplevels(brfss[brfss$in_sample, ])   # drops the empty "65+" age group
+in_s$w <- in_s$mmsawt / mean(in_s$mmsawt)
+hisp <- in_s$hispanic == 1
+
+fit_white <- glm(f_ins, family = quasibinomial, data = in_s[!hisp, ], weights = w)
+X_ins <- model.matrix(f_ins, data = in_s)
+lin <- (wmeans(X_ins[hisp, ], in_s$w[hisp]) - wmeans(X_ins[!hisp, ], in_s$w[!hisp])) * coef(fit_white)
+
+yun_share <- c(education = sum(lin[str_detect(names(lin), "^educ")]),
+               income    = sum(lin[str_detect(names(lin), "^income")]),
+               age       = sum(lin[str_detect(names(lin), "^agec")]),
+               sex       = sum(lin[str_detect(names(lin), "female")])) / sum(lin)
+
+tibble(variable = names(yun_share), share = yun_share,
+       points = 100 * yun_share * fair["explained"]) |>
+  knitr::kable(digits = 3)
+```
+
+Income and education carry most of the explained part, and age carries a bit: Hispanic adults are younger on average, and younger adults are more likely to be uninsured.
+
+What's in the unexplained `r round(100 * fair["unexplained"], 1)` points? Not "being Hispanic" as such. The model leaves out citizenship and immigration status, which determine eligibility for Medicaid and the ACA marketplaces, the kind of job and whether it offers insurance, and where people live: Hispanic adults are concentrated in states like Texas and Florida that didn't expand Medicaid, and that is a big part of the story. Exercise 4 asks you to add place to the model.
+
+## Decomposition is accounting
+
+I said this at the start, and I'll say it again because it matters. Every number in this document describes how a difference is put together, given a particular set of variables and a particular reference. Whether the "explained" part is *caused* by those variables is a separate question, and the answer depends on whether the model includes everything that affects both the characteristic and the outcome. If it doesn't (and it never completely does), the explained part is partly someone else's effect. Decompositions are an excellent way to describe and organize a difference, and they're a good first step toward explaining it, but they're not the last step. We'll take up what a causal claim requires in week 14.
+
+## Summary
+
+Kitagawa decomposition splits a difference in crude rates into a rate effect and a composition effect, using the average of the two populations as the weights so the two parts add up exactly. Oaxaca-Blinder decomposition does the same thing for a regression, splitting a gap in means into a part explained by characteristics and an unexplained part, and the split depends on the reference coefficients you choose. For binary outcomes, the explained part comes from a counterfactual average predicted probability, not from multiplying means by coefficients. In all three cases, the estimate is a function of survey data, so it needs a design-based standard error, and replicate weights give you one without any new formulas. The unexplained part is a residual, not a measure of discrimination, and the explained part is a description, not a causal effect.
+
+## Exercises
+
+These exercises are Homework 7.
+
+**1.** Collapse the 13 age groups in the Texas and California data into five broad groups (under 25, 25-44, 45-64, 65-84, and 85+) and redo the Kitagawa decomposition. How much do the rate and composition effects change, and why would wider age groups move part of the composition effect into the rate effect?
+
+```{r}
+#| label: ex-kitagawa
+#| eval: false
+# YOUR CODE HERE
+```
+
+**2.** My wage data don't include hours worked. Suppose women work fewer hours than men on average, and that part-time workers are concentrated in some occupations. Which part of the decomposition (explained or unexplained) is the hours difference hiding in now, and how do you expect the explained part, and the contribution of occupation, to change if you added hours to the model? You don't need to run anything, but if you want to, make your own IPUMS extract with `UHRSWORK` and `WKSWORK2` and try it.
+
+**3.** Using the Texas IPUMS data, decompose the gap in log wages between NH White and Hispanic men who are employed and 25 to 64, using the pooled reference with a group indicator. Report the explained and unexplained parts, the detailed explained part by variable group, and standard errors from the replicate weights.
+
+```{r}
+#| label: ex-ob-race
+#| eval: false
+# YOUR CODE HERE
+```
+
+<details>
+<summary>One solution for exercise 3</summary>
+
+```{r}
+#| label: ex-ob-race-solution
+#| eval: false
+men_wh <- wages |>
+  filter(female == 0, race_eth %in% c("NH White", "Hispanic")) |>
+  mutate(hispanic = as.numeric(race_eth == "Hispanic"))
+
+f2 <- lnwage ~ educ + AGE + I(AGE^2) + occ
+X2 <- model.matrix(f2, data = men_wh)
+y2 <- men_wh$lnwage
+white <- men_wh$hispanic == 0
+
+ob2 <- function(w) {
+  b_w <- wls(X2[white, ], y2[white], w[white])
+  b_h <- wls(X2[!white, ], y2[!white], w[!white])
+  b_p <- wls(cbind(X2, hispanic = men_wh$hispanic), y2, w)[colnames(X2)]
+  x_w <- wmeans(X2[white, ], w[white])
+  x_h <- wmeans(X2[!white, ], w[!white])
+  ex <- (x_w - x_h) * b_p
+  c(gap = sum(x_w * b_w) - sum(x_h * b_h),
+    explained = sum(ex),
+    unexplained = sum(x_w * (b_w - b_p) + x_h * (b_p - b_h)),
+    education = sum(ex[str_detect(names(ex), "^educ")]),
+    age = sum(ex[str_detect(names(ex), "AGE")]),
+    occupation = sum(ex[str_detect(names(ex), "^occ")]))
+}
+
+est <- ob2(men_wh$PERWT)
+reps <- map(1:80, \(r) ob2(men_wh[[paste0("REPWTP", r)]])) |> bind_rows()
+se <- sqrt(4 / 80 * colSums((reps - matrix(est, 80, length(est), byrow = TRUE))^2))
+cbind(estimate = est, se = se)
+```
+
+Some occupation groups may have no Hispanic or no NH White men, which makes `solve()` fail. If that happens, collapse the small occupation groups before building `X2`.
+
+</details>
+
+**4.** Add the metro area (`place`) to the uninsurance model and redo the Fairlie decomposition (point estimates only; the bootstrap takes a while). How much of the gap is explained now? What does it mean, substantively, that where people live "explains" part of the gap?
+
+```{r}
+#| label: ex-fairlie-place
+#| eval: false
+# YOUR CODE HERE
+```
+
+<details>
+<summary>One solution for exercise 4</summary>
+
+```{r}
+#| label: ex-fairlie-place-solution
+#| eval: false
+f_ins <- uninsured ~ educ + income + agec + female + place
+fairlie(brfss$mmsawt, brfss)
+```
+
+Because `fairlie()` uses `f_ins` from the global environment, redefining the formula is enough. (If a metro had Hispanic respondents but no NH White ones, the prediction would fail, because the NH White model would have no coefficient for that place. In the 2024 file, every metro has both.) The explained part grows, but only a little. Place picks up state Medicaid policy, local labor markets and the local cost of coverage, so its contribution is a composition effect in the Kitagawa sense: Hispanic adults are more likely to live in places where *everyone* is more likely to be uninsured.
+
+</details>
+
+**5.** Redo the Fairlie decomposition using the Hispanic adults' coefficients as the reference instead (fit the model to Hispanic adults, and predict for NH White adults). How does the explained share compare, and why isn't it the same?
+
+```{r}
+#| label: ex-fairlie-reverse
+#| eval: false
+# YOUR CODE HERE
+```

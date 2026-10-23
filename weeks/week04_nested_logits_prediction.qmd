@@ -65,13 +65,26 @@ tidymodels_prefer()
 
 ### The data and the question
 
-I'll use the 2024 BRFSS SMART MMSA data with the standard recodes from week 2 (they live in `R/recode_mmsa.R` now). The question is a classic one: how much of the difference in fair or poor self-rated health across racial and ethnic groups is associated with differences in education and income?
+In a research setting we are almost never satisfied with a single, solitary model. The literature on most subjects has several facets, and we want to know how they fit together. A classic example is whether socioeconomic status accounts for racial and ethnic differences in health. @hummer1993 asked it about infant mortality, @sudano_baker2006 about health declines and mortality in late middle age, and @shuey_willson2008 about health trajectories over the life course. Analyses like these enter predictors in **blocks**:
+
+$$
+\begin{aligned}
+\text{Model 1:}\quad & \text{logit}(\pi) = \beta_0 + \text{race/ethnicity} + \text{age} + \text{sex} \\
+\text{Model 2:}\quad & \text{logit}(\pi) = \beta_0 + \text{race/ethnicity} + \text{age} + \text{sex} + \text{SES} \\
+\text{Model 3:}\quad & \text{logit}(\pi) = \beta_0 + \text{race/ethnicity} + \text{age} + \text{sex} + \text{SES} + \text{health behaviors}
+\end{aligned}
+$$
+
+and then watch what happens to the race and ethnicity coefficients from one block to the next. When an effect gets smaller after we control for something, the fancy word is that it has been *attenuated*.
+
+I'll use the 2024 BRFSS SMART MMSA data with the standard recodes from week 2 (they live in `R/recode_mmsa.R` now). The question is the classic one: how much of the difference in fair or poor self-rated health across racial and ethnic groups is associated with differences in education and income, and what changes when we add smoking and health insurance?
 
 ```{r}
 #| label: brfss
 brfss <- get_mmsa(2024) |>
   recode_mmsa() |>
-  mutate(complete = complete.cases(badhealth, race_eth, agec, female, educ, income))
+  mutate(complete = complete.cases(badhealth, race_eth, agec, female, educ, income,
+                                   smoke, insured))
 
 des <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt, data = brfss)
 des_cc <- subset(des, complete)
@@ -83,11 +96,11 @@ des_cc <- subset(des, complete)
 miss_inc <- mean(is.na(brfss$income))
 ```
 
-Nested models have to be fit to the same respondents, or the comparison is meaningless. Income is missing for `r pct(miss_inc)` of respondents (the BRFSS income question has a lot of "don't know" and "refused" answers), so I restrict both models to complete cases with `subset()`. Throwing away a fifth of the sample is not something I'd do in a paper, and in week 9 we'll impute those values instead.
+Nested models have to be fit to the same respondents, or the comparison is meaningless. Income is missing for `r pct(miss_inc)` of respondents (the BRFSS income question has a lot of "don't know" and "refused" answers), and smoking and insurance add a little more missingness, so I restrict all three models to the `r pct(mean(brfss$complete))` of respondents with complete data, using `subset()`. Throwing away a quarter of the sample is not something I'd do in a paper, and in week 9 we'll impute those values instead.
 
 ### The usual approach
 
-Model 1 has race and ethnicity plus age and sex. Model 2 adds education and income.
+Model 1 has race and ethnicity plus age and sex. Model 2 adds education and income. Model 3 adds smoking status and health insurance coverage.
 
 ```{r}
 #| label: nested-models
@@ -95,10 +108,12 @@ m1 <- svyglm(badhealth ~ race_eth + agec + female,
              design = des_cc, family = quasibinomial())
 m2 <- svyglm(badhealth ~ race_eth + agec + female + educ + income,
              design = des_cc, family = quasibinomial())
+m3 <- svyglm(badhealth ~ race_eth + agec + female + educ + income + smoke + insured,
+             design = des_cc, family = quasibinomial())
 
-modelsummary(list("Model 1" = m1, "Model 2" = m2),
+modelsummary(list("Model 1" = m1, "Model 2" = m2, "Model 3" = m3),
              coef_omit = "agec|female|Intercept",
-             coef_rename = \(x) str_remove_all(x, "race_eth|educ|income"),
+             coef_rename = \(x) str_remove_all(x, "race_eth|educ|income|smoke"),
              gof_map = "nobs", fmt = 3,
              title = "Logit coefficients for fair or poor health")
 ```
@@ -109,6 +124,44 @@ I use `quasibinomial()` here because it gives the same estimates as `binomial()`
 #| label: wald-test
 regTermTest(m2, ~ educ + income, method = "Wald")
 ```
+
+```{r}
+#| label: m3-values
+#| include: false
+m_h <- c(coef(m1)[["race_ethHispanic"]], coef(m2)[["race_ethHispanic"]],
+         coef(m3)[["race_ethHispanic"]])
+m_b <- c(coef(m1)[["race_ethNH Black"]], coef(m2)[["race_ethNH Black"]],
+         coef(m3)[["race_ethNH Black"]])
+or_cur <- exp(coef(m3)[["smokeCurrent"]])
+p_ins <- regTermTest(m3, ~insured)$p
+```
+
+Model 3 is where it gets interesting. Adding health behaviors, the Hispanic coefficient goes back *up*, from `r round(m_h[2], 3)` to `r round(m_h[3], 3)`, and the Black coefficient goes from `r round(m_b[2], 3)` to `r round(m_b[3], 3)`. This is somewhat confusing at first, but it's most likely about differences in smoking. Hispanic and Black adults in these data smoke less than non-Hispanic White adults with the same education and income, so smoking was hiding part of their disadvantage in Model 2. Once we compare people with the same smoking history, the gap opens back up. That's a **suppression** effect, the mirror image of attenuation. Current smokers have `r round(or_cur, 2)` times the odds of fair or poor health of people who never smoked, while insurance coverage has no detectable association with the outcome once everything else is in the model (p = `r round(p_ins, 2)`).
+
+### Comparing model fit
+
+There are several ways to ask whether a bigger model explains the outcome better than a smaller one, and for nested models we're usually asking whether the new block was worth adding. The `regTermTest()` Wald test above is one. In an ordinary `glm()`, the traditional way is a likelihood ratio test, but with survey weights the "likelihood" is a weighted pseudo-likelihood, and the usual likelihood ratio statistic doesn't have a $\chi^2$ distribution. `anova()` on two `svyglm()` models does the right thing, a Rao-Scott working likelihood ratio test that corrects for the design [@lumley_scott2014]:
+
+```{r}
+#| label: anova-svy
+anova(m1, m2)
+anova(m2, m3)
+```
+
+Both blocks significantly improve the fit. The **Akaike information criterion** is the other common tool. It has two parts, a measure of how badly the model fits (the deviance) and a penalty for the number of parameters $k$:
+
+$$
+AIC = -2 \log L(\hat\theta) + 2k
+$$
+
+Lower is better, and you can only compare AICs for models fit to exactly the same data, which is one more reason the three models share a sample. A naive AIC computed from the weighted pseudo-likelihood isn't valid, but `AIC()` on a `svyglm()` model gives the design-based version of @lumley_scott2015, which replaces the $2k$ penalty with one based on the design effects (the `eff.p` column is the effective number of parameters):
+
+```{r}
+#| label: aic-svy
+AIC(m1, m2, m3)
+```
+
+Model 3 has the lowest AIC by a wide margin. A common rule of thumb is that if two models are within about 10 AIC points of each other, you should prefer the more parsimonious one. That isn't an issue here, but with smaller samples or weaker blocks it often is.
 
 ```{r}
 #| label: naive-change
@@ -248,6 +301,70 @@ ame_h <- ame |> filter(contrast == "Hispanic")
 
 Now the result reads in percentage points, which is what most readers think in anyway. Before adjusting for SES, Hispanic adults are `r round(100 * ame_h$estimate[1], 1)` percentage points more likely than non-Hispanic White adults to report fair or poor health. After adjustment the gap is `r round(100 * ame_h$estimate[2], 1)` points. I'd report the AMEs next to (or in place of) the odds ratios in a paper, and I'll expect them in yours.
 
+### Stratified models
+
+You'll often see models in the literature **stratified** by some predictor, fit separately for men and women, say, or for each racial and ethnic group. This is usually because the hypothesis is that the effect of one variable differs across the groups. Does education protect everyone's health equally, or does it pay off more for some groups than others?
+
+The first thing to do is test the interaction. If the education by race interaction isn't significant, we have no justification for stratifying, because the data don't tell us the effect of education varies by race. This is the test of parallel slopes from the analysis of covariance.
+
+```{r}
+#| label: interaction-test
+m_int <- svyglm(badhealth ~ race_eth * educ + agec + female + income + smoke + insured,
+                design = des_cc, family = quasibinomial())
+regTermTest(m_int, ~ race_eth:educ, method = "Wald")
+```
+
+```{r}
+#| label: interaction-p
+#| include: false
+p_int <- regTermTest(m_int, ~ race_eth:educ, method = "Wald")$p
+```
+
+The interaction test gives p = `r format.pval(p_int, digits = 2)`, so there is evidence that the education gradient isn't the same in every group. Now we can stratify. I fit the model separately for non-Hispanic White, non-Hispanic Black and Hispanic adults by subsetting the design.
+
+```{r}
+#| label: stratified
+groups <- c("NH White", "NH Black", "Hispanic")
+
+strat <- groups |>
+  set_names() |>
+  map(\(g) svyglm(badhealth ~ educ + agec + female + income + smoke + insured,
+                  design = subset(des_cc, race_eth == g),
+                  family = quasibinomial()))
+
+modelsummary(strat, coef_omit = "agec|Intercept",
+             coef_rename = \(x) str_remove_all(x, "educ|income|smoke"),
+             gof_map = "nobs", fmt = 3,
+             title = "Logit coefficients for fair or poor health, stratified by race and ethnicity")
+```
+
+To test whether one coefficient is the same in two separate models $j$ and $k$, the classic approach [@allison1999] is a $z$ test built from the two coefficients and their standard errors, which works because the two groups are independent subsamples:
+
+$$
+z = \frac{\beta_{j} - \beta_{k}}{\sqrt{\left[s.e.(\beta_{j})\right]^2 + \left[s.e.(\beta_{k})\right]^2}}
+$$
+
+```{r}
+#| label: z-test
+z_test <- function(m_j, m_k, term) {
+  d <- coef(m_j)[[term]] - coef(m_k)[[term]]
+  se <- sqrt(SE(m_j)[[term]]^2 + SE(m_k)[[term]]^2)
+  tibble(term = term, difference = d, z = d / se, p = 2 * pnorm(-abs(d / se)))
+}
+
+bind_rows(z_test(strat[["Hispanic"]], strat[["NH White"]], "educCollege graduate"),
+          z_test(strat[["NH Black"]], strat[["NH White"]], "educCollege graduate"))
+```
+
+```{r}
+#| label: z-values
+#| include: false
+zt <- bind_rows(z_test(strat[["Hispanic"]], strat[["NH White"]], "educCollege graduate"),
+                z_test(strat[["NH Black"]], strat[["NH White"]], "educCollege graduate"))
+```
+
+The college coefficient for Hispanic adults isn't significantly different from the one for non-Hispanic White adults (p = `r round(zt$p[1], 2)`). The one for Black adults is less negative, and the difference is significant (p = `r format.pval(zt$p[2], digits = 2)`), which would usually be read as a college degree being associated with a smaller health advantage for Black adults than for White adults. That's a finding with a real literature behind it, often discussed as "diminished returns" to education. But here's the catch, which brings us back to the scaling problem.
+
 ### Comparing effects across groups
 
 The same scaling problem shows up when you compare a coefficient across groups, for example the education gradient for men versus women in separate models. If the residual variance differs between the groups, the logit coefficients differ even when the underlying effects don't [@allison1999]. AMEs sidestep this too. Here I fit the model separately for men and women and compare the AME of a college degree (versus a high school diploma) on the probability scale.
@@ -331,6 +448,16 @@ dhs_test <- testing(dhs_split)
 
 ### A recipe and a workflow
 
+The model itself is the familiar logit:
+
+$$
+\log\left(\frac{\Pr(\text{modern method})}{1 - \Pr(\text{modern method})}\right) = \mathbf{x}'\boldsymbol\beta
+\quad\Longleftrightarrow\quad
+\Pr(\text{modern method}) = \frac{1}{1 + \exp(-\mathbf{x}'\boldsymbol\beta)}
+$$
+
+What's new is how we use it. Instead of reading the coefficients, we take each woman's predicted probability and turn it into a predicted class.
+
 A **recipe** describes the preprocessing (dummy variables, a quadratic for age), a **model specification** says what kind of model to fit, and a **workflow** bundles the two so the same steps get applied to every piece of data.
 
 ```{r}
@@ -375,6 +502,40 @@ These metrics measure different things:
 - **The Brier score** is the mean squared difference between the predicted probability and the 0/1 outcome, so lower is better.
 
 Here is the humbling part. Accuracy is `r pct(get_m("accuracy"))`, which sounds fine until you notice that only `r pct(base_rate)` of women use a modern method. A "model" that predicts "no" for everyone would be right `r pct(1 - base_rate)` of the time. Our model barely beats that, and its sensitivity is `r pct(get_m("sensitivity"))`, so it misses most users. The AUC of `r round(get_m("roc_auc"), 2)` says the model does carry real information. The 0.5 threshold is just a bad way to use it when the outcome is this uncommon.
+
+### Decision rules and the confusion matrix
+
+It helps to see where those numbers come from. The model gives each woman a probability. To turn probabilities into classes, we need a **decision rule**: a threshold, so that a woman is classified as a modern method user if $\Pr(y = \text{modern} \mid \mathbf{x}) > c$, and as a non-user otherwise. The default is $c = 0.5$. Cross-tabulating the observed classes against the predicted ones gives the **confusion matrix**.
+
+```{r}
+#| label: confusion
+cv_class <- collect_predictions(logit_cv) |>
+  mutate(pred_05 = factor(if_else(.pred_yes > 0.5, "yes", "no"), levels = c("yes", "no")),
+         pred_mean = factor(if_else(.pred_yes > base_rate, "yes", "no"),
+                            levels = c("yes", "no")))
+
+conf_mat(cv_class, truth = modern, estimate = pred_05)
+```
+
+The columns are the truth and the rows are the predictions. The diagonal holds the women the model gets right, the **true positives** (users predicted to be users) and **true negatives** (non-users predicted to be non-users). The off-diagonal cells are the mistakes: **false positives**, non-users the model calls users, and **false negatives**, users it misses. Accuracy is the diagonal divided by the total. Sensitivity is the true positives divided by all actual users (the first column), and specificity is the true negatives divided by all actual non-users (the second column). With the 0.5 rule, most of the users end up in the false negative cell.
+
+A simple alternative is to use the mean of the outcome as the threshold, calling a woman a likely user if her predicted probability is higher than the share of users in the training data.
+
+```{r}
+#| label: confusion-mean
+conf_mat(cv_class, truth = modern, estimate = pred_mean)
+
+bind_rows(
+  "Threshold 0.5" = metric_set(accuracy, sensitivity, specificity)(cv_class, truth = modern,
+                                                                   estimate = pred_05),
+  "Threshold = mean" = metric_set(accuracy, sensitivity, specificity)(cv_class, truth = modern,
+                                                                      estimate = pred_mean),
+  .id = "rule") |>
+  select(rule, .metric, .estimate) |>
+  pivot_wider(names_from = .metric, values_from = .estimate)
+```
+
+Lowering the threshold trades specificity for sensitivity. The model now catches far more of the users, at the cost of flagging more non-users, and overall accuracy falls. Which rule is better depends entirely on what the predictions are for.
 
 ### Choosing a threshold
 

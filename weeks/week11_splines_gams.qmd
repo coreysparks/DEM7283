@@ -1,0 +1,417 @@
+---
+title: "DEM 5283/7283 Week 11: Splines and Generalized Additive Models"
+subtitle: "Statistics for Demographic Data II"
+author: "Corey S. Sparks, PhD"
+date: last-modified
+bibliography: references.bib
+format:
+  html:
+    toc: true
+    toc-float: true
+    number-sections: false
+    self-contained: true
+    fig-width: 8
+    fig-height: 5
+execute:
+  engine: knitr
+  echo: true
+  warning: false
+  message: false
+---
+
+## Introduction
+
+Demographers spend a lot of time on age, and almost nothing important is a straight line in age. Mortality falls through childhood and rises exponentially in adulthood, fertility rises and falls, earnings grow fast early in a career and level off, and self-rated health declines in a pattern that's anything but linear. So far we've handled curves by cutting age into groups, which throws away information and makes the curve a staircase, or by adding $x^2$, which forces the curve to be a parabola, symmetric around its peak.
+
+**Splines** are a better way. A spline is a set of simple functions (lines or cubic polynomials) joined together at points called **knots**, so the curve can bend where the data bend and stay smooth everywhere. This week covers regression splines, which you can drop into any model we've used, including survey-weighted ones, and **generalized additive models** (GAMs), which choose how wiggly each curve should be from the data.
+
+## Setup
+
+The `splines` package comes with R and makes spline terms for any regression formula. `mgcv` fits GAMs [@wood2017].
+
+```{r}
+#| label: packages
+library(tidyverse)
+library(here)
+library(survey)
+library(splines)
+library(mgcv)
+library(ipumsr)
+library(sparkscolors)  # pak::pak("coreysparks/sparkscolors"), UTSA colors
+
+source(here("R", "get_mmsa.R"))
+source(here("R", "recode_mmsa.R"))
+```
+
+```{r}
+#| label: setup
+#| include: false
+options(survey.lonely.psu = "adjust")
+theme_set(
+  theme_minimal(base_size = 12) +
+    theme(text = element_text(colour = utsa_cols("midnight")),
+          panel.grid.major = element_line(colour = utsa_cols("smoke")),
+          panel.grid.minor = element_blank(),
+          legend.position = "bottom")
+)
+fmt <- function(x, d = 0) format(round(x, d), big.mark = ",", nsmall = d)
+pct <- function(x, d = 1) paste0(format(round(100 * x, d), nsmall = d), "%")
+```
+
+## Splines
+
+### Piecewise linear splines
+
+In the simplest case, the relationship between $x$ and $y$ changes at one point. Here are some simulated data where $y$ rises with $x$ until $x = 70$ and then levels off.
+
+```{r}
+#| label: sim-piecewise
+set.seed(7283)
+sim1 <- tibble(x = 1:100,
+               y = c(rnorm(70, 1 + 0.5 * (1:70), 1), rnorm(30, 35, 1)))
+
+fit_line <- lm(y ~ x, data = sim1)
+```
+
+A straight line through these data misses the change completely. Instead, we can let the line bend at a **knot**. Mathematically, a spline with knots $x_1, x_2, \ldots, x_k$ is a set of functions, one for each interval between knots:
+
+$$f(x) = \begin{cases}
+F_1(x) & \text{for } x \in [x_1, x_2] \\
+F_2(x) & \text{for } x \in [x_2, x_3] \\
+\quad\vdots \\
+F_{k}(x) & \text{for } x \in [x_{k-1}, x_k]
+\end{cases}$$
+
+joined so that they meet at the knots. For a linear spline with one knot at $c$, that's just one extra term in the regression, $(x - c)_+$, which is 0 below the knot and $x - c$ above it:
+
+$$y = \beta_0 + \beta_1 x + \beta_2 (x - c)_+ + \varepsilon$$
+
+Below the knot the slope is $\beta_1$, and above it the slope is $\beta_1 + \beta_2$.
+
+```{r}
+#| label: fig-piecewise
+#| fig-cap: "A straight line and a linear spline with one knot at x = 70, fit to simulated data."
+fit_knot <- lm(y ~ x + pmax(x - 70, 0), data = sim1)
+
+sim1 |>
+  mutate(`Straight line` = fitted(fit_line), `Spline, knot at 70` = fitted(fit_knot)) |>
+  pivot_longer(c(`Straight line`, `Spline, knot at 70`), names_to = "model", values_to = "fitted") |>
+  ggplot(aes(x = x)) +
+  geom_point(aes(y = y), colour = utsa_cols("smoke")) +
+  geom_line(aes(y = fitted, colour = model, linetype = model), linewidth = 1.2) +
+  scale_colour_utsa(palette = "primary") +
+  labs(colour = NULL, linetype = NULL)
+```
+
+::: {.callout-note title="Code explanation: `pmax(x - 70, 0)`"}
+`pmax()` is the "parallel maximum": it compares two vectors element by element and keeps the larger value. `pmax(x - 70, 0)` is 0 when `x` is below 70 (because `x - 70` is negative) and `x - 70` above it, which is exactly $(x - c)_+$. You can put a function like this directly in a model formula.
+:::
+
+The slope below the knot is `r round(coef(fit_knot)[2], 2)` (the true value is 0.5), and above it is `r round(coef(fit_knot)[2] + coef(fit_knot)[3], 2)` (the true value is 0). The spline found the change because I told it where to look. Usually we don't know where the knots should go, and the curve isn't made of straight pieces.
+
+### Cubic splines and more knots
+
+Most real curves are smooth, and pieces of straight lines have corners. **Cubic splines** use a cubic polynomial between each pair of knots, joined so that the curve and its first two derivatives are continuous at the knots, which makes the joins invisible. Here is a noisier curve, a sine wave, with cubic splines that use more and more flexibility.
+
+```{r}
+#| label: fig-sine
+#| fig-cap: "Cubic regression splines with increasing degrees of freedom, fit to a noisy sine curve."
+set.seed(7283)
+sim2 <- tibble(t = seq(0, 2 * pi, length.out = 200),
+               y = 3 * sin(2 * t) + rnorm(200, 0, 2))
+
+sim2 |>
+  mutate(`Straight line` = fitted(lm(y ~ t)),
+         `3 df` = fitted(lm(y ~ bs(t, df = 3))),
+         `6 df` = fitted(lm(y ~ bs(t, df = 6))),
+         `20 df` = fitted(lm(y ~ bs(t, df = 20)))) |>
+  pivot_longer(-c(t, y), names_to = "model", values_to = "fitted") |>
+  mutate(model = fct_inorder(model)) |>
+  ggplot(aes(x = t)) +
+  geom_point(aes(y = y), colour = utsa_cols("smoke")) +
+  geom_line(aes(y = fitted, colour = model, linetype = model), linewidth = 1.1) +
+  scale_colour_utsa() +
+  labs(colour = NULL, linetype = NULL)
+```
+
+With 3 degrees of freedom (a plain cubic), the curve can't follow the data. With 6 it captures the wave. With 20 it starts chasing the noise. That's the basic tradeoff with splines, and every method below is a way of deciding how much flexibility to allow.
+
+### B-splines and natural splines
+
+In R, you add a spline to a model formula with `bs()` (a **B-spline**) or `ns()` (a **natural spline**). Both turn one variable into several columns, called the **basis**, and the model estimates a coefficient for each column. The fitted curve is the sum of the columns times their coefficients.
+
+```{r}
+#| label: fig-basis
+#| fig-cap: "The four basis functions of a natural spline for age with 4 degrees of freedom. The fitted curve is a weighted sum of these."
+age_grid <- 18:80
+basis <- ns(age_grid, df = 4)
+
+as_tibble(unclass(basis)[, 1:4]) |>
+  set_names(paste("Basis", 1:4)) |>
+  mutate(age = age_grid) |>
+  pivot_longer(-age, names_to = "column", values_to = "value") |>
+  ggplot(aes(x = age, y = value, colour = column, linetype = column)) +
+  geom_line(linewidth = 1.1) +
+  scale_colour_utsa() +
+  labs(x = "Age", y = "Basis value", colour = NULL, linetype = NULL)
+```
+
+::: {.callout-note title="Code explanation: `bs()` and `ns()`"}
+1. `bs(x, df = 6)` makes a cubic B-spline basis with 6 columns. With `df` and no `knots`, R puts the knots at evenly spaced quantiles of `x`, so there are more knots where there are more data. You can also give the knots yourself, as in `bs(x, knots = c(30, 50, 65))`.
+2. `ns(x, df = 4)` makes a natural cubic spline basis. A natural spline is constrained to be a straight line beyond the outermost knots. Cubic polynomials tend to swing wildly at the edges of the data, where there are fewer observations, and the natural spline stops that. For age, I almost always use `ns()`.
+3. The individual coefficients on these columns don't mean anything you'd want to interpret. Interpret the curve, by predicting from the model over a range of values, as we'll do below.
+:::
+
+How many degrees of freedom? @harrell2015 suggests 3 to 5 knots for most problems, which is 4 to 6 degrees of freedom, and says that where the knots go matters much less than how many there are. You can also compare models with AIC, or let the data decide, which is what a GAM does.
+
+## Self-rated health and age in the BRFSS
+
+Here is the probability of reporting fair or poor health by age, in a survey-weighted logit model with a straight line in age and with a natural spline. The BRFSS gives age in single years, top-coded at 80.
+
+```{r}
+#| label: brfss-data
+brfss <- get_mmsa() |>
+  recode_mmsa() |>
+  mutate(age = age80)
+
+des <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt, data = brfss)
+
+fit_linear <- svyglm(badhealth ~ age + female + educ + race_eth,
+                     design = des, family = quasibinomial)
+fit_spline <- svyglm(badhealth ~ ns(age, df = 4) + female + educ + race_eth,
+                     design = des, family = quasibinomial)
+
+anova(fit_linear, fit_spline)
+```
+
+The two models are nested (a straight line is a special case of the spline), so the design-based likelihood ratio test from week 4 compares them, and it strongly prefers the spline. To see what the spline is doing, predict over the age range, holding the other variables at fixed values.
+
+```{r}
+#| label: fig-age-health
+#| fig-cap: "Predicted probability of fair or poor health by age, from linear and spline models. Women with a high school education who are NH White, with 95% confidence bands."
+newdat <- tibble(age = 18:80, female = 1, educ = "HS graduate", race_eth = "NH White")
+
+predict_curve <- function(fit, label) {
+  p <- predict(fit, newdata = newdat, type = "link", se.fit = TRUE)
+  newdat |>
+    mutate(model = label,
+           fit = plogis(coef(p)),
+           lower = plogis(coef(p) - 1.96 * SE(p)),
+           upper = plogis(coef(p) + 1.96 * SE(p)))
+}
+
+curves <- bind_rows(predict_curve(fit_linear, "Linear in age"),
+                    predict_curve(fit_spline, "Natural spline, 4 df"))
+
+ggplot(curves, aes(x = age, y = fit, colour = model, fill = model, linetype = model)) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.2, colour = NA) +
+  geom_line(linewidth = 1.1) +
+  scale_colour_utsa(palette = "primary") +
+  scale_fill_utsa(palette = "primary") +
+  scale_y_continuous(labels = scales::label_percent()) +
+  labs(x = "Age", y = "Probability of fair or poor health",
+       colour = NULL, fill = NULL, linetype = NULL)
+```
+
+::: {.callout-note title="Code explanation: predictions with confidence bands"}
+1. `predict()` on a `svyglm` with `se.fit = TRUE` returns the predictions and their design-based standard errors. `coef(p)` and `SE(p)` pull them out.
+2. I predict on the **link** (log-odds) scale, build the 95% interval there, and convert everything to probabilities with `plogis()`. Building the interval on the probability scale could give limits below 0 or above 1.
+3. `predict_curve()` wraps those steps in a function so I can do the same thing to both models, and `bind_rows()` stacks the results for plotting.
+:::
+
+The straight line says the probability rises steadily with age. The spline says something more interesting: fair or poor health rises quickly through the 30s, 40s and early 50s, then nearly levels off from the mid-50s to the mid-60s before rising again. That flat stretch is around the ages when people leave the labor force, and also when the people in the worst health have started to die, so the survivors are a selected group. The straight line averages over all of that.
+
+### Does the age pattern differ by education?
+
+A spline can interact with other variables like any other term. Here the age curve is allowed to differ by education.
+
+```{r}
+#| label: fig-age-educ
+#| fig-cap: "Predicted probability of fair or poor health by age and education, from a spline-by-education interaction model."
+fit_spline_educ <- svyglm(badhealth ~ ns(age, df = 4) * educ + female + race_eth,
+                          design = des, family = quasibinomial)
+anova(fit_spline, fit_spline_educ)
+
+newdat_educ <- expand_grid(age = 18:80, educ = levels(brfss$educ),
+                           female = 1, race_eth = "NH White")
+
+newdat_educ |>
+  mutate(fit = as.numeric(predict(fit_spline_educ, newdata = newdat_educ, type = "response")),
+         educ = factor(educ, levels = levels(brfss$educ))) |>
+  ggplot(aes(x = age, y = fit, colour = educ, linetype = educ)) +
+  geom_line(linewidth = 1.1) +
+  scale_colour_utsa() +
+  scale_y_continuous(labels = scales::label_percent()) +
+  labs(x = "Age", y = "Probability of fair or poor health", colour = NULL, linetype = NULL)
+```
+
+The education gap is already there among young adults, but it more than doubles through midlife, and it's largest in the late 50s and early 60s. That's the pattern the cumulative advantage literature predicts, and you'd miss it with age groups or a single age slope.
+
+::: {.callout-note title="Code explanation: `expand_grid()`"}
+`expand_grid()` makes every combination of the values you give it: here, every age from 18 to 80 for each of the four education levels, so 63 × 4 = 252 rows. Single values like `female = 1` are repeated on every row. It's the easiest way to build data for predictions.
+:::
+
+## Generalized additive models
+
+### Letting the data choose
+
+With regression splines, you choose the degrees of freedom. A **generalized additive model** [@hastie_tibshirani1990; @wood2017] estimates the curve and how wiggly it should be at the same time. The linear predictor is a sum of smooth functions and ordinary linear terms:
+
+$$g(E(y)) = \beta_0 + f_1(x_1) + f_2(x_2) + \beta_3 x_3 + \cdots$$
+
+Each $f$ is a spline with many knots, but the model adds a **penalty** for wiggliness: the more the curve bends, the more it costs. A smoothing parameter sets the balance between fitting the data and staying smooth, and `mgcv` estimates it from the data. The result is summarized by the **effective degrees of freedom** (edf) of each smooth. An edf near 1 means the curve is essentially a straight line, and larger values mean more bending.
+
+Here's the sine example again.
+
+```{r}
+#| label: gam-sim
+gam_sim <- gam(y ~ s(t), data = sim2)
+summary(gam_sim)$s.table
+```
+
+The GAM used about `r round(summary(gam_sim)$edf, 1)` effective degrees of freedom, close to the 6 that looked right above, without being told.
+
+### A GAM for self-rated health
+
+```{r}
+#| label: gam-brfss
+brfss_cc <- brfss |>
+  filter(!is.na(badhealth), !is.na(educ), !is.na(race_eth)) |>
+  mutate(w = mmsawt / mean(mmsawt))
+
+gam_health <- bam(badhealth ~ s(age, by = educ) + educ + female + race_eth,
+                  data = brfss_cc, weights = w, family = quasibinomial, discrete = TRUE)
+summary(gam_health)$s.table
+```
+
+::: {.callout-note title="Code explanation: `bam()` and `s(age, by = educ)`"}
+1. `gam()` and `bam()` fit the same models. `bam()` ("big additive model") is designed for large data sets, and `discrete = TRUE` speeds it up further by rounding the covariates to a grid of values. With `r fmt(nrow(brfss_cc))` respondents, `bam()` takes a couple of seconds and `gam()` takes much longer.
+2. `s(age)` is a smooth function of age. `s(age, by = educ)` fits a separate smooth for each education level. Because the smooths are centered at zero, you also need the main effect of `educ` to let the levels differ in their averages.
+3. `weights = w` uses the survey weights, rescaled to average 1. The point estimates are weighted, but the standard errors are not design-based. `mgcv` doesn't know about strata or clusters. For design-based inference on a curve, use `ns()` in `svyglm()` as above, and use the GAM to explore.
+:::
+
+The effective degrees of freedom for the college graduates' curve are `r round(summary(gam_health)$edf[4], 1)`, compared with `r round(min(summary(gam_health)$edf[1:3]), 1)` to `r round(max(summary(gam_health)$edf[1:3]), 1)` for the others: their curve is smoother, without the same midlife acceleration.
+
+```{r}
+#| label: fig-gam-health
+#| fig-cap: "Predicted probability of fair or poor health by age and education, from the GAM."
+newdat_educ |>
+  mutate(fit = predict(gam_health, newdata = newdat_educ, type = "response"),
+         educ = factor(educ, levels = levels(brfss$educ))) |>
+  ggplot(aes(x = age, y = fit, colour = educ, linetype = educ)) +
+  geom_line(linewidth = 1.1) +
+  scale_colour_utsa() +
+  scale_y_continuous(labels = scales::label_percent()) +
+  labs(x = "Age", y = "Probability of fair or poor health", colour = NULL, linetype = NULL)
+```
+
+The GAM and the regression spline tell the same story, which is reassuring. The GAM wiggles a little more, because it's free to.
+
+## The age-earnings profile
+
+One of the oldest curves in social science is the relationship between age and earnings. Earnings rise quickly in the first years of a career, as people gain experience and change jobs, then flatten, and eventually fall as people cut back their hours or retire. The traditional model is a quadratic in age (or experience), which forces the curve to be a symmetric hill. Here's the Texas ACS wage data from week 2, with a quadratic and a natural spline, separately for men and women.
+
+```{r}
+#| label: ipums-wages
+ddi <- read_ipums_ddi(here("data", "usa_00014.xml"))
+wages <- read_ipums_micro(ddi, data_file = here("data", "usa_00014_tx.dat.gz"),
+                          verbose = FALSE) |>
+  filter(EMPSTAT == 1, between(AGE, 18, 70), INCWAGE > 0, INCWAGE < 999998) |>
+  mutate(lnwage = log(INCWAGE),
+         sex = if_else(SEX == 2, "Women", "Men"))
+
+fit_quad <- lm(lnwage ~ (AGE + I(AGE^2)) * sex, data = wages, weights = PERWT)
+fit_ns <- lm(lnwage ~ ns(AGE, df = 6) * sex, data = wages, weights = PERWT)
+AIC(fit_quad, fit_ns)
+```
+
+```{r}
+#| label: fig-age-earnings
+#| fig-cap: "Predicted annual wages by age and sex, from quadratic and natural spline models, Texas, 2024 ACS. Employed people with wages."
+newdat_w <- expand_grid(AGE = 18:70, sex = c("Men", "Women"))
+
+newdat_w |>
+  mutate(Quadratic = exp(predict(fit_quad, newdata = newdat_w)),
+         `Natural spline, 6 df` = exp(predict(fit_ns, newdata = newdat_w))) |>
+  pivot_longer(c(Quadratic, `Natural spline, 6 df`), names_to = "model", values_to = "wage") |>
+  ggplot(aes(x = AGE, y = wage, colour = model, linetype = model)) +
+  geom_line(linewidth = 1.1) +
+  facet_wrap(~sex) +
+  scale_colour_utsa(palette = "primary") +
+  scale_y_continuous(labels = scales::label_dollar()) +
+  labs(x = "Age", y = "Predicted annual wage (geometric mean)", colour = NULL, linetype = NULL)
+```
+
+```{r}
+#| label: earnings-peak
+#| include: false
+peaks <- newdat_w |>
+  mutate(quad = exp(predict(fit_quad, newdata = newdat_w)),
+         spline = exp(predict(fit_ns, newdata = newdat_w))) |>
+  group_by(sex) |>
+  summarise(peak_quad = AGE[which.max(quad)], peak_spline = AGE[which.max(spline)])
+```
+
+The spline fits much better (its AIC is `r fmt(AIC(fit_quad) - AIC(fit_ns))` points lower). The quadratic puts men's peak at age `r peaks$peak_quad[peaks$sex == "Men"]`, and the spline at `r peaks$peak_spline[peaks$sex == "Men"]`, with a long plateau. More importantly, the quadratic understates how fast wages grow in the twenties and forces a decline after the peak that's as steep as the rise before it. For women, the spline shows growth stalling in the early thirties, the ages when many women have young children, and picking up again later, a pattern the quadratic can't show at all. (Remember from week 7 that these are annual wages, so part of that stall is fewer hours worked.)
+
+## Summary
+
+Splines let a curve bend where the data bend, with smooth joins at the knots. Natural splines (`ns()`) behave better than B-splines at the edges of the data, and 4 to 6 degrees of freedom are enough for most demographic curves. Splines are just extra columns in the design matrix, so they work in `svyglm()` and every other model we've used, and you can compare a spline to a straight line with a design-based likelihood ratio test. GAMs choose the amount of smoothing from the data and are excellent for exploring, but `mgcv` doesn't do design-based standard errors, so confirm what you find with regression splines in a survey model. Whatever you fit, interpret the curve by predicting from it and plotting, not by reading the coefficients.
+
+## Exercises
+
+These exercises are Homework 11.
+
+**1.** Fit the self-rated health model with `ns(age, df = k)` for `k` = 2, 3, 4, 6 and 8, and plot the predicted curves on one graph. Where do they start to disagree, and how many degrees of freedom would you use?
+
+```{r}
+#| label: ex-df
+#| eval: false
+# YOUR CODE HERE
+```
+
+**2.** BMI changes with age too. Fit a survey-weighted linear model for BMI with a natural spline in age interacted with sex, and plot the predicted BMI by age for men and women. Why might average BMI fall at the oldest ages? Think about who is still alive and still answering surveys.
+
+```{r}
+#| label: ex-bmi
+#| eval: false
+# YOUR CODE HERE
+```
+
+<details>
+<summary>One solution for exercise 2</summary>
+
+```{r}
+#| label: ex-bmi-solution
+#| eval: false
+fit_bmi <- svyglm(bmi ~ ns(age, df = 5) * female, design = des)
+
+nd <- expand_grid(age = 18:80, female = 0:1)
+nd |>
+  mutate(bmi = as.numeric(predict(fit_bmi, newdata = nd)),
+         sex = if_else(female == 1, "Women", "Men")) |>
+  ggplot(aes(x = age, y = bmi, colour = sex, linetype = sex)) +
+  geom_line(linewidth = 1.1) +
+  scale_colour_utsa(palette = "primary") +
+  labs(x = "Age", y = "Predicted BMI", colour = NULL, linetype = NULL)
+```
+
+Average BMI rises into middle age and falls after about 60. Part of that is aging (people lose muscle and weight late in life), and part is selection: people with very high BMI have higher mortality, so they are underrepresented among older survey respondents.
+
+</details>
+
+**3.** Add a smooth term for BMI, `s(bmi)`, to the GAM for fair or poor health. Plot its predicted effect, holding the other variables fixed. Is the relationship linear? Where is the risk lowest?
+
+```{r}
+#| label: ex-gam-bmi
+#| eval: false
+# YOUR CODE HERE
+```
+
+**4.** In the wage data, fit `ns(AGE, df = 6)` separately for workers with and without a bachelor's degree (`EDUC %in% 10:11`), and compare the shape of the age-earnings profiles. Where does each group peak?
+
+```{r}
+#| label: ex-earnings-educ
+#| eval: false
+# YOUR CODE HERE
+```

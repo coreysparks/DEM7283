@@ -1,0 +1,481 @@
+---
+title: "DEM 5283/7283 Week 9: Missing Data and Multiple Imputation"
+subtitle: "Statistics for Demographic Data II"
+author: "Corey S. Sparks, PhD"
+date: last-modified
+bibliography: references.bib
+format:
+  html:
+    toc: true
+    toc-float: true
+    number-sections: false
+    self-contained: true
+    fig-width: 8
+    fig-height: 5
+execute:
+  engine: knitr
+  echo: true
+  warning: false
+  message: false
+---
+
+## Introduction
+
+Every time we ask a question on a survey, there are reasons we might not get an answer, and every model you've fit so far this semester has quietly dealt with that by dropping anyone with a missing value on any variable in the model. That's called **listwise deletion**, or complete-case analysis, and it is the default in R, Stata, SAS and everything else. Sometimes it's fine. Often it throws away a lot of people, and if the people it throws away are different from the people it keeps, it biases the results too.
+
+This week covers why data go missing, what kinds of missingness we can and can't live with, the easy ways to fill in missing values (which are bad ways), and multiple imputation, which is the method I'd recommend for most demographic analyses. I'll pay particular attention to doing multiple imputation with survey data, because the usual textbook example drops the design, and you've spent eight weeks learning not to do that.
+
+## Setup
+
+The `mice` package does the imputation [@vanbuuren2011], and `mitools` combines the results across imputed data sets. The `survey` package can work directly with a list of imputed data sets, so the design stays in the analysis.
+
+```{r}
+#| label: packages
+library(tidyverse)
+library(here)
+library(survey)
+library(mice)
+library(mitools)
+library(sparkscolors)  # pak::pak("coreysparks/sparkscolors"), UTSA colors
+
+source(here("R", "get_mmsa.R"))
+source(here("R", "recode_mmsa.R"))
+```
+
+```{r}
+#| label: setup
+#| include: false
+options(survey.lonely.psu = "adjust")
+theme_set(
+  theme_minimal(base_size = 12) +
+    theme(text = element_text(colour = utsa_cols("midnight")),
+          panel.grid.major = element_line(colour = utsa_cols("smoke")),
+          panel.grid.minor = element_blank(),
+          legend.position = "bottom")
+)
+fmt <- function(x, d = 0) format(round(x, d), big.mark = ",", nsmall = d)
+pct <- function(x, d = 1) paste0(format(round(100 * x, d), nsmall = d), "%")
+```
+
+## Why data go missing
+
+### Reasons for missing data
+
+Survey methodologists sort missing data by *how much* of a person's information is missing.
+
+1. **Total nonresponse.** The sampled person never participates: they refuse, they're never home, they're too ill. We usually have nothing on them but the sampling frame information, and the survey weights are built to account for them (that was week 2's raking story).
+2. **Noncoverage.** The person was never in the sampling frame at all, like people without phones in a phone survey. This is also handled, as well as it can be, by the weights.
+3. **Item nonresponse.** The person participates but doesn't answer a particular question. They refuse, they say "I don't know," they give an answer that doesn't make sense, or the interviewer skips the question. This is what imputation is for.
+4. **Partial nonresponse.** Somewhere in between: someone starts the interview and quits partway, or answers one wave of a panel study and not the next. Agencies handle this with weights (dropping the partial cases and reweighting the rest) or by imputing the missing items.
+
+This week is about item nonresponse, because it's the kind *you* have to deal with. Income is the classic example. People don't like to tell a stranger on the phone how much money they make, but they're usually happy to tell you their age, education, and whether they own their home, and those things tell us a lot about their income.
+
+### Types of missing data
+
+@little_rubin2019 gave us the vocabulary everyone uses. The three types are about what the *probability of being missing* depends on.
+
+1. **Missing completely at random (MCAR).** Whether a value is missing has nothing to do with anything about the person, observed or not. A coffee spill on a stack of questionnaires is MCAR. Complete-case analysis is unbiased under MCAR; it just loses precision.
+2. **Missing at random (MAR).** Whether a value is missing depends on *other things we observed* about the person, but not on the missing value itself once we take those into account. If older and less educated respondents are less likely to report their income, but among people of the same age and education, the chance of reporting doesn't depend on income itself, income is MAR. The name is unfortunate, because MAR isn't random in any everyday sense.
+3. **Missing not at random (MNAR).** Whether a value is missing depends on the value itself, even after accounting for everything we observed. If the people with the highest incomes refuse to report them *because* their incomes are high, income is MNAR. Think of a question on satisfaction with a service: the most dissatisfied people may be the least likely to answer, so the answers we get are rosier than the truth.
+
+MCAR and MAR are called **ignorable**, because the methods below can recover unbiased estimates without modeling *why* the data are missing. MNAR is **non-ignorable**, and handling it requires assumptions you can't check with the data you have.
+
+### What the computer does
+
+Left to itself, software does one of two things. **Listwise deletion** drops the whole case if any variable in the model is missing. **Pairwise deletion** drops a case only from the calculations that need the missing variable, so a correlation matrix might be built from different people in each cell. Both give you fewer cases, and neither fixes bias unless the data are MCAR.
+
+## The data
+
+I'll use the Texas metro areas from the 2024 BRFSS, which keeps the imputation fast enough to run in class. Because the BRFSS strata are nested within states, the Texas respondents carry their full design (you saw this in week 2). The outcome is fair or poor self-rated health, and the predictors are income, education, race and ethnicity, age, sex, smoking, BMI and insurance.
+
+```{r}
+#| label: data
+tx <- get_mmsa() |>
+  recode_mmsa() |>
+  filter(texas, !is.na(badhealth)) |>
+  mutate(place = factor(place),
+         log_wt = log(mmsawt),
+         # income and education as ordered numeric codes (see below)
+         income_n = as.integer(income),
+         educ_n = as.integer(educ))
+
+analysis_vars <- c("badhealth", "income_n", "educ_n", "race_eth", "agec",
+                   "female", "smoke", "bmi", "insured")
+
+tx |>
+  summarise(across(all_of(analysis_vars), \(x) mean(is.na(x)))) |>
+  pivot_longer(everything(), names_to = "variable", values_to = "share_missing") |>
+  arrange(desc(share_missing)) |>
+  knitr::kable(digits = 3)
+```
+
+::: {.callout-note title="Code explanation: counting missing values with `across()`"}
+1. `across(all_of(analysis_vars), ...)` applies the same function to every column named in `analysis_vars`. `all_of()` says "these names are in a character vector," which is how you hand `across()` a list of columns you've stored ahead of time.
+2. `\(x) mean(is.na(x))` is an anonymous function (week 2's `\(d)` again). `is.na(x)` is `TRUE` where `x` is missing, and the mean of a `TRUE`/`FALSE` vector is the share that are `TRUE`.
+3. `pivot_longer()` turns the one-row result into one row per variable, which is easier to read and sort.
+:::
+
+```{r}
+#| label: complete-cases
+#| include: false
+n_all <- nrow(tx)
+n_cc <- tx |> select(all_of(analysis_vars)) |> drop_na() |> nrow()
+```
+
+Income is missing for `r pct(mean(is.na(tx$income_n)))` of respondents, which is typical for the BRFSS, and BMI for `r pct(mean(is.na(tx$bmi)))`. Put all nine variables in one model, and complete-case analysis keeps `r fmt(n_cc)` of the `r fmt(n_all)` respondents. We'd lose `r pct(1 - n_cc / n_all, 0)` of the sample before estimating anything.
+
+## The easy ways, which are the bad ways
+
+### Mean imputation
+
+The simplest fix is to replace every missing value with the mean of the observed values. Here it is for BMI.
+
+```{r}
+#| label: mean-imputation
+bmi_mean_imp <- if_else(is.na(tx$bmi), mean(tx$bmi, na.rm = TRUE), tx$bmi)
+
+tibble(version = c("Observed values only", "Mean imputed"),
+       mean = c(mean(tx$bmi, na.rm = TRUE), mean(bmi_mean_imp)),
+       median = c(median(tx$bmi, na.rm = TRUE), median(bmi_mean_imp)),
+       variance = c(var(tx$bmi, na.rm = TRUE), var(bmi_mean_imp))) |>
+  knitr::kable(digits = 2)
+```
+
+The mean doesn't change (it can't), the median barely moves, but the variance drops by `r pct(1 - var(bmi_mean_imp) / var(tx$bmi, na.rm = TRUE), 0)`. Everyone who was missing now sits exactly at the mean, which piles them up in the middle of the distribution and makes BMI look less variable than it is. Any regression coefficient involving BMI will be biased toward zero, and every standard error will be too small, because the model thinks it has `r fmt(sum(is.na(tx$bmi)))` real observations at the mean.
+
+```{r}
+#| label: fig-mean-imputation
+#| fig-cap: "BMI before and after mean imputation. The spike at the mean is the imputed values."
+tibble(Observed = tx$bmi, `Mean imputed` = bmi_mean_imp) |>
+  pivot_longer(everything(), names_to = "version", values_to = "bmi") |>
+  filter(!is.na(bmi), bmi < 60) |>
+  ggplot(aes(x = bmi, colour = version, linetype = version)) +
+  geom_freqpoly(aes(y = after_stat(density)), binwidth = 1, linewidth = 1) +
+  scale_colour_utsa(palette = "primary") +
+  labs(x = "BMI", y = "Density", colour = NULL, linetype = NULL)
+```
+
+### Modal imputation
+
+For a categorical variable, the equivalent is to fill in the most common category. Do that with income, and everyone who didn't report an income gets put in the most common income group, which changes the whole distribution.
+
+```{r}
+#| label: modal-imputation
+mode_income <- names(which.max(table(tx$income)))
+income_mode_imp <- replace_na(as.character(tx$income), mode_income)
+
+tibble(income = levels(tx$income)) |>
+  mutate(observed = as.numeric(prop.table(table(tx$income))),
+         mode_imputed = as.numeric(prop.table(table(factor(income_mode_imp, levels = income))))) |>
+  knitr::kable(digits = 3)
+```
+
+::: {.callout-note title="Code explanation: finding the mode"}
+`table(tx$income)` counts each income group. `which.max()` returns the position of the largest count (with its name attached), and `names()` pulls out the name, so `mode_income` is the label of the most common group. `replace_na()` fills each missing value with it.
+:::
+
+### Regression imputation, hot deck and predictive mean matching
+
+Better ideas use what we know about the person.
+
+1. **Regression imputation** fits a model for the variable with missing values, using the complete cases, and plugs in each missing person's predicted value. It uses the relationships in the data, but everyone with the same predictors gets the same imputed value, so it still understates the variance.
+2. **Hot deck imputation** finds respondents who look like the person with the missing value on the variables that are observed (the "donors") and borrows a donor's actual answer. The Census Bureau did this for decades, and the ACS still does.
+3. **Predictive mean matching (PMM)** combines the two. Fit the regression, compute predicted values for everyone, then for each missing case, find a few observed cases whose predicted values are close to the missing case's, and borrow one of their *actual* values at random. Because the imputed values are real observed values, they're always plausible (no negative BMIs, no income category 3.6), and the randomness keeps the variance honest.
+
+Any of these fills in each missing value once, and then we analyze the data as if the imputed values were real. That's the remaining problem: we don't know the missing values, and a single imputation hides that uncertainty.
+
+## Testing for MAR
+
+### Flag variables
+
+Before imputing, look at who's missing. Make a flag that's 1 if a value is missing, and model it with the things you observe.
+
+```{r}
+#| label: flag-model
+flag_fit <- glm(is.na(income_n) ~ badhealth + educ + agec + female + race_eth,
+                family = binomial, data = tx)
+
+broom::tidy(flag_fit) |>
+  select(term, estimate, std.error, p.value) |>
+  knitr::kable(digits = 3)
+```
+
+Missing income is clearly related to education, age and sex (and, for the NH Other group, race and ethnicity), so income is not MCAR, and complete-case analysis would keep a sample that's more educated and differs in age from the full one. Interestingly, once those are in the model, reporting income isn't related to self-rated health.
+
+::: {.callout-warning}
+This is easy to get wrong, so I want to be careful. A test like this can show that data are *not* MCAR. It can never show that they *are* MAR, because MAR is about whether missingness depends on the missing values themselves, and those are exactly the values you don't have. A flag model with no significant predictors tells you the missingness isn't related to what you observed, and that's all. Whether income is MAR or MNAR is a judgment about how people answer surveys, and you defend it with substantive arguments and sensitivity analyses, not with a p-value.
+:::
+
+## Multiple imputation
+
+### The idea
+
+Multiple imputation, due to @rubin1987, deals with the uncertainty problem directly. Instead of filling in each missing value once, fill it in $m$ times, each time with a random draw from a model of what the value might be. That gives $m$ complete data sets that agree on the observed values and differ on the imputed ones. Analyze each one the way you would have analyzed the complete data, and combine the results with **Rubin's rules**:
+
+1. The combined estimate is the average of the $m$ estimates, $\bar Q = \frac{1}{m}\sum_{i=1}^m \hat Q_i$.
+2. The within-imputation variance $\bar W$ is the average of the $m$ squared standard errors, the uncertainty we'd have if the data were complete.
+3. The between-imputation variance $B = \frac{1}{m-1}\sum_{i=1}^m (\hat Q_i - \bar Q)^2$ measures how much the estimates disagree because of the missing data.
+4. The total variance is $T = \bar W + (1 + \frac{1}{m})B$, and the standard error is $\sqrt{T}$.
+
+The **fraction of missing information** (FMI) is roughly $(1 + 1/m)B / T$, the share of the total variance that's due to the missing data. It's often much smaller than the share of cases with a missing value, because the other variables carry a lot of information about the missing ones.
+
+### Chained equations
+
+With several variables missing in different combinations, `mice` uses **multiple imputation by chained equations** [@vanbuuren2018]. It starts by filling every missing value with a random draw from the observed values. Then it goes through the variables one at a time, fitting a model for each one using all the others, and replacing that variable's missing values with draws from the model. One pass through all the variables is an iteration. After a number of iterations, the imputations settle down, and the last one becomes one imputed data set. The whole thing runs $m$ times.
+
+### Patterns of missingness
+
+`md.pattern()` shows which combinations of variables are missing together.
+
+```{r}
+#| label: md-pattern
+patterns <- md.pattern(select(tx, all_of(analysis_vars)), plot = FALSE)
+head(patterns, 8)
+tail(patterns, 1)
+```
+
+Each row is a pattern, with 1 for observed and 0 for missing. The row names are how many respondents have that pattern, the last column is how many variables they're missing, and the last row (from `tail()`) is the total number missing for each variable. The first row is the complete cases. Most of the rest are missing just one thing, usually income or BMI. (`md.pattern()` also draws this as a picture if you leave out `plot = FALSE`.)
+
+### Building the imputation model with a survey design
+
+Two rules matter here, and the second one is where survey data are different.
+
+1. **Include the outcome.** It feels like cheating, but leaving the outcome out of the imputation model imputes values that are unrelated to the outcome, which biases the coefficients toward zero.
+2. **Include the design.** The probability of being sampled is related to who people are, and the weights and strata carry that information. @reiter2006 showed that leaving the design out of the imputation model can bias the results, and including the design variables (or functions of them) fixes it. I'll include the log of the weight and the metro area. The BRFSS strata are nested within metro areas, and the 51 Texas strata as a factor would make every imputation model enormous and slow, so metro area is a reasonable stand-in.
+
+There's one more choice. Income and education are ordered categories. If I leave them as factors, `mice` uses multinomial logit models to impute them, which ignore the ordering and are slow. As integer codes with PMM, the imputed values are always one of the observed categories, and the ordering is used.
+
+```{r}
+#| label: imp-data
+imp_data <- tx |>
+  select(all_of(analysis_vars), place, log_wt)
+
+ini <- mice(imp_data, maxit = 0)
+ini$method
+```
+
+::: {.callout-note title="Code explanation: `mice()` with `maxit = 0`"}
+Running `mice()` with zero iterations doesn't impute anything, but it sets everything up and tells you what it *would* do. `ini$method` shows the imputation method for each variable: `"pmm"` for numeric ones, `"logreg"` for two-category factors, `"polyreg"` (multinomial logit) for unordered factors with more than two categories, and `""` for variables with nothing missing. If you want to change a method, or stop a variable from being used to predict others, you edit `ini$method` or `ini$predictorMatrix` and pass them back to `mice()`. Here the defaults are what I want.
+:::
+
+### How many imputations?
+
+The old advice was that 5 imputations are enough, and for the point estimates, it usually is. For standard errors that don't change when you rerun the imputation with a new seed, you need more. @vonhippel2020 gives a two-stage rule. Run a small pilot, estimate the largest fraction of missing information, and then use
+
+$$m = 1 + \frac{1}{2}\left(\frac{FMI}{CV}\right)^2$$
+
+where $CV$ is how much you're willing to let the standard errors vary from one run to the next (0.05 means 5%). I'll write a function that analyzes a set of imputations with the design, since we'll use it twice.
+
+```{r}
+#| label: mi-analysis-function
+f_health <- badhealth ~ factor(income_n) + factor(educ_n) + race_eth + agec +
+  female + smoke + bmi + insured
+
+analyze_mi <- function(imp) {
+  completed <- complete(imp, action = "all") |>
+    map(\(d) mutate(d, ststr = tx$ststr, mmsawt = tx$mmsawt))
+  des_mi <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt,
+                      data = imputationList(completed))
+  fits <- with(des_mi, svyglm(f_health, family = quasibinomial))
+  MIcombine(fits)
+}
+```
+
+::: {.callout-note title="Code explanation: analyzing imputed survey data"}
+1. `complete(imp, action = "all")` returns a list of the $m$ completed data sets.
+2. `map(\(d) mutate(d, ...))` adds the strata and weights back to each one. I left them out of the imputation data, and since nothing in them is missing, they're the same in every data set.
+3. `imputationList()` tells `svydesign()` that its data are a set of imputations. The result is a list of $m$ survey designs, all with the same strata and weights.
+4. `with(des_mi, svyglm(...))` fits the same model to each design, giving $m$ fitted models.
+5. `MIcombine()` applies Rubin's rules and returns the combined coefficients, the combined variance matrix and the fraction of missing information for each coefficient (`$missinfo`).
+
+This keeps the survey design in every step. The usual `mice` workflow, `with(imp, glm(...))` and `pool()`, would ignore it.
+:::
+
+```{r}
+#| label: mi-pilot
+#| cache: true
+pilot <- mice(imp_data, m = 5, maxit = 10, seed = 7283, printFlag = FALSE)
+pilot_fit <- analyze_mi(pilot)
+max_fmi <- max(pilot_fit$missinfo)
+m_needed <- ceiling(1 + 0.5 * (max_fmi / 0.05)^2)
+c(max_fmi = max_fmi, m_needed = m_needed)
+```
+
+The largest fraction of missing information in the pilot is `r round(max_fmi, 2)`, and the rule says we need about `r m_needed` imputations for standard errors stable to within 5%. I'll use 20, which is comfortably more. (@vonhippel2020 suggests using the upper end of a confidence interval for the FMI, which is a bit more conservative.)
+
+```{r}
+#| label: mi-final
+#| cache: true
+imp <- mice(imp_data, m = 20, maxit = 10, seed = 7283, printFlag = FALSE)
+mi_fit <- analyze_mi(imp)
+```
+
+This takes a few minutes, and the chunk is cached, so it only runs again if the code changes.
+
+### Checking the imputations
+
+Before using the results, check two things. First, did the chained equations settle down? Each line below is one imputation's mean of the imputed BMI values at each iteration. If they mix together and don't trend up or down, the algorithm has converged.
+
+```{r}
+#| label: fig-convergence
+#| fig-cap: "Mean of the imputed BMI values at each iteration, one line per imputation."
+tibble(iteration = rep(1:10, times = 20),
+       imputation = rep(1:20, each = 10),
+       mean_bmi = as.vector(imp$chainMean["bmi", , ])) |>
+  ggplot(aes(x = iteration, y = mean_bmi, group = imputation)) +
+  geom_line(colour = utsa_cols("midnight"), alpha = 0.5) +
+  scale_x_continuous(breaks = 1:10) +
+  labs(x = "Iteration", y = "Mean of imputed BMI")
+```
+
+Second, do the imputed values look plausible? They don't have to match the observed values (if the data are MAR and not MCAR, they shouldn't), but they should be in the same range.
+
+```{r}
+#| label: fig-imputed-bmi
+#| fig-cap: "Observed BMI and imputed BMI from all 20 imputations."
+complete(imp, action = "long") |>
+  mutate(imputed = rep(is.na(imp_data$bmi), times = 20)) |>
+  filter(imputed | .imp == 1, bmi < 60) |>
+  mutate(source = if_else(imputed, "Imputed", "Observed")) |>
+  ggplot(aes(x = bmi, colour = source, linetype = source)) +
+  geom_density(linewidth = 1) +
+  scale_colour_utsa(palette = "primary") +
+  labs(x = "BMI", y = "Density", colour = NULL, linetype = NULL)
+```
+
+::: {.callout-note title="Code explanation: the diagnostic plots"}
+1. `imp$chainMean` is an array with one row per variable, one column per iteration and one layer per imputation, holding the mean of the imputed values. `as.vector()` flattens the BMI slice column by column, which is why the `iteration` and `imputation` vectors are built with `rep(..., times = )` and `rep(..., each = )`.
+2. `complete(imp, action = "long")` stacks all 20 completed data sets into one long data frame, with `.imp` saying which imputation each row came from. To separate the observed values from the imputed ones, I flag the rows where BMI was missing in the original data, repeated 20 times, and keep the observed values only once (`.imp == 1`).
+3. `mice` has its own plots (`plot(imp)`, `densityplot(imp)`, `stripplot(imp)`), which are quicker to type but use the `lattice` package and its colors.
+:::
+
+The imputed BMI values have almost the same distribution as the observed ones (a mean of `r round(mean(unlist(imp$imp$bmi)), 2)`, against `r round(mean(tx$bmi, na.rm = TRUE), 2)`), and none of them are implausible, which is what PMM guarantees. They don't have to agree this closely. Here, the people missing BMI aren't very different from everyone else on the things that predict BMI.
+
+### Comparing complete cases and multiple imputation
+
+```{r}
+#| label: compare
+des <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt, data = tx)
+fit_cc <- svyglm(f_health, design = des, family = quasibinomial)
+
+compare <- tibble(term = names(coef(fit_cc)),
+                  complete_case = coef(fit_cc),
+                  se_complete_case = SE(fit_cc),
+                  multiple_imputation = coef(mi_fit),
+                  se_multiple_imputation = sqrt(diag(vcov(mi_fit))),
+                  fmi = mi_fit$missinfo)
+knitr::kable(compare, digits = 3)
+```
+
+```{r}
+#| label: fig-compare
+#| fig-cap: "Log-odds of fair or poor health, complete-case analysis and multiple imputation, with 95% confidence intervals."
+#| fig-height: 7
+compare |>
+  filter(term != "(Intercept)") |>
+  pivot_longer(c(complete_case, multiple_imputation), names_to = "method", values_to = "estimate") |>
+  mutate(se = if_else(method == "complete_case", se_complete_case, se_multiple_imputation),
+         method = if_else(method == "complete_case", "Complete cases", "Multiple imputation")) |>
+  ggplot(aes(x = estimate, y = fct_rev(fct_inorder(term)), colour = method, shape = method)) +
+  geom_vline(xintercept = 0, colour = utsa_cols("smoke")) +
+  geom_pointrange(aes(xmin = estimate - 1.96 * se, xmax = estimate + 1.96 * se),
+                  position = position_dodge(width = 0.6)) +
+  scale_colour_utsa(palette = "primary") +
+  labs(x = "Log-odds", y = NULL, colour = NULL, shape = NULL)
+```
+
+```{r}
+#| label: compare-numbers
+#| include: false
+ed <- compare |> filter(str_detect(term, "educ"))
+inc <- compare |> filter(str_detect(term, "income"))
+```
+
+Three things to see here. First, the standard errors from multiple imputation are smaller for nearly every coefficient, because we're using `r fmt(n_all)` respondents instead of `r fmt(n_cc)`. Second, some estimates move. With complete cases, high school graduates and people with some college look no different from people without a high school diploma (coefficients of `r round(ed$complete_case[1], 2)` and `r round(ed$complete_case[2], 2)`), and only college graduates stand out (`r round(ed$complete_case[3], 2)`). After imputation, all three are clearly negative (`r round(ed$multiple_imputation[1], 2)`, `r round(ed$multiple_imputation[2], 2)` and `r round(ed$multiple_imputation[3], 2)`). Remember that less educated respondents are less likely to report their income, so complete-case analysis drops them disproportionately, and with them a good part of the education gradient. Third, the FMI column is largest for the income coefficients, up to `r round(max(inc$fmi), 2)`, because income is the most-missing variable, but it's well below the `r pct(mean(is.na(tx$income_n)), 0)` of respondents missing income, because education, age and the rest tell us a lot about income.
+
+::: {.callout-tip}
+Multiple imputation doesn't create information. It uses the information in the observed variables about the missing ones, and it's honest about what's left over. If your imputation model is wrong (it leaves out an interaction the analysis model includes, for example), the imputations will be wrong in the same way. The rule of thumb is that the imputation model should be at least as rich as the analysis model, and include anything that predicts the missing values or whether they're missing.
+:::
+
+## Summary
+
+Complete-case analysis is the default everywhere, and it's unbiased only when the data are MCAR, which they almost never are. Mean and modal imputation keep the sample size but distort distributions and shrink variances, so don't use them. Multiple imputation fills in the missing values several times, analyzes each completed data set, and combines the results with Rubin's rules, so the standard errors include the uncertainty from the missing data. With survey data, put the design variables in the imputation model and analyze each imputed data set with the design, using `imputationList()` and `MIcombine()`. You can show that data aren't MCAR, but you can never show from the data that they're MAR, so you have to argue for it. For more, @allison2002 is a short and readable introduction, @schafer_graham2002 is a classic review, and @vanbuuren2018 covers `mice` in detail and is free online.
+
+## Exercises
+
+These exercises are Homework 9.
+
+**1.** Make a flag for missing BMI and model it with the same predictors as the income flag model. Is BMI MCAR? Who is less likely to report their height and weight?
+
+```{r}
+#| label: ex-flag-bmi
+#| eval: false
+# YOUR CODE HERE
+```
+
+**2.** Rerun the final imputation with `m = 5` and a different seed, and compare the standard errors of the income coefficients to the ones from `m = 20`. How much do they change? Relate your answer to the von Hippel rule.
+
+```{r}
+#| label: ex-m5
+#| eval: false
+# YOUR CODE HERE
+```
+
+**3.** Rerun the imputation *without* `place` and `log_wt` in the imputation model, analyze it with the design, and compare the coefficients to the ones above. Do any of them move by more than a standard error?
+
+```{r}
+#| label: ex-no-design
+#| eval: false
+# YOUR CODE HERE
+```
+
+<details>
+<summary>One solution for exercise 3</summary>
+
+```{r}
+#| label: ex-no-design-solution
+#| eval: false
+imp_nodesign <- mice(select(imp_data, -place, -log_wt), m = 20, maxit = 10,
+                     seed = 7283, printFlag = FALSE)
+fit_nodesign <- analyze_mi(imp_nodesign)
+
+tibble(term = names(coef(mi_fit)),
+       with_design = coef(mi_fit),
+       without_design = coef(fit_nodesign),
+       difference_in_se = (without_design - with_design) / sqrt(diag(vcov(mi_fit)))) |>
+  knitr::kable(digits = 3)
+```
+
+`analyze_mi()` still uses the design for the *analysis*, which is what you want. Only the imputation model changes.
+
+</details>
+
+**4.** Using the imputed data, estimate the prevalence of fair or poor health by income group with `svyby()`, and compare it to the complete-case estimate. (Hint: `with(des_mi, svyby(...))` returns one result per imputation; `MIcombine()` combines them. You'll need to rebuild `des_mi` outside the function.)
+
+```{r}
+#| label: ex-prevalence
+#| eval: false
+# YOUR CODE HERE
+```
+
+<details>
+<summary>One solution for exercise 4</summary>
+
+```{r}
+#| label: ex-prevalence-solution
+#| eval: false
+completed <- complete(imp, action = "all") |>
+  map(\(d) mutate(d, ststr = tx$ststr, mmsawt = tx$mmsawt))
+des_mi <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt,
+                    data = imputationList(completed))
+
+prev_mi <- with(des_mi, svyby(~badhealth, ~income_n, design = .design, FUN = svymean)) |>
+  MIcombine()
+prev_mi
+
+svyby(~badhealth, ~income_n, design = des, FUN = svymean, na.rm = TRUE)
+```
+
+Inside `with()` on an imputation list, the current design is called `.design`.
+
+</details>
