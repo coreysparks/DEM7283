@@ -1,0 +1,398 @@
+---
+title: "DEM 5283/7283 Week 15: Tree-Based Machine Learning with tidymodels"
+subtitle: "Statistics for Demographic Data II"
+author: "Corey S. Sparks, PhD"
+date: last-modified
+bibliography: references.bib
+format:
+  html:
+    toc: true
+    toc-float: true
+    number-sections: false
+    self-contained: true
+    fig-width: 8
+    fig-height: 5
+execute:
+  engine: knitr
+  echo: true
+  warning: false
+  message: false
+---
+
+## Introduction
+
+Almost everything this semester has been about **explanation**: estimating how an outcome is related to particular predictors, with standard errors, so we can say something about the population. Week 4 introduced a different goal, **prediction**: getting the outcome right for people the model hasn't seen. Machine learning methods are built for prediction, and they've become common in social science [@molina_garip2019], for imputing missing data, targeting services, and screening for risk, among other things.
+
+This week covers tree-based methods (classification trees, random forests and boosted trees) using the `tidymodels` framework [@kuhn_silge2022], and three things that matter as much as the algorithm: honest evaluation with cross-validation, calibration (do the predicted probabilities mean what they say?), and fairness (does the model work equally well for everyone?). The last one is where a demographer's training is most useful, and where prediction for policy can go wrong.
+
+## Setup
+
+```{r}
+#| label: packages
+library(tidyverse)
+library(here)
+library(tidymodels)
+library(sparkscolors)  # pak::pak("coreysparks/sparkscolors"), UTSA colors
+
+source(here("R", "get_mmsa.R"))
+source(here("R", "recode_mmsa.R"))
+
+tidymodels_prefer()
+```
+
+::: {.callout-note title="Code explanation: `tidymodels` and `tidymodels_prefer()`"}
+`tidymodels` is a collection of packages that work together, the way the `tidyverse` is: `rsample` splits data, `recipes` prepares predictors, `parsnip` specifies models, `workflows` bundles a recipe and a model, `tune` tunes, and `yardstick` measures performance. Several of its function names clash with functions in other packages (`dplyr` and `MASS` both have a `select()`, for example). `tidymodels_prefer()` tells R to use the `tidymodels` version whenever there's a conflict, which saves a lot of confusing error messages.
+:::
+
+```{r}
+#| label: setup
+#| include: false
+theme_set(
+  theme_minimal(base_size = 12) +
+    theme(text = element_text(colour = utsa_cols("midnight")),
+          panel.grid.major = element_line(colour = utsa_cols("smoke")),
+          panel.grid.minor = element_blank(),
+          legend.position = "bottom")
+)
+fmt <- function(x, d = 0) format(round(x, d), big.mark = ",", nsmall = d)
+pct <- function(x, d = 1) paste0(format(round(100 * x, d), nsmall = d), "%")
+```
+
+## Prediction is a different goal
+
+When we explain, we care about the coefficients: their size, their sign, and their standard errors. When we predict, we care about the predictions, and the coefficients are just a means to an end. That changes three things.
+
+1. **We judge a model on new data.** A model can fit the data it was estimated on very well and predict new data badly, because it has learned the noise. That's **overfitting**, and the only protection is to test the model on data it hasn't seen.
+2. **Flexibility is a tool, not a risk to avoid.** A model with thousands of interactions and nonlinearities would be uninterpretable as an explanation, but if it predicts better on new data, it's a better predictive model.
+3. **Prediction is not causation.** A variable that predicts an outcome may do so because it causes it, because the outcome causes it, or because both share a cause. For prediction, it doesn't matter. For deciding what to do about the outcome, it matters enormously (that was week 14).
+
+## Trees
+
+### Classification trees
+
+A classification tree predicts an outcome by asking a series of yes/no questions about the predictors. It starts with everyone, finds the single split of a single predictor that best separates people with and without the outcome, then repeats within each of the two groups, and so on. The final groups are the **leaves**, and the prediction for anyone in a leaf is the share of people in that leaf with the outcome. Trees find interactions and nonlinearities automatically, because each split happens within the groups made by the previous splits.
+
+### Data
+
+I'll predict fair or poor self-rated health in the 2024 BRFSS, from demographics, socioeconomic status, health behaviors, and the numbers of poor physical and mental health days. To keep the run time reasonable, I take a random sample of 20,000 respondents with complete data.
+
+```{r}
+#| label: data
+set.seed(7283)
+brfss <- get_mmsa() |>
+  recode_mmsa() |>
+  mutate(badhealth = factor(badhealth, levels = c(1, 0), labels = c("Fair/poor", "Good+")),
+         age = age80,
+         employed = factor(case_when(employ1 %in% 1:2 ~ "Employed",
+                                     employ1 %in% 3:4 ~ "Unemployed",
+                                     employ1 %in% 5:6 ~ "Homemaker or student",
+                                     employ1 == 7 ~ "Retired",
+                                     employ1 == 8 ~ "Unable to work")),
+         exercise = case_when(exerany2 == 1 ~ 1, exerany2 == 2 ~ 0)) |>
+  select(badhealth, age, female, race_eth, educ, income, insured, smoke, bmi,
+         ment_days, phys_days, employed, exercise) |>
+  drop_na() |>
+  slice_sample(n = 20000)
+
+count(brfss, badhealth) |> mutate(share = n / sum(n))
+```
+
+::: {.callout-note title="Code explanation: the outcome as a factor"}
+`tidymodels` classification models need the outcome to be a factor, and by default they treat the *first* level as the event of interest. That's why I put `"Fair/poor"` first. Get this backward, and the ROC AUC will come out as 1 minus the right answer.
+:::
+
+### Splitting the data
+
+The first step in any predictive analysis is to set aside a **test set** that you don't touch until the very end. Everything else (choosing a model, tuning it) happens on the **training set**, using **cross-validation**: split the training data into $v$ folds, fit the model on $v - 1$ of them, evaluate it on the one left out, and repeat until every fold has been left out once.
+
+```{r}
+#| label: split
+split <- initial_split(brfss, prop = 0.75, strata = badhealth)
+train <- training(split)
+test <- testing(split)
+folds <- vfold_cv(train, v = 5, strata = badhealth)
+```
+
+`strata = badhealth` makes sure each piece has the same share of people in fair or poor health, which matters when the outcome is uncommon.
+
+### A recipe and three models
+
+A **recipe** says how to prepare the predictors. Here, it just turns factors into dummy variables, which the logit model and the boosted trees need. Then I specify three models: a logit model, as a baseline; a random forest; and boosted trees.
+
+```{r}
+#| label: models
+rec <- recipe(badhealth ~ ., data = train) |>
+  step_dummy(all_nominal_predictors())
+
+spec_logit <- logistic_reg()
+
+spec_rf <- rand_forest(trees = 300, mtry = tune(), min_n = tune()) |>
+  set_engine("ranger", importance = "impurity") |>
+  set_mode("classification")
+
+spec_xgb <- boost_tree(trees = 300, tree_depth = tune(), learn_rate = tune()) |>
+  set_engine("xgboost") |>
+  set_mode("classification")
+
+wf_logit <- workflow(rec, spec_logit)
+wf_rf <- workflow(rec, spec_rf)
+wf_xgb <- workflow(rec, spec_xgb)
+```
+
+::: {.callout-note title="Code explanation: model specifications"}
+1. `rand_forest()` and `boost_tree()` describe the *kind* of model, and `set_engine()` picks the package that fits it (`ranger` for random forests and `xgboost` for boosted trees). The same specification could be fit by different engines without changing anything else.
+2. `tune()` marks a **tuning parameter**, a setting that isn't estimated from the data by the model itself, so we have to choose it by trying different values and comparing them in cross-validation.
+3. `workflow(rec, spec)` bundles the recipe and the model, so the data preparation is redone inside every fold. That matters: if you prepare the data once using all of it, information from the held-out fold leaks into the training.
+:::
+
+**Random forests** [@breiman2001] grow hundreds of deep trees, each on a bootstrap sample of the data and choosing each split from a random subset of `mtry` predictors, and average their predictions. Any one tree overfits, but the errors of many different trees mostly cancel. `min_n` is the smallest number of people allowed in a leaf. **Boosted trees** [@chen_guestrin2016] grow shallow trees one at a time, each one fit to the errors of the trees before it, and add them up with a small weight, the `learn_rate`. `tree_depth` limits how many splits each tree can make.
+
+### Tuning and comparing with cross-validation
+
+```{r}
+#| label: tune
+#| cache: true
+metrics <- metric_set(roc_auc, brier_class, accuracy)
+
+res_logit <- fit_resamples(wf_logit, folds, metrics = metrics)
+
+res_rf <- tune_grid(wf_rf, folds, grid = 5, metrics = metrics)
+
+xgb_params <- extract_parameter_set_dials(wf_xgb) |>
+  update(learn_rate = learn_rate(range = c(-2, -0.5)))  # 0.01 to 0.3, on the log10 scale
+res_xgb <- tune_grid(wf_xgb, folds, grid = 5, param_info = xgb_params, metrics = metrics)
+```
+
+::: {.callout-note title="Code explanation: tuning"}
+1. `fit_resamples()` fits a model with nothing to tune once per fold. `tune_grid()` does the same for each of several candidate values of the tuning parameters (`grid = 5` asks for five combinations, spread out over the plausible range).
+2. `extract_parameter_set_dials()` pulls out the tuning parameters and their default ranges, and `update()` changes one. The default range for `learn_rate` goes down to 0.0000000001, which, with only 300 trees, gives models that barely learn anything, so I narrowed it.
+3. The metrics: **ROC AUC** is the probability that a randomly chosen person in fair or poor health gets a higher predicted probability than a randomly chosen person in good health, from 0.5 (no better than chance) to 1 (perfect). The **Brier score** is the mean squared difference between the predicted probability and the outcome, so lower is better, and it rewards good probabilities, not just good rankings. **Accuracy** is the share classified correctly at a 0.5 threshold, which, as week 4 showed, can be misleading with an uncommon outcome.
+:::
+
+```{r}
+#| label: cv-results
+bind_rows(
+  collect_metrics(res_logit) |> mutate(model = "Logit"),
+  show_best(res_rf, metric = "roc_auc", n = 1) |> select(.config) |>
+    inner_join(collect_metrics(res_rf), by = ".config") |> mutate(model = "Random forest"),
+  show_best(res_xgb, metric = "roc_auc", n = 1) |> select(.config) |>
+    inner_join(collect_metrics(res_xgb), by = ".config") |> mutate(model = "Boosted trees")
+) |>
+  select(model, .metric, mean, std_err) |>
+  pivot_wider(names_from = .metric, values_from = c(mean, std_err)) |>
+  knitr::kable(digits = 3)
+```
+
+```{r}
+#| label: cv-numbers
+#| include: false
+auc_logit <- collect_metrics(res_logit) |> filter(.metric == "roc_auc") |> pull(mean)
+auc_rf <- show_best(res_rf, metric = "roc_auc", n = 1)$mean
+auc_xgb <- show_best(res_xgb, metric = "roc_auc", n = 1)$mean
+```
+
+The three models predict almost equally well: cross-validated AUCs of `r round(auc_logit, 3)` for the logit, `r round(auc_rf, 3)` for the random forest and `r round(auc_xgb, 3)` for boosted trees. That's a common result with survey data like this. The predictors are a handful of categorical variables and a few counts, and a logit model with main effects captures most of what there is to capture. Tree-based methods shine when there are many predictors, complicated interactions, or strong nonlinearities, and their advantages are often smaller than the hype suggests. Always fit a simple baseline; sometimes it's the model you should use.
+
+### The final model on the test set
+
+Now, and only now, use the test set. I'll take the boosted trees with their best tuning values, fit them on the whole training set, and evaluate them on the test set, along with the logit for comparison.
+
+```{r}
+#| label: final
+#| cache: true
+final_xgb <- wf_xgb |>
+  finalize_workflow(select_best(res_xgb, metric = "roc_auc")) |>
+  last_fit(split, metrics = metrics)
+final_logit <- last_fit(wf_logit, split, metrics = metrics)
+
+bind_rows(collect_metrics(final_logit) |> mutate(model = "Logit"),
+          collect_metrics(final_xgb) |> mutate(model = "Boosted trees")) |>
+  select(model, .metric, .estimate) |>
+  pivot_wider(names_from = .metric, values_from = .estimate) |>
+  knitr::kable(digits = 3)
+```
+
+::: {.callout-note title="Code explanation: `last_fit()`"}
+`finalize_workflow()` plugs the best tuning values into the workflow, and `last_fit()` fits it to the full training set and evaluates it on the test set in one step. Its name is a reminder: this should be the last thing you fit. If you go back and change the model after seeing the test results, the test set is no longer an honest measure of performance.
+:::
+
+```{r}
+#| label: fig-roc
+#| fig-cap: "ROC curves for the logit and boosted tree models on the test set."
+bind_rows(collect_predictions(final_logit) |> mutate(model = "Logit"),
+          collect_predictions(final_xgb) |> mutate(model = "Boosted trees")) |>
+  group_by(model) |>
+  roc_curve(badhealth, `.pred_Fair/poor`) |>
+  ggplot(aes(x = 1 - specificity, y = sensitivity, colour = model, linetype = model)) +
+  geom_abline(colour = utsa_cols("smoke")) +
+  geom_path(linewidth = 1.1) +
+  coord_equal() +
+  scale_colour_utsa(palette = "primary") +
+  labs(x = "False positive rate (1 - specificity)", y = "True positive rate (sensitivity)",
+       colour = NULL, linetype = NULL)
+```
+
+The two ROC curves lie almost on top of each other.
+
+### What does the model use?
+
+A random forest or boosted model has no coefficients to read, but you can ask how much each predictor contributes. **Variable importance** for a random forest adds up how much each predictor's splits improve the fit across all the trees.
+
+```{r}
+#| label: fig-importance
+#| fig-cap: "Variable importance from the random forest (total decrease in node impurity), fit to the training data."
+#| cache: true
+final_rf <- wf_rf |>
+  finalize_workflow(select_best(res_rf, metric = "roc_auc")) |>
+  fit(train)
+
+extract_fit_engine(final_rf)$variable.importance |>
+  enframe(name = "variable", value = "importance") |>
+  slice_max(importance, n = 12) |>
+  ggplot(aes(x = importance, y = fct_reorder(variable, importance))) +
+  geom_col(fill = utsa_cols("midnight")) +
+  labs(x = "Importance", y = NULL)
+```
+
+The number of poor physical health days dominates, followed by BMI, poor mental health days, the employment category "unable to work," and age. None of that is surprising, and that's worth noticing. Machine learning mostly rediscovered what a demographer would have put in the model in the first place. Importance tells you what the model uses to predict, not what causes poor health: physical health days and inability to work are partly consequences of poor health, which is fine for prediction and useless for explanation.
+
+## Calibration
+
+A good ranking isn't enough if you're going to use the predicted probabilities themselves, say, to estimate how many people in a county are in fair or poor health. A model is **calibrated** if, among people with a predicted probability of 20%, about 20% have the outcome. Check by grouping people by their predicted probability and comparing the average prediction with the observed share in each group.
+
+```{r}
+#| label: fig-calibration
+#| fig-cap: "Calibration of the logit and boosted tree models on the test set. Points on the diagonal are perfectly calibrated."
+bind_rows(collect_predictions(final_logit) |> mutate(model = "Logit"),
+          collect_predictions(final_xgb) |> mutate(model = "Boosted trees")) |>
+  group_by(model, bin = ntile(`.pred_Fair/poor`, 10)) |>
+  summarise(predicted = mean(`.pred_Fair/poor`),
+            observed = mean(badhealth == "Fair/poor"), .groups = "drop") |>
+  ggplot(aes(x = predicted, y = observed, colour = model, shape = model)) +
+  geom_abline(colour = utsa_cols("smoke")) +
+  geom_line() +
+  geom_point(size = 2.5) +
+  coord_equal() +
+  scale_colour_utsa(palette = "primary") +
+  scale_x_continuous(labels = scales::label_percent()) +
+  scale_y_continuous(labels = scales::label_percent()) +
+  labs(x = "Mean predicted probability (deciles)", y = "Observed share in fair/poor health",
+       colour = NULL, shape = NULL)
+```
+
+::: {.callout-note title="Code explanation: a calibration plot by hand"}
+`ntile(x, 10)` splits the predictions into ten groups of equal size, from lowest to highest. Within each group, I compare the mean predicted probability with the share who actually reported fair or poor health. The `probably` package has functions that draw these plots for you (`cal_plot_breaks()`), but they're only a few lines of `dplyr`, and doing it yourself makes clear what the plot shows.
+:::
+
+Both models are reasonably well calibrated, with points near the diagonal. Logit models tend to be well calibrated by construction. Random forests and boosted trees often aren't, especially with small learning rates or few trees, and it's worth checking before using their probabilities.
+
+## Fairness
+
+### Does the model work equally well for everyone?
+
+A model that predicts well on average can predict badly for some groups. That matters if predictions are used to make decisions about people. @obermeyer2019 studied an algorithm used by U.S. health systems to decide who got extra care management. It predicted health care *costs* as a stand-in for health care *needs*, and because less money is spent on Black patients with the same level of illness, it systematically underestimated how sick Black patients were. Fixing the target variable roughly tripled the share of Black patients flagged for extra care.
+
+Here is our model's performance by race and ethnicity, in the test set.
+
+```{r}
+#| label: fairness
+preds <- collect_predictions(final_xgb) |>
+  bind_cols(select(test, race_eth))
+
+auc_group <- preds |>
+  group_by(race_eth) |>
+  roc_auc(badhealth, `.pred_Fair/poor`) |>
+  select(race_eth, auc = .estimate)
+
+calib_group <- preds |>
+  group_by(race_eth) |>
+  summarise(n = n(),
+            observed = mean(badhealth == "Fair/poor"),
+            predicted = mean(`.pred_Fair/poor`))
+
+left_join(calib_group, auc_group, by = "race_eth") |>
+  mutate(difference = predicted - observed) |>
+  knitr::kable(digits = 3)
+```
+
+```{r}
+#| label: fairness-numbers
+#| include: false
+fg <- left_join(calib_group, auc_group, by = "race_eth")
+```
+
+::: {.callout-note title="Code explanation: binding predictions to the test data"}
+`collect_predictions()` returns the predictions for the test set in the same row order as the test data, so `bind_cols()` can attach the race and ethnicity column. Grouping by it and calling `roc_auc()` computes the AUC within each group.
+:::
+
+The model ranks people best among NH White adults (AUC `r round(fg$auc[fg$race_eth == "NH White"], 2)`) and less well for Hispanic adults (`r round(fg$auc[fg$race_eth == "Hispanic"], 2)`) and NH Black adults (`r round(fg$auc[fg$race_eth == "NH Black"], 2)`). Look at the calibration columns too: if the predicted share is below the observed share for a group, the model underestimates how many people in that group are in poor health, and anyone using it to allocate resources by predicted need would shortchange them. That's what happens for Hispanic adults: the model predicts that `r pct(fg$predicted[fg$race_eth == "Hispanic"])` are in fair or poor health, and `r pct(fg$observed[fg$race_eth == "Hispanic"])` actually are. These test-set groups are small (some have only a few hundred people), so these differences are noisy, and you'd want to confirm them with more data or cross-validation before acting on them. But this is exactly the check to do, and most published prediction models never report it.
+
+Why would a model work less well for some groups? Because they're a minority of the training data, so the model learns less about them. Because the predictors mean different things in different groups (an income of \$50,000 goes further in some places than others, and self-rated health questions may be answered differently across languages and cultures). And because the outcome itself can be measured differently, as in the Obermeyer study.
+
+### Limits of prediction for policy
+
+Three cautions before you use a predictive model to make decisions about people.
+
+1. **A prediction is not a reason.** A model that predicts poor health from being unable to work doesn't tell you that finding people jobs will improve their health. If the decision is about *intervening*, you're back to the causal questions of week 14.
+2. **Check performance by group, and check calibration, not just overall accuracy.** Report both. Decide in advance what level of difference between groups would be unacceptable.
+3. **Think about what the outcome measures.** A model is only as good as its target. If the outcome is a proxy (costs for need, arrests for crime, test scores for learning), the model will reproduce whatever biases the proxy has.
+
+::: {.callout-tip title="Survey weights in tidymodels"}
+I ignored the survey weights here, which is common in prediction, where the goal is to predict well for the sample at hand. If the model is meant to predict well for the *population*, `tidymodels` supports case weights: wrap the weight with `importance_weights()` in the data, and add `add_case_weights()` to the workflow. Weighted metrics are also available in `yardstick`. See @kuhn_silge2022 for the details.
+:::
+
+## Summary
+
+Prediction is a different goal from explanation: we judge models on data they haven't seen, using a held-out test set and cross-validation, and flexibility is a tool rather than a danger. Trees split the data into groups with a series of yes/no questions; random forests average many trees grown on bootstrap samples, and boosted trees add up many shallow trees fit to each other's errors. In survey data with a few categorical predictors, a well-specified logit model often predicts as well as either, so always fit a baseline. Check calibration as well as discrimination, and check both for each group the model will be used on. A prediction is not a causal effect, and a model that predicts well on average can still fail the people who most need it to work. @james2021 is a free, readable introduction to the methods, and @kuhn_silge2022 covers `tidymodels`.
+
+## Exercises
+
+These exercises are Homework 15.
+
+**1.** Fit a single classification tree to the training data (`decision_tree(tree_depth = 4) |> set_mode("classification")`), print it with `extract_fit_engine()`, and describe the first three splits in words. How does its test-set AUC compare with the random forest's?
+
+```{r}
+#| label: ex-tree
+#| eval: false
+# YOUR CODE HERE
+```
+
+<details>
+<summary>One solution for exercise 1</summary>
+
+```{r}
+#| label: ex-tree-solution
+#| eval: false
+wf_tree <- workflow(rec, decision_tree(tree_depth = 4) |> set_mode("classification"))
+fit_tree <- fit(wf_tree, train)
+extract_fit_engine(fit_tree)
+
+augment(fit_tree, test) |>
+  roc_auc(badhealth, `.pred_Fair/poor`)
+```
+
+</details>
+
+**2.** Remove the two variables that are closest to being measures of the outcome itself, `phys_days` and `ment_days`, and refit the logit and random forest models with cross-validation. How much does performance drop? Which predictors become most important?
+
+```{r}
+#| label: ex-drop
+#| eval: false
+# YOUR CODE HERE
+```
+
+**3.** Using the logit model from the test set, compute the sensitivity and specificity by race and ethnicity at a threshold equal to the overall prevalence of fair or poor health (the week 4 decision rule). Would a program that used this rule to offer services treat the groups equally?
+
+```{r}
+#| label: ex-threshold
+#| eval: false
+# YOUR CODE HERE
+```
+
+**4.** Refit the boosted tree model with `trees = 1000` and compare its cross-validated AUC and Brier score with the 300-tree model. Is the extra computing time worth it?
+
+```{r}
+#| label: ex-trees
+#| eval: false
+# YOUR CODE HERE
+```

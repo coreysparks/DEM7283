@@ -1,0 +1,385 @@
+---
+title: "DEM 5283/7283 Week 14: Causal Inference Foundations"
+subtitle: "Statistics for Demographic Data II"
+author: "Corey S. Sparks, PhD"
+date: last-modified
+bibliography: references.bib
+format:
+  html:
+    toc: true
+    toc-float: true
+    number-sections: false
+    self-contained: true
+    fig-width: 8
+    fig-height: 5
+execute:
+  engine: knitr
+  echo: true
+  warning: false
+  message: false
+---
+
+## Introduction
+
+All semester, I've been careful to say "associated with" and not "causes." In week 7, I said decomposition is accounting, not causal inference, and in weeks 10 and 12 that within and contextual effects describe patterns without telling us why. This week is about what it takes to make a causal claim from observational data like the surveys we use, and two tools that help. **Directed acyclic graphs** (DAGs) make your assumptions about what causes what explicit, and tell you which variables to adjust for and which to leave alone. **Propensity score methods** adjust for the variables the DAG identifies in a way that lets you check whether the adjustment worked. Neither one makes an observational study into an experiment, and I'll end with a way to ask how wrong you might be.
+
+The example is a question with real policy stakes: if people without health insurance had it, how much more likely would they be to get a routine checkup?
+
+## Setup
+
+`dagitty` and `ggdag` draw and analyze DAGs [@textor2016], `WeightIt` [@greifer_weightit] and `MatchIt` estimate propensity scores and weights, `cobalt` checks balance, and `EValue` does the sensitivity analysis.
+
+```{r}
+#| label: packages
+library(tidyverse)
+library(here)
+library(survey)
+library(dagitty)
+library(ggdag)
+library(WeightIt)
+library(MatchIt)
+library(cobalt)
+library(marginaleffects)
+library(EValue)
+library(sparkscolors)  # pak::pak("coreysparks/sparkscolors"), UTSA colors
+
+source(here("R", "get_mmsa.R"))
+source(here("R", "recode_mmsa.R"))
+```
+
+```{r}
+#| label: setup
+#| include: false
+options(survey.lonely.psu = "adjust")
+theme_set(
+  theme_minimal(base_size = 12) +
+    theme(text = element_text(colour = utsa_cols("midnight")),
+          panel.grid.major = element_line(colour = utsa_cols("smoke")),
+          panel.grid.minor = element_blank(),
+          legend.position = "bottom")
+)
+fmt <- function(x, d = 0) format(round(x, d), big.mark = ",", nsmall = d)
+pct <- function(x, d = 1) paste0(format(round(100 * x, d), nsmall = d), "%")
+```
+
+## Potential outcomes
+
+### What a causal effect is
+
+The modern framework for causal inference starts with **potential outcomes**. For each person $i$, imagine two versions of the outcome: $Y_i(1)$, whether they'd get a checkup *if* they had insurance, and $Y_i(0)$, whether they'd get one *if* they didn't. The causal effect of insurance for that person is $Y_i(1) - Y_i(0)$. The problem, sometimes called the fundamental problem of causal inference, is that we only ever see one of the two. An insured person's $Y_i(0)$ is a counterfactual: it didn't happen.
+
+So we settle for averages over groups of people. Three are common.
+
+1. The **average treatment effect** (ATE), $E[Y(1) - Y(0)]$, averages over everyone.
+2. The **average treatment effect on the treated** (ATT) averages over people who actually got the treatment: what did insurance do for the insured?
+3. The **average treatment effect on the controls** (ATC) averages over people who didn't: what *would* insurance do for the uninsured?
+
+These can differ, because the effect of insurance is probably different for different people. For policy, the ATC is usually the question: an insurance expansion would cover the people who are currently uninsured, so we want the effect for them. That's what I'll estimate.
+
+### Confounding
+
+If we just compare insured and uninsured people, we're comparing $E[Y(1) \mid \text{insured}]$ with $E[Y(0) \mid \text{uninsured}]$. That's only the causal effect if the insured and uninsured would have had the same checkup rates under the same insurance status, and they wouldn't. Insured people are older, richer, more educated, and more likely to be employed, and all of those affect getting a checkup on their own. Those variables are **confounders**: they affect both the treatment and the outcome.
+
+The key assumption that lets us estimate a causal effect from observational data is **conditional exchangeability** (also called no unmeasured confounding, or ignorability): among people with the same values of the confounders $X$, insurance status is as good as random. If that holds, and if people with every combination of $X$ have some chance of being both insured and uninsured (**positivity**), we can estimate causal effects by comparing like with like. @hernan_robins2020 is the best book-length introduction, and it's free online.
+
+## Directed acyclic graphs
+
+### Drawing your assumptions
+
+Which variables are confounders? That's not a statistical question; it's a question about how the world works. A **DAG** [@pearl2009] is a picture of your answer. Each variable is a node, and an arrow from $A$ to $B$ means you believe $A$ directly causes $B$. "Directed" means every edge has an arrow, and "acyclic" means you can't follow the arrows in a loop back to where you started.
+
+Here's my DAG for insurance and checkups. Age, sex, race and ethnicity, education, income, employment and marital status all affect both insurance (through employer coverage, Medicaid eligibility, a spouse's plan, the ability to pay) and checkups. Insurance affects checkups directly and through having a regular doctor.
+
+```{r}
+#| label: fig-dag
+#| fig-cap: "A DAG for the effect of health insurance on having a routine checkup."
+#| fig-height: 6
+dag <- dagify(
+  checkup ~ insured + doctor + age + female + race + educ + income + employed + married,
+  doctor ~ insured + age + income,
+  insured ~ age + female + race + educ + income + employed + married,
+  income ~ educ + employed + race + age,
+  employed ~ educ + age,
+  exposure = "insured", outcome = "checkup",
+  coords = list(x = c(insured = 0, checkup = 4, doctor = 2, age = 1, female = 3, race = 0.5,
+                      educ = 1.5, income = 2.5, employed = 3.5, married = 2),
+                y = c(insured = 0, checkup = 0, doctor = 1, age = -1.5, female = -1.5, race = -2.5,
+                      educ = -3, income = -2.2, employed = -3, married = -0.9))
+)
+
+ggdag(dag, text = FALSE, node_size = 14) +
+  geom_dag_point(colour = utsa_cols("midnight"), size = 14) +
+  geom_dag_text(colour = "white", size = 2.6) +
+  theme_dag()
+```
+
+::: {.callout-note title="Code explanation: `dagify()`"}
+`dagify()` takes formulas where the left side is a variable and the right side lists its direct causes, so `doctor ~ insured + age + income` means "insurance, age and income each have an arrow into having a regular doctor." `exposure` and `outcome` mark the treatment and the outcome. `coords` places the nodes so the picture is readable; without it, `ggdag()` picks a layout at random. `geom_dag_point()` and `geom_dag_text()` redraw the nodes and labels in our colors.
+:::
+
+### What to adjust for
+
+The DAG tells us which variables to adjust for, using the **backdoor criterion**: adjust for a set of variables that blocks every path from the treatment to the outcome that starts with an arrow *into* the treatment (a "backdoor" path), without adjusting for anything caused by the treatment. `dagitty` finds those sets for you.
+
+```{r}
+#| label: adjustment-sets
+adjustmentSets(dag)
+```
+
+The minimal set is the seven demographic and socioeconomic variables. Two things are *not* in it, and both matter.
+
+1. **Mediators.** Having a regular doctor is on the path from insurance to checkups. Adjusting for it would remove part of the effect we're trying to estimate, the part that works by giving people a doctor. Don't adjust for variables caused by the treatment.
+2. **Colliders.** A collider is a variable caused by two others, like $X \rightarrow C \leftarrow Y$. Two causes of a collider are independent until you condition on it; then they become associated. The classic example: if admission to a selective program depends on either talent or connections, then among the admitted, talent and connections are negatively correlated, even if they're unrelated in the population [@elwert_winship2014]. Adjusting for a collider, or selecting your sample on one, creates bias that wasn't there. A surprising number of "controls" in published regressions are colliders.
+
+```{r}
+#| label: fig-collider
+#| fig-cap: "A collider. X and Y are independent, but conditioning on C, which both cause, makes them associated."
+#| fig-height: 3
+collider <- dagify(C ~ X + Y, coords = list(x = c(X = 0, C = 1, Y = 2), y = c(X = 0, C = -1, Y = 0)))
+
+ggdag(collider, text = FALSE, node_size = 12) +
+  geom_dag_point(colour = utsa_cols("midnight"), size = 12) +
+  geom_dag_text(colour = "white") +
+  theme_dag()
+```
+
+The DAG is only as good as your knowledge. If I've left out a confounder (like health status, which affects both insurance through Medicaid disability eligibility and checkups), no method below will fix it. Drawing the DAG doesn't make the assumptions true, but it makes them visible, so readers can argue with them.
+
+## The data
+
+The BRFSS asks how long it's been since each respondent's last routine checkup. I'll use adults 18 to 64, since nearly everyone 65 and over has Medicare.
+
+```{r}
+#| label: data
+brfss <- get_mmsa() |>
+  recode_mmsa() |>
+  mutate(checkup = case_when(checkup1 == 1 ~ 1,               # within the past year
+                             checkup1 %in% c(2:4, 8) ~ 0),    # longer ago, or never
+         employed = case_when(employ1 %in% 1:2 ~ "Employed",
+                              employ1 %in% 3:4 ~ "Unemployed",
+                              employ1 %in% 5:6 ~ "Homemaker or student",
+                              employ1 == 7 ~ "Retired",
+                              employ1 == 8 ~ "Unable to work"),
+         married = case_when(marital == 1 ~ 1, marital %in% 2:6 ~ 0),
+         age = age80) |>
+  filter(agec != "65+") |>
+  select(checkup, insured, age, female, race_eth, educ, income, employed, married,
+         mmsawt, ststr) |>
+  drop_na() |>
+  mutate(sw = mmsawt / mean(mmsawt))       # survey weight rescaled to average 1
+
+des <- svydesign(ids = ~1, strata = ~ststr, weights = ~sw, data = brfss)
+svyby(~checkup, ~insured, design = des, FUN = svymean)
+```
+
+```{r}
+#| label: naive
+#| include: false
+fit_naive <- svyglm(checkup ~ insured, design = des, family = quasibinomial)
+naive <- avg_comparisons(fit_naive, variables = "insured", wts = "(weights)")
+```
+
+`r pct(1 - weighted.mean(brfss$insured, brfss$sw))` of these adults are uninsured. The unadjusted difference in the share with a checkup in the past year is `r round(100 * naive$estimate, 1)` percentage points. Some of that is confounding.
+
+::: {.callout-note}
+I dropped people with missing values on any of these variables, which is about a quarter of the sample, mostly because of income. A real analysis would use multiple imputation from week 9 first, and then do everything below within each imputed data set.
+:::
+
+## Propensity scores
+
+### The idea
+
+With seven confounders, many of them categorical, there are thousands of combinations of $X$, and we can't compare insured and uninsured people within every one. @rosenbaum_rubin1983 showed that we don't have to. The **propensity score**, $e(X) = \Pr(\text{insured} \mid X)$, is a single number that summarizes the confounders, and if exchangeability holds given $X$, it also holds given $e(X)$. So we can balance the groups on the propensity score instead of on every combination of the confounders. @austin2011 is a good practical introduction.
+
+There are two main ways to use it.
+
+1. **Matching** pairs each uninsured person with an insured person who has a similar propensity score, and compares the matched groups.
+2. **Weighting** reweights the groups so that each looks like the target population. For the ATC, the uninsured keep a weight of 1, and each insured person gets a weight of $(1 - e)/e$, which makes the insured look like the uninsured. (For the ATE, everyone gets $1/\Pr(\text{the treatment they got})$, and for the ATT, the insured keep 1 and the uninsured get $e/(1 - e)$.)
+
+### Propensity scores with survey data
+
+With survey data, there are two populations to think about: the population the survey represents, and the population of people the propensity weights describe. @dugoff2014 recommend fitting the propensity score model with the survey weights and then multiplying the propensity weights by the survey weights for the outcome analysis, so that the estimate describes the treatment effect in the survey's target population. `WeightIt` does the first part with its `s.weights` argument.
+
+```{r}
+#| label: weightit
+f_ps <- insured ~ age + I(age^2) + female + race_eth + educ + income + employed + married
+
+w_glm <- weightit(f_ps, data = brfss, method = "glm", estimand = "ATC", s.weights = "sw")
+summary(w_glm)
+```
+
+::: {.callout-note title="Code explanation: `weightit()`"}
+1. The formula is the propensity score model: the treatment on the left, the confounders on the right. Its job is balance, not prediction, so include what the DAG says and don't worry about significance.
+2. `method = "glm"` estimates the propensity score with a logit model, and `estimand = "ATC"` computes the ATC weights from it.
+3. `s.weights = "sw"` names the survey weight, which is used in fitting the propensity model and in the balance statistics. The weights `weightit()` returns *don't* include the survey weights; you multiply them in for the outcome model.
+4. `summary()` shows the range of the weights and the **effective sample size** (ESS), roughly how many unweighted observations the weighted sample is worth. Very large weights shrink the ESS, and they're a warning that some people are carrying a lot of the estimate.
+:::
+
+### Checking balance
+
+The point of the propensity score is to balance the confounders, so check whether it did. The usual measure is the **standardized mean difference**: the difference in means between groups divided by the standard deviation. A common rule is that it should be below 0.1 for every covariate after weighting.
+
+```{r}
+#| label: fig-love
+#| fig-cap: "Standardized mean differences between insured and uninsured adults, before and after weighting."
+#| fig-height: 7
+love.plot(w_glm, thresholds = c(m = 0.1), abs = TRUE, binary = "std",
+          colors = c(utsa_cols("orange")[[1]], utsa_cols("midnight")[[1]]),
+          shapes = c("triangle", "circle"), var.order = "unadjusted",
+          sample.names = c("Unweighted", "Weighted")) +
+  theme(legend.position = "bottom")
+```
+
+Before weighting, the insured and uninsured differ by more than 0.1 standard deviations on most of the confounders, by more than 0.5 on some, like income and Hispanic ethnicity. After weighting, every one is under 0.1. In the weighted data, insured and uninsured adults look alike on everything in the model. That's the thing propensity scores can do that ordinary regression can't: you can see whether the adjustment worked, before you look at the outcome.
+
+::: {.callout-note title="Code explanation: `love.plot()`"}
+`love.plot()` from `cobalt` plots the standardized mean difference for every covariate, before and after adjustment. `abs = TRUE` plots absolute values, `binary = "std"` standardizes binary variables too, `thresholds = c(m = 0.1)` draws the 0.1 line, and `var.order = "unadjusted"` sorts the covariates by how unbalanced they were. `bal.tab(w_glm)` gives the same information as a table.
+:::
+
+### Estimating the effect
+
+Now the outcome model. With balance achieved by the weights, the outcome model can be simple: checkup on insurance, with the propensity weights times the survey weights.
+
+```{r}
+#| label: ps-estimate
+brfss$w_ps <- w_glm$weights * brfss$sw
+des_ps <- svydesign(ids = ~1, strata = ~ststr, weights = ~w_ps, data = brfss)
+fit_ps <- svyglm(checkup ~ insured, design = des_ps, family = quasibinomial)
+
+atc_ps <- avg_comparisons(fit_ps, variables = "insured", wts = "(weights)")
+atc_ps
+```
+
+::: {.callout-warning}
+The standard errors here treat the propensity weights as fixed, which isn't quite right, because they were estimated. In practice, that usually makes them a little conservative for the ATE and ATC. For exact standard errors, use the `glm_weightit()` function in `WeightIt`, which accounts for the estimation of the weights (but not the survey strata), or bootstrap the whole procedure with replicate weights, as in week 7.
+:::
+
+### Other ways to get there
+
+Logit propensity weights are one choice among many. **Entropy balancing** [@hainmueller2012] skips the propensity model and finds weights that make the means of the covariates exactly equal across groups, while keeping the weights as even as possible. **Matching** finds an insured person who looks like each uninsured person. And plain regression adjustment, followed by averaging the predicted difference over the uninsured (like the average marginal effects from week 3), estimates the same ATC under different assumptions.
+
+```{r}
+#| label: other-methods
+# entropy balancing
+w_eb <- weightit(f_ps, data = brfss, method = "ebal", estimand = "ATC", s.weights = "sw")
+brfss$w_eb <- w_eb$weights * brfss$sw
+fit_eb <- svyglm(checkup ~ insured, family = quasibinomial,
+                 design = svydesign(ids = ~1, strata = ~ststr, weights = ~w_eb, data = brfss))
+atc_eb <- avg_comparisons(fit_eb, variables = "insured", wts = "(weights)")
+
+# nearest neighbor matching, with replacement
+m_out <- matchit(f_ps, data = brfss, method = "nearest", estimand = "ATC",
+                 replace = TRUE, s.weights = ~sw)
+matched <- match.data(m_out) |> mutate(w_m = weights * sw)
+fit_m <- svyglm(checkup ~ insured, family = quasibinomial,
+                design = svydesign(ids = ~1, strata = ~ststr, weights = ~w_m, data = matched))
+atc_m <- avg_comparisons(fit_m, variables = "insured", wts = "(weights)")
+
+# regression adjustment, averaged over the uninsured
+fit_reg <- svyglm(update(f_ps, checkup ~ insured + .), design = des, family = quasibinomial)
+atc_reg <- avg_comparisons(fit_reg, variables = "insured",
+                           newdata = filter(brfss, insured == 0), wts = "sw")
+
+results <- tibble(method = c("Unadjusted", "Regression adjustment", "Propensity score weights",
+                             "Entropy balancing", "Nearest neighbor matching"),
+                  estimate = c(naive$estimate, atc_reg$estimate, atc_ps$estimate,
+                               atc_eb$estimate, atc_m$estimate),
+                  se = c(naive$std.error, atc_reg$std.error, atc_ps$std.error,
+                         atc_eb$std.error, atc_m$std.error))
+knitr::kable(results, digits = 3)
+```
+
+::: {.callout-note title="Code explanation: `matchit()` and `update()`"}
+1. `matchit()` estimates the propensity score and, for each uninsured person, finds the insured person with the closest score. With `replace = TRUE`, an insured person can be the match for more than one uninsured person, and `match.data()` returns the matched sample with a `weights` column that counts how many times each person was used.
+2. `update(f_ps, checkup ~ insured + .)` builds a new formula from an old one. The `.` on the right stands for everything that was on the right of `f_ps`, so this is checkup on insurance plus all the confounders. It saves retyping the list, and it guarantees the outcome model adjusts for the same variables as the propensity model.
+:::
+
+```{r}
+#| label: fig-methods
+#| fig-cap: "Estimated effect of insurance on having a checkup in the past year, for currently uninsured adults 18 to 64, with 95% confidence intervals."
+results |>
+  mutate(method = fct_rev(fct_inorder(method))) |>
+  ggplot(aes(x = estimate, y = method)) +
+  geom_pointrange(aes(xmin = estimate - 1.96 * se, xmax = estimate + 1.96 * se),
+                  colour = utsa_cols("midnight")) +
+  scale_x_continuous(labels = scales::label_percent()) +
+  labs(x = "Difference in probability of a checkup", y = NULL)
+```
+
+Regression adjustment and the two weighting methods land close together, between `r round(100 * min(results$estimate[2:4]), 1)` and `r round(100 * max(results$estimate[2:4]), 1)` percentage points, compared with an unadjusted difference of `r round(100 * naive$estimate, 1)`. Adjusting for the confounders reduced the estimate a bit, but most of the gap survives. Matching gives `r round(100 * atc_m$estimate, 1)` points, but with a standard error about four times as large, so it's consistent with the others. It's much less precise because it uses only one insured match per uninsured person and ignores the rest of the insured sample. When very different methods agree, that's reassuring, but remember that they all rely on the same assumption: no unmeasured confounding. They differ in how they adjust for the confounders, not in which confounders they adjust for.
+
+## How wrong could we be?
+
+The biggest threat to this estimate is something we didn't measure. Health is the obvious candidate: sicker people might be both more likely to get coverage (through disability-related Medicaid, for example) and more likely to see a doctor. @vanderweele_ding2017 proposed the **E-value** to put a number on how worried to be. It's the minimum strength of association, on the risk ratio scale, that an unmeasured confounder would need to have with *both* the treatment and the outcome, beyond the measured confounders, to fully explain away the observed effect.
+
+```{r}
+#| label: evalue
+rr_ps <- avg_comparisons(fit_ps, variables = "insured", wts = "(weights)", comparison = "ratio")
+ev <- evalues.RR(est = rr_ps$estimate, lo = rr_ps$conf.low, hi = rr_ps$conf.high)
+ev
+```
+
+The risk ratio is `r round(rr_ps$estimate, 2)`: insurance makes a past-year checkup about `r round(rr_ps$estimate, 1)` times as likely for the uninsured. The E-value is `r round(ev[2, 1], 2)`. To explain the whole effect, an unmeasured confounder would need to make people `r round(ev[2, 1], 1)` times as likely to be insured *and* `r round(ev[2, 1], 1)` times as likely to get a checkup, after accounting for age, income, education and the rest. For the confidence interval to include no effect, it would need associations of `r round(ev[2, 2], 1)`. Those are strong associations, stronger than most of the measured confounders have, so I'm fairly confident that insurance increases checkups, though less confident about the exact size.
+
+::: {.callout-tip}
+Sensitivity analyses like this don't prove anything. They translate "there might be unmeasured confounding" into a specific question that readers can think about: is there plausibly a confounder that strong? That's a much better conversation than either ignoring the problem or giving up.
+:::
+
+## Summary
+
+A causal effect compares potential outcomes that we can never see together, so we estimate averages, like the ATE, ATT or ATC, and need assumptions to do it: conditional exchangeability and positivity. A DAG makes the assumptions explicit and tells you what to adjust for, and what not to: never mediators or colliders. Propensity scores summarize the confounders in one number, and weighting or matching on them lets you check balance before looking at the outcome. With survey data, use the survey weights in the propensity model and multiply them into the outcome weights. Different adjustment methods should give similar answers if the model is reasonable, but they all share the assumption of no unmeasured confounding, and an E-value tells you how strong a confounder would have to be to change your conclusion.
+
+## Exercises
+
+These exercises are Homework 14.
+
+**1.** Add `doctor` (having a personal doctor, from `persdoc3`: codes 1 and 2 are yes, 3 is no) to the propensity score model and redo the weighting. What happens to the estimate, and why is this the wrong thing to do?
+
+```{r}
+#| label: ex-mediator
+#| eval: false
+# YOUR CODE HERE
+```
+
+**2.** Estimate the ATT instead of the ATC (the effect of insurance for the people who have it). How do the weights, the effective sample size and the estimate change? Which estimand would you report to a state legislature considering a Medicaid expansion?
+
+```{r}
+#| label: ex-att
+#| eval: false
+# YOUR CODE HERE
+```
+
+<details>
+<summary>One solution for exercise 2</summary>
+
+```{r}
+#| label: ex-att-solution
+#| eval: false
+w_att <- weightit(f_ps, data = brfss, method = "glm", estimand = "ATT", s.weights = "sw")
+summary(w_att)
+
+brfss$w_att <- w_att$weights * brfss$sw
+fit_att <- svyglm(checkup ~ insured, family = quasibinomial,
+                  design = svydesign(ids = ~1, strata = ~ststr, weights = ~w_att, data = brfss))
+avg_comparisons(fit_att, variables = "insured", wts = "(weights)")
+```
+
+For the ATT, the uninsured get weights of $e/(1 - e)$, and uninsured people who look a lot like insured people (high $e$) get very large weights, so the effective sample size of the uninsured shrinks a lot. A Medicaid expansion would cover people who are currently uninsured, so the ATC is the relevant estimand.
+
+</details>
+
+**3.** Draw a DAG for a different question in the BRFSS, the effect of current smoking on fair or poor health. Use `adjustmentSets()` to find what you'd need to adjust for, and name at least one variable that would be a mediator and one that would be a collider.
+
+```{r}
+#| label: ex-dag
+#| eval: false
+# YOUR CODE HERE
+```
+
+**4.** Estimate the effect of insurance separately for Hispanic and NH White adults (subset the data, refit the weights, and estimate the ATC in each group). Is the effect the same size? Calculate an E-value for each.
+
+```{r}
+#| label: ex-subgroup
+#| eval: false
+# YOUR CODE HERE
+```
