@@ -1,0 +1,283 @@
+---
+title: "Bayesian Logistic Regression with PyMC"
+format: 
+  html:
+    theme: cosmo
+    toc: true
+    toc-depth: 3
+execute:
+  echo: false
+---
+
+## Introduction
+
+In this tutorial, we'll explore how to implement Bayesian logistic regression using the PyMC library. Unlike classical logistic regression that provides point estimates for coefficients, Bayesian logistic regression provides full posterior distributions over model parameters, allowing us to quantify uncertainty in our estimates.
+
+### What is Bayesian Logistic Regression?
+
+Bayesian logistic regression is a probabilistic approach to logistic regression where:
+- We treat model parameters (coefficients) as random variables with probability distributions
+- We use Bayes' theorem to update our beliefs about parameters based on observed data
+- The result is a posterior distribution that captures uncertainty in the parameter estimates
+
+### Why Use Bayesian Methods?
+
+1. **Uncertainty Quantification**: Provides credible intervals rather than just point estimates
+2. **Incorporating Prior Knowledge**: Can include domain expertise through prior distributions
+3. **Model Comparison**: Natural framework for comparing different models
+4. **Regularization**: Priors act as a form of regularization
+
+## Setting up the Environment
+
+First, let's install and import the necessary packages:
+
+```{python}
+# Install required packages (uncomment if needed)
+# !pip install pymc arviz pandas numpy matplotlib seaborn
+
+import pymc as pm
+import arviz as az
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Set style for plots
+plt.style.use('seaborn-v0_8')
+```
+
+## Data Simulation
+
+Let's simulate a dataset that we'll use for our Bayesian logistic regression model. We'll create 1000 observations with two features:
+
+```{python}
+# Set random seed for reproducibility
+np.random.seed(42)
+
+# Generate synthetic data
+n = 1000
+x1 = np.random.normal(0, 1, n)
+x2 = np.random.normal(0, 1, n)
+
+# True coefficients
+true_intercept = 0.5
+true_coef1 = 1.2
+true_coef2 = -0.8
+
+# Create logits
+linear_combination = true_intercept + true_coef1 * x1 + true_coef2 * x2
+probabilities = 1 / (1 + np.exp(-linear_combination))
+
+# Generate binary outcomes
+y = np.random.binomial(1, probabilities, n)
+
+# Create a DataFrame
+df = pd.DataFrame({
+    'x1': x1,
+    'x2': x2,
+    'y': y
+})
+
+print("Dataset shape:", df.shape)
+print("\nFirst 5 rows:")
+df.head()
+```
+
+```{python}
+# Basic statistics of our dataset
+print("Dataset statistics:")
+df.describe()
+```
+
+## Model Specification
+
+In Bayesian logistic regression, we specify priors for our model parameters. Here's how we'll set up our PyMC model:
+
+```{python}
+with pm.Model() as model:
+    # Priors for the coefficients
+    intercept = pm.Normal('intercept', mu=0, sigma=10)
+    coef1 = pm.Normal('coef1', mu=0, sigma=10)
+    coef2 = pm.Normal('coef2', mu=0, sigma=10)
+    
+    # Linear combination of predictors
+    linear_combination = intercept + coef1 * df['x1'] + coef2 * df['x2']
+    
+    # Logistic link function (the probability of y = 1)
+    p = pm.Deterministic('p', pm.math.sigmoid(linear_combination))
+    
+    # Likelihood (observations)
+    likelihood = pm.Bernoulli('y', p=p, observed=df['y'])
+    
+    print("Model specification completed.")
+```
+
+## Model Sampling
+
+Now we'll sample from the posterior distribution using MCMC. We'll use the No-U-Turn Sampler (NUTS) which is efficient for high-dimensional problems:
+
+```{python}
+# Sample from the posterior
+with model:
+    trace = pm.sample(2000, tune=1000, target_accept=0.95, random_seed=42)
+    
+print("Sampling completed.")
+print(f"Trace shape: {trace.posterior.dims}")
+```
+
+## Model Diagnostics
+
+Before analyzing our results, let's check if our model converged properly:
+
+```{python}
+# Summary of the trace
+az.summary(trace)
+
+# Plot posterior distributions
+az.plot_trace(trace, var_names=['intercept', 'coef1', 'coef2']);
+```
+
+Let's also check for convergence using diagnostic statistics:
+
+```{python}
+# Gelman-Rubin statistic (should be close to 1.0)
+print("Gelman-Rubin Statistics:")
+pm.summary(trace, var_names=['intercept', 'coef1', 'coef2'])['r_hat']
+
+# Effective sample size (should be large)
+print("\nEffective Sample Sizes:")
+pm.summary(trace, var_names=['intercept', 'coef1', 'coef2'])['ess_bulk']
+```
+
+## Results Interpretation
+
+Now let's examine our posterior results and compare them with the true values used to generate our data:
+
+```{python}
+# Extract posterior samples
+posterior_samples = trace.posterior
+
+# Calculate credible intervals for coefficients
+print("Posterior Summary:")
+summary = az.summary(trace)
+print(summary)
+
+# Compare with true values
+print("\nComparison with True Values:")
+true_values = [true_intercept, true_coef1, true_coef2]
+coef_names = ['intercept', 'coef1', 'coef2']
+
+for i, (name, true_val) in enumerate(zip(coef_names, true_values)):
+    post_mean = summary.loc[name, 'mean']
+    lower_95 = summary.loc[name, 'hdi_3%']
+    upper_95 = summary.loc[name, 'hdi_97%']
+    
+    print(f"{name}:")
+    print(f"  True value: {true_val}")
+    print(f"  Posterior mean: {post_mean:.3f}")
+    print(f"  95% Credible interval: [{lower_95:.3f}, {upper_95:.3f}]")
+    print(f"  True value within CI: {lower_95 <= true_val <= upper_95}")
+    print()
+```
+
+## Visualization of Results
+
+Let's visualize the posterior distributions and the relationship between our predictors and outcome:
+
+```{python}
+# Plot posterior distributions
+fig, axes = plt.subplots(1, 3, figsize=(12, 4))
+
+for i, coef in enumerate(['intercept', 'coef1', 'coef2']):
+    axes[i].hist(trace.posterior[coef].values.flatten(), bins=50, alpha=0.7)
+    axes[i].axvline(summary.loc[coef, 'mean'], color='red', linestyle='--', 
+                   label=f'Mean = {summary.loc[coef, "mean"]:.3f}')
+    axes[i].axvline(summary.loc[coef, 'hdi_3%'], color='black', linestyle=':', alpha=0.7)
+    axes[i].axvline(summary.loc[coef, 'hdi_97%'], color='black', linestyle=':', alpha=0.7)
+    axes[i].set_xlabel(coef)
+    axes[i].set_ylabel('Frequency')
+    axes[i].set_title(f'Posterior Distribution of {coef}')
+    axes[i].legend()
+
+plt.tight_layout()
+plt.show()
+```
+
+## Prediction with Uncertainty
+
+One of the key advantages of Bayesian methods is the ability to quantify uncertainty in predictions. Let's make predictions and visualize prediction intervals:
+
+```{python}
+# Create predictions using posterior samples
+with model:
+    # Sample from posterior predictive distribution 
+    p_pred = pm.sample_posterior_predictive(trace, var_names=['p'], random_seed=42)
+
+# Extract posterior predictions
+posterior_predictions = p_pred.posterior_predictive['y']
+
+# Calculate mean prediction and 95% credible interval
+mean_pred = np.mean(posterior_predictions, axis=0)
+pred_lower = np.percentile(posterior_predictions, 2.5, axis=0)
+pred_upper = np.percentile(posterior_predictions, 97.5, axis=0)
+
+# Plot predictions with uncertainty
+plt.figure(figsize=(10, 6))
+plt.plot(mean_pred, label='Mean prediction', linewidth=2)
+plt.fill_between(range(len(mean_pred)), pred_lower, pred_upper, alpha=0.3, 
+                 label='95% credible interval')
+plt.xlabel('Observation index')
+plt.ylabel('Predicted probability')
+plt.title('Bayesian Logistic Regression Predictions with Uncertainty')
+plt.legend()
+plt.grid(True, alpha=0.3)
+plt.show()
+```
+
+## Model Comparison
+
+Finally, let's try a more complex model and compare it with our simple one:
+
+```{python}
+# Simple model (with only intercept and two predictors)
+simple_model = pm.Model()
+
+with simple_model:
+    # Priors
+    intercept = pm.Normal('intercept', mu=0, sigma=10)
+    coef1 = pm.Normal('coef1', mu=0, sigma=10)
+    coef2 = pm.Normal('coef2', mu=0, sigma=10)
+    
+    # Linear combination and likelihood
+    linear_combination = intercept + coef1 * df['x1'] + coef2 * df['x2']
+    p = pm.Deterministic('p', pm.math.sigmoid(linear_combination))
+    likelihood = pm.Bernoulli('y', p=p, observed=df['y'])
+
+# Fit simple model
+with simple_model:
+    simple_trace = pm.sample(2000, tune=1000, target_accept=0.95, random_seed=42)
+    
+# Compare models using WAIC (Widely Applicable Information Criterion)
+print("Model Comparison using WAIC:")
+# Note: For PyMC 5+, we need to include log-likelihood in the trace
+try:
+    simple_idata = az.from_pymc3(trace=simple_trace, log_likelihood=True)
+    waic_result = az.waic(simple_idata)
+    print(f"Simple model WAIC: {waic_result.elpd_waic:.2f}")
+except Exception as e:
+    print(f"WAIC computation failed: {e}")
+
+```
+
+## Conclusion
+
+In this tutorial, we've learned how to:
+1. Set up a Bayesian logistic regression model using PyMC  
+2. Specify priors for model parameters
+3. Sample from the posterior distribution using MCMC methods
+4. Diagnose model convergence
+5. Interpret posterior results with credible intervals
+6. Visualize posterior distributions and prediction uncertainty
+7. Compare different models
+
+The main advantage of this Bayesian approach over classical logistic regression is that it provides a full probability distribution for our parameters, which allows us to quantify the uncertainty in our estimates. This is particularly valuable when making decisions based on our model results.

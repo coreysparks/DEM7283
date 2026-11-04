@@ -17,3 +17,6 @@ data/dhs_model_ir.rds
 data/ZZIR62FL.DTA
 weeks/*_cache/
 data/mmsa_context_*.rds
+
+# macOS
+.DS_Store

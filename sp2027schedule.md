@@ -2,6 +2,25 @@
 
 Statistics for Demographic Data II, Spring 2027
 
+## Course Description:
+This course represents an in-depth coverage of the general linear model framework, including alternative logistic regression models, count-data regression and multi-level modeling. Model fit, model comparison and regression diagnostics for each method are covered. In addition to these topics, students are also introduced to techniques for causal inference, imputation and reproducible research. All methods will be illustrated with an appropriate demographic survey data set and applied examples from real research.
+  
+
+### Computer skills:
+We will be using R. R is the language in which most research statisticians work and current methodological developments are being made, it is also free and can be used on any operating system. 
+
+Please update your R version (4.6.2) to the latest release and update all your packages.
+
+We will use R through Positron (https://positron.posit.co/download) and we will use Posit Publisher for turning in all assignments.
+
+I will also post data and other resources to my Github repository https://github.com/coreysparks/DEM7283 
+
+## R packages for the class
+Copy and paste the following command in Positron to install the packages we will use in this class:
+
+source("https://raw.githubusercontent.com/coreysparks/Rcode/master/install_first_7283.R")
+
+In Positron. Please have these programs downloaded and installed prior to class.
 
 ## Revised calendar
 
@@ -13,13 +32,13 @@ Statistics for Demographic Data II, Spring 2027
 | 4 | Model comparison across nested logits (KHB); prediction and cross validation |
 | 5 | Ordinal and multinomial models |
 | 6 | Counts and rates: Poisson, negative binomial, offsets, zero inflation |
-| 7 | Decomposition: Kitagawa and Oaxaca-Blinder |
+| 7 | Decomposition analysis: Kitagawa and Oaxaca-Blinder |
 | 8 | Spring break |
 | 9 | Missing data and multiple imputation with survey designs |
 | 10 | Longitudinal models: GEE, fixed effects, within-between models |
-| 11 | Splines and GAMs |
+| 11 | Nonlinear regression: Splines and GAMs |
 | 12 | Multilevel models I: centering, random slopes, level-specific weights |
 | 13 | Multilevel models II: GLMMs, growth curves, APC identification |
-| 14 | Causal inference foundations: DAGs and propensity score weighting |
+| 14 | Causal inference foundations: Propensity score weighting |
 | 15 | Tree-based machine learning with tidymodels |
 | 16 | Final papers due |

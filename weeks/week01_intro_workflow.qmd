@@ -117,6 +117,18 @@ library(survey)              # every session
 update.packages(ask = FALSE) # every so often, for bug fixes and new features
 ```
 
+Installing the packages for this course one at a time would take you most of an afternoon, so I wrote a script that does it for you. Run this once, before our second meeting:
+
+```{r}
+#| label: install-course-packages
+#| eval: false
+source("https://raw.githubusercontent.com/coreysparks/Rcode/master/install_first_7283.R")
+```
+
+`source()` downloads the file and runs every line in it. Read it first, because you should never run code from the internet that you haven't looked at, mine included. It's short. It installs `pak`, a faster installer that pulls prebuilt binaries from CRAN and can also install from GitHub, and then hands `pak` the list of packages we'll use this semester, grouped by the week they show up, plus `sparkscolors` from my GitHub. Anything you already have is skipped, so if it stops partway through (a dropped Wi-Fi connection, a laptop going to sleep), just run it again and it picks up where it left off. The first run takes a while. Go get a coffee.
+
+If you're on Windows, the script will also tell you if it can't find Rtools. You won't need Rtools until week 12, when `brms` has to compile models in C++, but it's much less painful to install it now than the night before a homework is due.
+
 Different packages sometimes use the same name for different functions. Base R's `stats` package has a `lag()` for time series, and `dplyr` has a `lag()` that works on vectors and takes different arguments. Whichever package you loaded last wins, and R prints a message about the conflict when you load it. When you want to be sure which one you're getting, use the `package::function()` form, like `stats::lag()` or `dplyr::lag()`. You'll see me do this throughout the course, and you'll also see it inside the helper functions in `R/`, where it means the function works without loading the whole package. Package authors deal with this too: `car::recode()` was renamed `car::Recode()` so it wouldn't collide with `dplyr::recode()`, because the two are so often used in the same analysis.
 
 A function is just a bit of code with **arguments**. Some arguments are required, and some have defaults you can change. Here is a function that finds the mean of a vector:
@@ -227,6 +239,16 @@ renv::restore()   # on a new machine: install the versions in renv.lock
 ```
 
 The usual rhythm is to install what you need, get the analysis working, run `renv::snapshot()`, and commit `renv.lock`. When a classmate (or I) clone your repository, `renv::restore()` rebuilds your library.
+
+The course repository works the same way. When I rendered these weekly documents, I snapshotted the packages into the `renv.lock` file at the top of the repository, so the lockfile is a record of exactly which version of every package produced the output you're reading. If you clone the repository and open the project, renv starts itself (that's what the `.Rprofile` file is for) and tells you the project library is out of sync. Run this once:
+
+```{r}
+#| label: renv-course-restore
+#| eval: false
+renv::restore()   # install the versions I used for the course materials
+```
+
+So why bother with the install script at all? The two do different jobs. The script puts current versions of the course packages in your own R library, which is what you want for your homework and your own projects. `renv::restore()` gives the course project its own library with *my* versions, which is what you want when one of my examples gives you a different number than it gave me, or throws an error I never saw. Nine times out of ten that's a package update, and restoring the lockfile is the fastest way to find out. And renv keeps a cache of everything it installs, so after the first restore, `renv::init()` in your own homework projects goes quickly.
 
 ### Version control with Git and GitHub
 
