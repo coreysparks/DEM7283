@@ -53,7 +53,7 @@ The course meets for sixteen weeks, with spring break in week 8 and final papers
 
 | Week | Topic |
 |---|---|
-| 1 | Course introduction; reproducible workflow with Quarto, renv, and Git |
+| 1 | Course introduction; reproducible workflow with Quarto, renv, and Git; publishing to Posit Connect Cloud |
 | 2 | Complex survey design, weights, replicate variance |
 | 3 | Binary outcomes: logit and probit, predicted probabilities, average marginal effects |
 | 4 | Comparing nested logit models (KHB); prediction and cross validation |
@@ -185,7 +185,7 @@ When I say an analysis is reproducible, I mean that someone else (or you, six mo
 3. **renv**, which records the package versions you used, and
 4. **Git**, which records every change you made and lets you share the whole thing on GitHub.
 
-I'll take these one at a time.
+I'll take these one at a time, and then show you how to put the rendered document on the web with Posit Connect Cloud, which isn't part of reproducibility but is how you'll share your homework.
 
 ### Projects and file paths
 
@@ -280,6 +280,120 @@ Commit when something works, and write messages that tell future you what change
 ::: {.callout-warning}
 Don't commit large data files or anything with restricted access. The BRFSS file is public, but the extracted file is several hundred megabytes, and the course repository keeps it and the cached copies out of Git with entries in `.gitignore`. If you use restricted data for your paper (and some of you will), keep it out of your repository entirely.
 :::
+
+### Sharing your work on Posit Connect Cloud
+
+GitHub keeps your code, but nobody wants to clone a repository and render a document just to read your results. For that you want the rendered HTML sitting at a web address you can paste into an email or a Canvas submission. Posit, the company behind RStudio, Positron and Quarto, runs a free hosting service for exactly this called **Posit Connect Cloud**, and the tool that sends your documents there from Positron or VS Code is an extension called **Posit Publisher**. The free tier allows unlimited publishing of static documents, which is all we need this semester.
+
+::: {.callout-note}
+If you find older tutorials that tell you to use RPubs or Quarto Pub (`quartopub.com`), those services are being retired. Quarto Pub stopped taking new accounts in 2026 and stops accepting new or updated documents on December 31, 2026. Everything below uses Connect Cloud instead.
+:::
+
+#### What exactly are we publishing?
+
+Before the buttons, one decision that matters for this course. Connect Cloud can take your document in two forms:
+
+1. **The source** (the `.qmd` file plus whatever it needs), which Connect Cloud then renders *on its own servers*, installing your packages and running every chunk.
+2. **The rendered output** (the `.html` file), which Connect Cloud just puts on the web as-is.
+
+The first is the more reproducible option in principle, but it falls apart with our data. To render your homework, Connect Cloud's server would need the BRFSS file, and that means uploading a several-hundred-megabyte zip file or having `get_mmsa()` download it from the CDC every time you publish. And if your final paper uses restricted data, uploading the source would put that data on someone else's server, which your data use agreement almost certainly forbids. So in this course **we publish the rendered, self-contained HTML file**. This is why the homework template uses `self-contained: true`: the figures, styles and tables are all packed inside one `.html` file, so that file is the only thing Connect Cloud needs.
+
+Your reproducibility doesn't suffer, because the source, the lockfile and the history are all in your GitHub repository. Connect Cloud is just the display window.
+
+::: {.callout-warning}
+Treat anything you publish on a free Connect Cloud account as public. Anyone with the link can read it, and links get forwarded. Never publish output that shows individual records from restricted data, and check that your rendered document doesn't print raw rows of a data set you aren't allowed to share (a stray `head(mydata)` will do it).
+:::
+
+#### Step 1: Create your Connect Cloud account
+
+You only do this once.
+
+1. Go to <https://connect.posit.cloud> and click **Sign Up**.
+2. Sign up with your GitHub account. You made one for this course already, and connecting the two now saves a step if you ever want Connect Cloud to publish straight from a repository. Google or email sign-up also works.
+3. Choose the **Free** plan when asked.
+4. Pick an account name. It shows up on your published content and in your profile, so choose something you'd be comfortable with a future employer seeing. Your UTSA ID or your name works fine.
+
+When you land on your **Home** page, which is empty for now, you're done. Leave the browser tab open, since you'll need to be signed in for the next step.
+
+#### Step 2: Render your document
+
+Render your document the usual way (the Render button, or `quarto render homework1.qmd` in the terminal) and confirm the `.html` file appears next to your `.qmd` file. Open it in a browser and check it. Connect Cloud publishes exactly what's in that file, so if a figure is missing or a chunk threw an error, the whole world gets to see that too.
+
+#### Step 3 (Positron or VS Code): Publish with Posit Publisher
+
+Positron ships with Posit Publisher already installed. In VS Code, install it from the Extensions view (search for "Posit Publisher").
+
+1. **Open your project folder** (File > Open Folder), not just the single file. Publisher works with the folder you have open.
+2. Click the **Posit Publisher icon** in the Activity Bar, the strip of icons down the left edge of the window. It looks like a rocket-ish upload arrow; hover over the icons if you can't find it.
+3. **Add a credential (once).** In the Publisher panel, find the **CREDENTIALS** section and click the **+** next to it. Choose **Posit Connect Cloud**. Your browser opens and shows an authorization code. Check that the code matches the one shown in your editor, click **Continue**, then **Authorize**. Back in the editor, accept the suggested name for the credential (or rename it). Publisher saves the credential on your computer, not in your project, so it never ends up in Git, and you don't do this step again.
+4. **Create a deployment.** Click the **+** next to **DEPLOYMENTS**. When Publisher asks which file to publish, choose the rendered **`homework1.html`** file, not the `.qmd` (see above for why). If it doesn't list the `.html` file, pick it with the file browser option.
+5. **Name it and pick the credential.** Give the deployment a title that will make sense on the web, like "DEM 7283 Homework 1: BRFSS descriptives for Austin", and select the Connect Cloud credential you made in step 3.
+6. **Check the file list.** Under **PROJECT FILES**, Publisher shows every file it will upload, and *only checked files are uploaded*. For a self-contained HTML file, the `.html` file is the only one that needs to be checked. Uncheck everything else, especially anything in `data/`.
+7. Click **Deploy Your Project**. Publisher shows its progress at the bottom of the window, and when it finishes you get a success message with a **View Content** button.
+
+Your document now lives at an address that looks like `https://[content-id].share.connect.posit.cloud`. Copy it, open it in a private browser window (to see it the way everyone else will), and that's the link you submit.
+
+Publisher keeps a record of the deployment in a folder called `.posit/` inside your project. **Commit that folder to Git.** It holds no passwords, only the information Publisher needs to update the same document next time instead of creating a new one.
+
+#### Step 3 (RStudio): Publish with the Publish button
+
+RStudio (version 2026.04 and later) can publish to Connect Cloud without the extension.
+
+1. Open your `.qmd` file and click **Render**.
+2. When the rendered document appears in the Viewer, click the blue **Publish** icon at the top right of the Viewer pane.
+3. Choose **Posit Connect Cloud** as the destination. The first time, RStudio walks you through connecting your account, which opens a browser window to authorize, the same as in Positron.
+4. When RStudio asks whether to publish the document *with source code* or *just the rendered document*, choose the rendered document, for the same reasons as above.
+5. Click **Publish**. RStudio opens the published document in your browser when it's done.
+
+#### Step 3 (any editor): Publish from the terminal or console
+
+If you'd rather type than click, or you want a method that works the same everywhere, there are two more ways. From the terminal, with Quarto 1.9 or later:
+
+```{bash}
+#| label: quarto-publish
+#| eval: false
+quarto --version                                      # check you have 1.9 or later
+quarto publish posit-connect-cloud homework1.qmd
+```
+
+::: {.callout-note title="Code explanation: quarto publish"}
+`quarto --version` prints the version of Quarto you have installed. Publishing to Connect Cloud was added in version 1.9, so if this prints something older, update RStudio or Positron (or install Quarto on its own from [quarto.org](https://quarto.org/docs/get-started/)).
+
+`quarto publish` is Quarto's built-in publishing command. The first word after it, `posit-connect-cloud`, is the **provider**, meaning where to send the document (the same command can also publish to GitHub Pages or Netlify). The last word is the file to publish. Quarto renders the document on your computer first, then uploads only the rendered output, so this method never sends your data anywhere.
+
+The first time you run it, Quarto asks to authorize your account. Press Enter, sign in in the browser window that opens, and come back to the terminal. Afterwards Quarto writes a small file called `_publish.yml` next to your document with the document's ID and web address. Like `.posit/`, it contains no credentials, so commit it. Running the same command again updates the same document. If you've already rendered and don't want to wait for a second render, add `--no-render` to the end.
+:::
+
+From the R console, the `rsconnect` package does the same job:
+
+```{r}
+#| label: rsconnect-publish
+#| eval: false
+install.packages("rsconnect")            # once
+rsconnect::connectCloudUser()            # once: link your Connect Cloud account
+rsconnect::deployDoc(here("homework1.html"))
+```
+
+::: {.callout-note title="Code explanation: rsconnect"}
+`rsconnect` is Posit's R package for publishing to its hosting services, and it's what RStudio's Publish button uses behind the scenes. The `rsconnect::` prefix is the `package::function()` form from earlier, so you can call these functions without loading the whole package with `library()`.
+
+`connectCloudUser()` connects R to your Connect Cloud account. It opens a browser window where you authorize access, then stores the credential on your computer (again, not in your project). You run it once per computer.
+
+`deployDoc()` publishes a single document. I've pointed it at the rendered `.html` file, so it uploads that file and nothing else. If you point it at the `.qmd` file instead, it uploads the source and Connect Cloud renders it on the server, which is the route we're avoiding. Wrapping the file name in `here()` makes sure R finds the file from the project root no matter which folder your console happens to be in. Run the same line again after you re-render, and it updates the existing document.
+:::
+
+#### Step 4: Updating your document
+
+You will find a typo five minutes after you publish. Everyone does. The fix is the same with every method: correct the `.qmd`, **render again**, and publish again. In Positron or VS Code, open the Publisher panel, select the existing deployment under **DEPLOYMENTS** and click **Deploy Your Project**. In RStudio, click **Publish** again and choose to update the existing document. From the terminal or console, run the same command again. All of these replace the document at the same web address, so the link you already shared keeps working. The one thing that breaks this is deleting `.posit/` or `_publish.yml`, in which case you get a brand new document at a brand new address, and your old one sits there out of date.
+
+Back on your Connect Cloud **Home** page you'll see a card for each document you've published. From the card's menu you can open its settings to change the title, give it a more readable address, or delete it when the semester is over.
+
+#### If something goes wrong
+
+- **The published page is missing figures or looks unstyled.** The HTML wasn't self-contained, so it's looking for image and style files that weren't uploaded. Check that your YAML header has `self-contained: true` under `format: html:`, render again, and republish.
+- **The upload is huge or very slow.** Something big is checked under **PROJECT FILES**, usually the data folder. Uncheck everything except the `.html` file.
+- **Publisher or rsconnect says your credential is invalid.** Delete the credential (right-click it in the **CREDENTIALS** list in Publisher) and add it again, or re-run `rsconnect::connectCloudUser()`.
+- **You published the `.qmd` by accident and the deploy failed with package or file errors.** That's Connect Cloud trying to render your document without your data. Delete that deployment from your Connect Cloud Home page and publish the `.html` file instead.
 
 ## The course data
 
@@ -459,7 +573,7 @@ Median BMI rises through middle age and falls after 65 for both men and women, a
 
 ## Exercises
 
-These exercises are Homework 1. Submit the link to your GitHub repository and the rendered HTML file.
+These exercises are Homework 1. Submit the link to your GitHub repository and the link to your document on Posit Connect Cloud.
 
 **1.** Create a new project for your homework this semester, either an RStudio project or a folder in Positron. Initialize Git and connect it to a new GitHub repository.
 
@@ -520,6 +634,8 @@ brfss |>
 #| eval: false
 # YOUR CODE HERE
 ```
+
+**6.** Create a Posit Connect Cloud account and publish the rendered, self-contained HTML file from exercise 5 (not the `.qmd`) with whichever method you prefer. Open the link in a private browser window to check that it works, then commit the `.posit/` folder or `_publish.yml` file that the publishing step created, and push.
 
 ## Session information
 

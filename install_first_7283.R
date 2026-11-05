@@ -31,7 +31,7 @@ pkgs <- c(
   # causal inference (week 14)
   "dagitty", "ggdag", "MatchIt", "WeightIt", "cobalt", "EValue",
   # machine learning (week 15)
-  "tidymodels", "probably", "ranger", "xgboost",
+  "tidymodels", "probably", "ranger", "xgboost", "rpart.plot",
   # UTSA color palettes (GitHub)
   "coreysparks/sparkscolors"
 )
