@@ -17,7 +17,7 @@ The syllabus and schedule are in [`sp2027syllabus.pdf`](sp2027syllabus.pdf) and 
 | 5 | [Ordinal and multinomial logit models](chapters/05-ordinal-multinomial.qmd) | BRFSS, DHS |
 | 6 | [Counts and rates](chapters/06-count-models.qmd) | AHRF, CDC WONDER, BRFSS |
 | 7 | [Decomposition](chapters/07-decomposition.qmd) | CDC WONDER, IPUMS USA, BRFSS |
-| 8 | Spring break | |
+| 8 | [Spring break: optional review](chapters/08-spring-break-review.qmd) | |
 | 9 | [Missing data and multiple imputation](chapters/09-missing-data.qmd) | BRFSS |
 | 10 | [Longitudinal models](chapters/10-longitudinal.qmd) | ECLS-K:2011 |
 | 11 | [Splines and generalized additive models](chapters/11-splines-gams.qmd) | BRFSS, IPUMS USA |
@@ -25,7 +25,7 @@ The syllabus and schedule are in [`sp2027syllabus.pdf`](sp2027syllabus.pdf) and 
 | 13 | [Multilevel models II](chapters/13-multilevel-2.qmd) | BRFSS, ECLS-K:2011, IPUMS NHIS |
 | 14 | [Causal inference foundations](chapters/14-causal-inference.qmd) | BRFSS |
 | 15 | [Tree-based machine learning with tidymodels](chapters/15-machine-learning.qmd) | BRFSS |
-| 16 | Final papers due | |
+| 16 | [The final paper and presentation](chapters/16-final-paper.qmd) | |
 
 ## Student setup
 

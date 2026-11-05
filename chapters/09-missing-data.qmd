@@ -8,9 +8,23 @@ source(here::here("_common.R"))
 
 ## Introduction
 
-Every time we ask a question on a survey, there are reasons we might not get an answer, and every model you've fit so far this semester has quietly dealt with that by dropping anyone with a missing value on any variable in the model. That's called **listwise deletion**, or complete-case analysis, and it is the default in R, Stata, SAS and everything else. Sometimes it's fine. Often it throws away a lot of people, and if the people it throws away are different from the people it keeps, it biases the results too.
+Every time we ask a question on a survey, there are reasons we might not get an answer, and every model you've fit so far this semester has quietly dealt with that by dropping anyone with a missing value on any variable in the model. That's called **listwise deletion**, or complete-case analysis, and it is the default in R, Stata, SAS and everything else. Sometimes it's fine. Often it throws away a lot of people, and it changes *who* contributes to the estimate: if the people it throws away are different from the people it keeps, the results can be biased too. Whether they actually are depends on what you're estimating and on why the data are missing, which is what the first part of this chapter is about.
 
 This week covers why data go missing, what kinds of missingness we can and can't live with, the easy ways to fill in missing values (which are bad ways), and multiple imputation, which is the method I'd recommend for most demographic analyses. I'll pay particular attention to doing multiple imputation with survey data, because the usual textbook example drops the design, and you've spent eight weeks learning not to do that.
+
+::: {.callout-note title="This week at a glance"}
+**The question.** How does fair or poor health differ by education and income among adults in Texas metro areas, when a sixth of them didn't report their income?
+
+**By the end of this week you should be able to**
+
+1. distinguish MCAR, MAR and MNAR with an example, and explain why the data can show that values are not MCAR but can never show that they are MAR;
+2. explain why filling in each missing value once understates uncertainty, and what Rubin's rules add;
+3. run a multiple imputation that keeps the survey design, and compare it with a complete-case analysis without claiming that either proves the missingness assumption.
+
+**Before you begin.** You need the survey design and `svyglm()` from [weeks 2 and 3](03-logit-probit.qmd#fitting-logit-and-probit-models), and the `map()` and `across()` patterns from [week 2](02-survey-design.qmd#comparing-the-standard-errors) and [week 1](01-intro-workflow.qmd#the-tidyverse).
+
+**Required and optional.** Everything is required except the details of the von Hippel formula for the number of imputations; the idea that more imputations give more stable standard errors is enough.
+:::
 
 ## Setup
 
@@ -59,13 +73,15 @@ This week is about item nonresponse, because it's the kind *you* have to deal wi
 
 ### Types of missing data
 
-@little_rubin2019 gave us the vocabulary everyone uses. The three types are about what the *probability of being missing* depends on.
+@little_rubin2019 gave us the vocabulary everyone uses. The three types are about what the *probability of being missing* depends on. I'll use one example for all three: income, missing for some BRFSS respondents.
 
-1. **Missing completely at random (MCAR).** Whether a value is missing has nothing to do with anything about the person, observed or not. A coffee spill on a stack of questionnaires is MCAR. Complete-case analysis is unbiased under MCAR; it just loses precision.
-2. **Missing at random (MAR).** Whether a value is missing depends on *other things we observed* about the person, but not on the missing value itself once we take those into account. If older and less educated respondents are less likely to report their income, but among people of the same age and education, the chance of reporting doesn't depend on income itself, income is MAR. The name is unfortunate, because MAR isn't random in any everyday sense.
-3. **Missing not at random (MNAR).** Whether a value is missing depends on the value itself, even after accounting for everything we observed. If the people with the highest incomes refuse to report them *because* their incomes are high, income is MNAR. Think of a question on satisfaction with a service: the most dissatisfied people may be the least likely to answer, so the answers we get are rosier than the truth.
+1. **Missing completely at random (MCAR).** Whether a value is missing has nothing to do with anything about the person, observed or not. Income would be MCAR if, say, a random batch of interviewers skipped the question by mistake. Complete-case analysis is unbiased under MCAR; it just loses precision.
+2. **Missing at random (MAR).** Whether a value is missing depends on *other things we observed* about the person, but not on the missing value itself once we take those into account. Income is MAR if older and less educated respondents are less likely to report it, but among people of the same age and education, the chance of reporting doesn't depend on how much they earn. The name is unfortunate, because MAR isn't random in any everyday sense: the missingness can depend strongly on observed variables.
+3. **Missing not at random (MNAR).** Whether a value is missing depends on the value itself, even after accounting for everything we observed. Income is MNAR if, among people of the same age and education, those with the highest (or lowest) incomes are least likely to report them *because* of what their incomes are.
 
 MCAR and MAR are called **ignorable**, because the methods below can recover unbiased estimates without modeling *why* the data are missing. MNAR is **non-ignorable**, and handling it requires assumptions you can't check with the data you have.
+
+Don't read that as "complete-case analysis is always biased unless the data are MCAR," though. It depends on what you're estimating. For example, if you're estimating a regression, and whether a value is missing depends only on the *predictors* in the model (not on the outcome), the complete-case coefficients are still unbiased, even though the data aren't MCAR. What complete-case analysis always does is change who contributes to the estimate, and you have to think through whether that matters for your question.
 
 ### What the computer does
 
@@ -128,6 +144,8 @@ tibble(version = c("Observed values only", "Mean imputed"),
   knitr::kable(digits = 2)
 ```
 
+`if_else(is.na(tx$bmi), mean(...), tx$bmi)` keeps each observed BMI and replaces each missing one with the mean of the observed values. `var()` is the variance.
+
 The mean doesn't change (it can't), the median barely moves, but the variance drops by `r pct(1 - var(bmi_mean_imp) / var(tx$bmi, na.rm = TRUE), 0)`. Everyone who was missing now sits exactly at the mean, which piles them up in the middle of the distribution and makes BMI look less variable than it is. Any regression coefficient involving BMI will be biased toward zero, and every standard error will be too small, because the model thinks it has `r fmt(sum(is.na(tx$bmi)))` real observations at the mean.
 
 ```{r}
@@ -169,9 +187,9 @@ Better ideas use what we know about the person.
 2. **Hot deck imputation** finds respondents who look like the person with the missing value on the variables that are observed (the "donors") and borrows a donor's actual answer. The Census Bureau did this for decades, and the ACS still does.
 3. **Predictive mean matching (PMM)** combines the two. Fit the regression, compute predicted values for everyone, then for each missing case, find a few observed cases whose predicted values are close to the missing case's, and borrow one of their *actual* values at random. Because the imputed values are real observed values, they're always plausible (no negative BMIs, no income category 3.6), and the randomness keeps the variance honest.
 
-Any of these fills in each missing value once, and then we analyze the data as if the imputed values were real. That's the remaining problem: we don't know the missing values, and a single imputation hides that uncertainty.
+Any of these fills in each missing value once, and then we analyze the data as if the imputed values were real. That's the remaining problem: we don't know the missing values, and a single imputation hides that uncertainty. The analysis treats a guess as if it had been observed, so its standard errors only reflect sampling, not our uncertainty about what the missing values were. You'll see exactly how much that understates the standard errors at the end of the chapter.
 
-## Testing for MAR
+## Investigating patterns of missingness
 
 ### Flag variables
 
@@ -187,6 +205,8 @@ broom::tidy(flag_fit) |>
   knitr::kable(digits = 3)
 ```
 
+`is.na(income_n)` is `TRUE` (1) when income is missing, so this is an ordinary logit model (`glm()` without the design, since we're only looking for patterns) of the probability that income is missing.
+
 Missing income is clearly related to education, age and sex (and, for the NH Other group, race and ethnicity), so income is not MCAR, and complete-case analysis would keep a sample that's more educated and differs in age from the full one. Interestingly, once those are in the model, reporting income isn't related to self-rated health.
 
 ::: {.callout-warning}
@@ -197,7 +217,9 @@ This is easy to get wrong, so I want to be careful. A test like this can show th
 
 ### The idea
 
-Multiple imputation, due to @rubin1987, deals with the uncertainty problem directly. Instead of filling in each missing value once, fill it in $m$ times, each time with a random draw from a model of what the value might be. That gives $m$ complete data sets that agree on the observed values and differ on the imputed ones. Analyze each one the way you would have analyzed the complete data, and combine the results with **Rubin's rules**:
+Multiple imputation, due to @rubin1987, deals with the uncertainty problem directly. It doesn't reveal the missing values. Instead, it creates several plausible completed data sets under stated assumptions, and the differences between their results represent our uncertainty about what was missing. Fill in each missing value $m$ times, each time with a random draw from a model of what the value might be. That gives $m$ complete data sets that agree on the observed values and differ on the imputed ones. Analyze each one the way you would have analyzed the complete data, and combine the results.
+
+In words, the combining rules say: the estimate is the average of the $m$ estimates, and the uncertainty has two parts. One is the ordinary uncertainty you'd have if the data were complete (the average of the $m$ squared standard errors). The other is how much the $m$ estimates disagree with each other, which is the uncertainty that comes from not knowing the missing values. Add the two, and that's the total. Formally, these are **Rubin's rules**:
 
 1. The combined estimate is the average of the $m$ estimates, $\bar Q = \frac{1}{m}\sum_{i=1}^m \hat Q_i$.
 2. The within-imputation variance $\bar W$ is the average of the $m$ squared standard errors, the uncertainty we'd have if the data were complete.
@@ -228,9 +250,11 @@ Each row is a pattern, with 1 for observed and 0 for missing. The row names are 
 Two rules matter here, and the second one is where survey data are different.
 
 1. **Include the outcome.** It feels like cheating, but leaving the outcome out of the imputation model imputes values that are unrelated to the outcome, which biases the coefficients toward zero.
-2. **Include the design.** The probability of being sampled is related to who people are, and the weights and strata carry that information. @reiter2006 showed that leaving the design out of the imputation model can bias the results, and including the design variables (or functions of them) fixes it. I'll include the log of the weight and the metro area. The BRFSS strata are nested within metro areas, and the 51 Texas strata as a factor would make every imputation model enormous and slow, so metro area is a reasonable stand-in.
+2. **Include the design.** The probability of being sampled is related to who people are, and the weights and strata carry that information. @reiter2006 showed that leaving the design out of the imputation model can bias the results, and that including the design variables (or functions of them) reduces that bias. It doesn't guarantee unbiased results: the imputation model still has to capture the relationships that matter, like how income relates to education and health. I'll include the log of the weight and the metro area. Using metro area in place of the strata is an approximation, and one you should justify, not take for granted. Here the justification is that the BRFSS strata are nested within metro areas, so metro area captures the biggest differences between strata, and the 51 Texas strata as a factor would make every imputation model enormous and slow. If the strata within a metro differed a lot in income, this shortcut would miss that.
 
-There's one more choice. Income and education are ordered categories. If I leave them as factors, `mice` uses multinomial logit models to impute them, which ignore the ordering and are slow. As integer codes with PMM, the imputed values are always one of the observed categories, and the ordering is used.
+The first rule deserves a word, because it seems to contradict what you'll learn about prediction in week 15. There, using the outcome to build a predictor is "leakage," because the outcome won't be available when you make a real prediction. Here, we aren't predicting anything for new people. We're filling in values in data where the outcome is already observed, so that the analysis of *these* data is unbiased. Different goals, different rules.
+
+There's one more choice. Income and education are ordered categories. If I leave them as factors, `mice` uses multinomial logit models to impute them, which ignore the ordering and are slow. As integer codes with PMM, the imputed values are always one of the observed categories, and the ordering is used. Be clear about what that buys. Because PMM borrows a real, observed category, every imputed value is a possible one. But the *matching* step uses a linear regression on the 1, 2, 3, ... codes, which treats the categories as equally spaced, the same assumption you were warned about in week 5. That's a reasonable approximation for finding similar people, not a claim that the codes are real numbers, and the analysis model below still treats income and education as categories (`factor()`).
 
 ```{r}
 #| label: imp-data
@@ -380,19 +404,54 @@ inc <- compare |> filter(str_detect(term, "income"))
 
 Three things to see here. First, the standard errors from multiple imputation are smaller for nearly every coefficient, because we're using `r fmt(n_all)` respondents instead of `r fmt(n_cc)`. Second, some estimates move. With complete cases, high school graduates and people with some college look no different from people without a high school diploma (coefficients of `r round(ed$complete_case[1], 2)` and `r round(ed$complete_case[2], 2)`), and only college graduates stand out (`r round(ed$complete_case[3], 2)`). After imputation, all three are clearly negative (`r round(ed$multiple_imputation[1], 2)`, `r round(ed$multiple_imputation[2], 2)` and `r round(ed$multiple_imputation[3], 2)`). Remember that less educated respondents are less likely to report their income, so complete-case analysis drops them disproportionately, and with them a good part of the education gradient. Third, the FMI column is largest for the income coefficients, up to `r round(max(inc$fmi), 2)`, because income is the most-missing variable, but it's well below the `r pct(mean(is.na(tx$income_n)), 0)` of respondents missing income, because education, age and the rest tell us a lot about income.
 
+::: {.callout-tip title="Reading the result: a right and a wrong interpretation"}
+**Right:** "Assuming income and BMI are missing at random given the variables in the imputation model, college graduates have log-odds of fair or poor health `r round(abs(ed$multiple_imputation[3]), 2)` lower than adults without a high school diploma, with the same income, race and ethnicity, age, sex, smoking, BMI and insurance. The complete-case estimate is `r round(abs(ed$complete_case[3]), 2)` lower."
+
+**Wrong:** "Multiple imputation recovered the true incomes, so the imputed results are correct." Imputation doesn't reveal anything; the imputed results are only as good as the MAR assumption and the imputation model. And if the complete-case and imputed results had agreed, that wouldn't prove the assumption either; both could be biased in the same way if income is MNAR.
+:::
+
+### What a single imputation would have said
+
+Here's the uncertainty problem from earlier, in numbers. Take just *one* of the imputed data sets and analyze it as if it were complete. That's what you'd get from any single-imputation method.
+
+```{r}
+#| label: single-imputation
+des_single <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt,
+                        data = mutate(complete(imp, action = 1),
+                                      ststr = tx$ststr, mmsawt = tx$mmsawt))
+fit_single <- svyglm(f_health, design = des_single, family = quasibinomial)
+
+tibble(term = names(coef(fit_single)),
+       se_single_imputation = SE(fit_single),
+       se_multiple_imputation = sqrt(diag(vcov(mi_fit)))) |>
+  mutate(ratio = se_multiple_imputation / se_single_imputation) |>
+  filter(str_detect(term, "income")) |>
+  knitr::kable(digits = 3)
+```
+
+`complete(imp, action = 1)` pulls out just the first completed data set. For the income coefficients, where the missing information is greatest, the single-imputation standard errors are smaller than the multiple-imputation ones. The single imputation treats every imputed income as if it had been observed, so it leaves out the between-imputation part of Rubin's rules, and its standard errors are too small.
+
 ::: {.callout-tip}
 Multiple imputation doesn't create information. It uses the information in the observed variables about the missing ones, and it's honest about what's left over. If your imputation model is wrong (it leaves out an interaction the analysis model includes, for example), the imputations will be wrong in the same way. The rule of thumb is that the imputation model should be at least as rich as the analysis model, and include anything that predicts the missing values or whether they're missing.
 :::
 
 ## Summary
 
-Complete-case analysis is the default everywhere, and it's unbiased only when the data are MCAR, which they almost never are. Mean and modal imputation keep the sample size but distort distributions and shrink variances, so don't use them. Multiple imputation fills in the missing values several times, analyzes each completed data set, and combines the results with Rubin's rules, so the standard errors include the uncertainty from the missing data. With survey data, put the design variables in the imputation model and analyze each imputed data set with the design, using `imputationList()` and `MIcombine()`. You can show that data aren't MCAR, but you can never show from the data that they're MAR, so you have to argue for it. For more, @allison2002 is a short and readable introduction, @schafer_graham2002 is a classic review, and @vanbuuren2018 covers `mice` in detail and is free online.
+Complete-case analysis is the default everywhere. It's guaranteed to be unbiased only when the data are MCAR, which they almost never are, and whether it's biased otherwise depends on what you're estimating and why the data are missing. Mean and modal imputation keep the sample size but distort distributions and shrink variances, so don't use them. Multiple imputation fills in the missing values several times, analyzes each completed data set, and combines the results with Rubin's rules, so the standard errors include the uncertainty from the missing data. With survey data, put the design variables in the imputation model and analyze each imputed data set with the design, using `imputationList()` and `MIcombine()`. You can show that data aren't MCAR, but you can never show from the data that they're MAR, so you have to argue for it. For more, @allison2002 is a short and readable introduction, @schafer_graham2002 is a classic review, and @vanbuuren2018 covers `mice` in detail and is free online.
 
 ## Exercises
 
 These exercises are Homework 9.
 
-**1.** Make a flag for missing BMI and model it with the same predictors as the income flag model. Is BMI MCAR? Who is less likely to report their height and weight?
+**Purpose.** Reason about why data are missing, impute them in a way that keeps the survey design, and be honest about what the imputation assumes.
+
+**What is provided.** The Texas BRFSS data `tx`, the imputation data `imp_data`, the analysis formula `f_health`, the function `analyze_mi()`, and the 20 imputations in `imp` from this chapter.
+
+**A satisfactory answer** states the missingness assumption behind each analysis; reports estimates with standard errors or confidence intervals; and doesn't claim that a test, or agreement between two analyses, proves that the data are MAR.
+
+**1.** Describe one plausible explanation for missing income that would make it MAR, and one that would make it MNAR, using what you know about how people answer surveys. Then compare the complete-case and multiple-imputation estimates of the income coefficients from this chapter, including their standard errors. Explain in two or three sentences why agreement (or disagreement) between the two doesn't prove that the missingness assumption is correct.
+
+**2.** Make a flag for missing BMI and model it with the same predictors as the income flag model. Is BMI MCAR? Who is less likely to report their height and weight?
 
 ```{r}
 #| label: ex-flag-bmi
@@ -400,7 +459,7 @@ These exercises are Homework 9.
 # YOUR CODE HERE
 ```
 
-**2.** Rerun the final imputation with `m = 5` and a different seed, and compare the standard errors of the income coefficients to the ones from `m = 20`. How much do they change? Relate your answer to the von Hippel rule.
+**3.** Rerun the final imputation with `m = 5` and a different seed, and compare the standard errors of the income coefficients to the ones from `m = 20`. How much do they change? Relate your answer to the von Hippel rule.
 
 ```{r}
 #| label: ex-m5
@@ -408,7 +467,7 @@ These exercises are Homework 9.
 # YOUR CODE HERE
 ```
 
-**3.** Rerun the imputation *without* `place` and `log_wt` in the imputation model, analyze it with the design, and compare the coefficients to the ones above. Do any of them move by more than a standard error?
+**4.** Rerun the imputation *without* `place` and `log_wt` in the imputation model, analyze it with the design, and compare the coefficients to the ones above. Do any of them move by more than a standard error?
 
 ```{r}
 #| label: ex-no-design
@@ -417,7 +476,7 @@ These exercises are Homework 9.
 ```
 
 <details>
-<summary>One solution for exercise 3</summary>
+<summary>One solution for exercise 4</summary>
 
 ```{r}
 #| label: ex-no-design-solution
@@ -437,7 +496,7 @@ tibble(term = names(coef(mi_fit)),
 
 </details>
 
-**4.** Using the imputed data, estimate the prevalence of fair or poor health by income group with `svyby()`, and compare it to the complete-case estimate. (Hint: `with(des_mi, svyby(...))` returns one result per imputation; `MIcombine()` combines them. You'll need to rebuild `des_mi` outside the function.)
+**5.** Using the imputed data, estimate the prevalence of fair or poor health by income group with `svyby()`, and compare it to the complete-case estimate. (Hint: `with(des_mi, svyby(...))` returns one result per imputation; `MIcombine()` combines them. You'll need to rebuild `des_mi` outside the function.)
 
 ```{r}
 #| label: ex-prevalence
@@ -446,7 +505,7 @@ tibble(term = names(coef(mi_fit)),
 ```
 
 <details>
-<summary>One solution for exercise 4</summary>
+<summary>One solution for exercise 5</summary>
 
 ```{r}
 #| label: ex-prevalence-solution
@@ -464,6 +523,21 @@ svyby(~badhealth, ~income_n, design = des, FUN = svymean, na.rm = TRUE)
 ```
 
 Inside `with()` on an imputation list, the current design is called `.design`.
+
+</details>
+
+**6.** A sensitivity analysis for MNAR. Suppose people who didn't report their income actually earn *less* than MAR-based imputation predicts: one income category lower, on average. Rerun the imputation with every imputed income moved down one category (but not below the lowest), analyze it with `analyze_mi()`, and compare the education and income coefficients with the ones above. How much would this kind of MNAR change your conclusions?
+
+```{r}
+#| label: ex-mnar
+#| eval: false
+# YOUR CODE HERE
+```
+
+<details>
+<summary>A hint for exercise 6</summary>
+
+`mice()` can change each imputed value right after it's drawn, with the `post` argument. Start from `ini <- mice(imp_data, maxit = 0)`, then set `post <- ini$post` and `post["income_n"] <- "imp[[j]][, i] <- pmax(1, imp[[j]][, i] - 1)"`, and pass `post = post` to `mice()`. `pmax(1, x - 1)` subtracts 1 but never goes below 1. This is called a *delta adjustment*, and you can try shifts of different sizes to see how big an MNAR problem would have to be to change your conclusions.
 
 </details>
 

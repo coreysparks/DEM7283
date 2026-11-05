@@ -10,7 +10,34 @@ source(here::here("_common.R"))
 
 The binary logit is flexible, because almost anything can be squeezed into a yes or no. But squeezing throws information away. Self-rated health has five ordered categories, and collapsing them into "fair or poor" versus everything else treats a move from excellent to good the same as no move at all. The same is true of a political scale that runs from very liberal to very conservative, or a question with "strongly agree" through "strongly disagree." Other outcomes have categories with no order at all: which method of contraception a woman uses, which of several labor markets a migrant moves to, how a family arranges child care, how someone gets to work. Demographers sometimes call these alternative decision-making processes, because the person (in principle) chooses one option from a set.
 
+Before choosing a model, decide what kind of outcome you have. Try classifying these yourself before reading the answers:
+
+| Outcome | Kind | Why |
+|---|---|---|
+| Reported fair or poor health (yes or no) | Binary | Two categories |
+| Self-rated health: excellent, very good, good, fair, poor | Ordered | The categories have a clear ranking from best to worst |
+| Agreement: strongly agree to strongly disagree | Ordered | Ranked, from most to least agreement |
+| Contraceptive method: pill, injection, IUD, condom, none | Unordered | No method is "more" than another |
+| How a migrant moved: alone, with family, with friends | Unordered | Different kinds of arrangement, not more or less of anything |
+| Number of children (0, 1, 2, ...) | A count | Ordered *and* equally spaced, so week 6's count models fit better |
+
+An ordered outcome has a meaningful ranking, but that doesn't mean the categories are equally far apart. The step from "excellent" to "very good" health need not be the same size as the step from "fair" to "poor." That's why we don't just code self-rated health 1 to 5 and run a linear regression: the 1-to-5 coding pretends the steps are equal. An ordinal model uses the order of the categories without assuming anything about the distances between them.
+
 This week covers the two standard models for these outcomes. The **ordinal logit** (the proportional odds model) is for ordered categories, and the **multinomial logit** is for unordered ones. Both are generalizations of the binary logit, both can be fit to complex survey data, and both are much easier to explain with predicted probabilities than with coefficients. I'll lean on predicted probabilities throughout, for the same reasons as last week.
+
+::: {.callout-note title="This week at a glance"}
+**The question.** How does self-rated health, in all its categories, differ by education? And how do women's contraceptive use and intentions differ by education?
+
+**By the end of this week you should be able to**
+
+1. say whether an outcome is binary, ordered or unordered, and justify it;
+2. explain the extra assumption an ordinal model makes (proportional odds), and check it;
+3. report predicted probabilities for every category of an ordinal or multinomial outcome, and explain why the multinomial model throws away the ordering.
+
+**Before you begin.** You need the logit model, odds ratios, `avg_predictions()` and the latent-variable idea from [week 3](03-logit-probit.qmd), and the DHS design from [week 2](02-survey-design.qmd#when-clusters-matter-the-dhs).
+
+**Required and optional.** The matrix calculation behind the Wald test for proportional odds is optional; what the test tells you is required.
+:::
 
 ## Setup
 
@@ -58,6 +85,8 @@ des <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt, data = brfss)
 svymean(~genhlth3, des, na.rm = TRUE)
 ```
 
+`svymean()` on a factor gives the weighted share in each category, with standard errors. An **ordered factor** (`genhlth3`) is a factor whose levels have a ranking, so R knows "Good" comes after "Excellent/very good".
+
 ### The proportional odds model
 
 Suppose an outcome has $J$ ordered categories, and person $i$ has the response $y_i = j$ for one of $j = 1, \dots, J$. With ordered categories, it's easier to work with the **cumulative probabilities**, $\Pr(y_i \le j)$, than with the probabilities of each category, because they increase as we move up the categories:
@@ -87,24 +116,42 @@ tibble(z = seq(-3.5, 3.5, by = 0.01), density = dlogis(z, scale = 0.6)) |>
   labs(x = "Latent health propensity (y*)", y = "Density", fill = NULL)
 ```
 
+You don't need to write code like this yourself; it draws the picture. `dlogis()` gives the height of the logistic distribution, `cut()` labels each point by the interval it falls in, `geom_area()` shades the areas, and `annotate()` adds the $\zeta$ labels.
+
 The proportional odds model is a set of $J-1$ binary logits for the cumulative probabilities:
 
 $$
 \text{logit}\, P(y_i \le j) = \zeta_j - \mathbf{x}_i'\boldsymbol\beta, \qquad j = 1, \dots, J-1
 $$
 
+With our three categories, ordered from best (excellent or very good) to worst (fair or poor), $J = 3$ and the model is two equations:
+
+$$
+\begin{aligned}
+\text{logit}\, P(\text{excellent or very good}) &= \zeta_1 - \mathbf{x}_i'\boldsymbol\beta \\
+\text{logit}\, P(\text{good or better}) &= \zeta_2 - \mathbf{x}_i'\boldsymbol\beta
+\end{aligned}
+$$
+
+So each equation models the probability of being *at or below* a cut point, which here means in that category *or a better one*. Because of the minus sign, a positive $\beta$ lowers both of those probabilities, which pushes people toward the worse categories. If the categories were ordered from worst to best instead, every sign would flip. The model would be the same, but you'd read it the other way. So before you interpret any coefficient, check which end of the scale is "high," and don't rely on the sign alone; the predicted probabilities below make the direction unambiguous.
+
 Each split of the outcome gets its own intercept $\zeta_j$, but the coefficients $\boldsymbol\beta$ are the same for every split. That is the **proportional odds** (or parallel lines) assumption. It says that education, say, shifts the odds of being in a worse category by the same factor whether we're comparing fair or poor to everything better, or good or worse to excellent or very good. With three categories there are only two splits, so the assumption is easy to look at directly.
 
-On the log-odds scale, the assumption means the model is a set of parallel lines, one for each split, with different intercepts and the same slope.
+On the log-odds scale, the assumption means the model is a set of parallel lines, one for each split, with different intercepts and the same slope: a shared slope across the cumulative comparisons. The left panel of @fig-parallel shows that. The right panel shows what a violation looks like: $x$ has a steeper slope for one split than for the other, so its effect depends on which comparison you make.
 
 ```{r}
 #| label: fig-parallel
-#| fig-cap: "The proportional odds model on the log-odds scale: each cumulative split has its own intercept, but the effect of x is the same for every split."
+#| fig-cap: "Left: the proportional odds model on the log-odds scale. Each cumulative split has its own intercept, but the effect of x is the same for every split. Right: a violation, where x has a steeper slope for one split than the other."
+#| fig-width: 8
 tibble(x = seq(0, 6, by = 0.1)) |>
-  cross_join(tibble(split = c("P(y > 1)", "P(y > 2)"), intercept = c(1, -1.5))) |>
-  mutate(log_odds = intercept + 0.4 * x) |>
+  cross_join(tibble(split = c("P(y > 1)", "P(y > 2)"), intercept = c(1, -1.5),
+                    slope_violated = c(0.2, 0.7))) |>
+  mutate(`Proportional odds holds` = intercept + 0.4 * x,
+         `Proportional odds violated` = intercept + slope_violated * x) |>
+  pivot_longer(starts_with("Proportional"), names_to = "panel", values_to = "log_odds") |>
   ggplot(aes(x = x, y = log_odds, colour = split, linetype = split)) +
   geom_line(linewidth = 1.2) +
+  facet_wrap(~panel) +
   scale_colour_utsa(palette = "primary") +
   labs(x = "x", y = "Cumulative log odds", colour = NULL, linetype = NULL)
 ```
@@ -117,11 +164,13 @@ fit_po <- svyolr(genhlth3 ~ race_eth + educ + agec + female, design = des)
 summary(fit_po)
 ```
 
+`svyolr()` ("survey ordinal logistic regression") fits the proportional odds model to the design. The outcome must be an ordered factor. In the `summary()`, the rows for the predictors are the $\beta$s, and the rows labeled with two category names separated by `|` are the cut points $\zeta_j$.
+
 With the minus sign in the model, positive coefficients mean higher (here, worse) categories. Hispanic respondents have `r round(exp(coef(fit_po)[["race_ethHispanic"]]), 2)` times the odds of being in a worse health category than non-Hispanic White respondents, at any split, and college graduates have `r round(exp(coef(fit_po)[["educCollege graduate"]]), 2)` times the odds of people without a high school diploma. The two intercepts are the cut points.
 
 ### Predicted probabilities
 
-Odds ratios for cumulative splits are hard to explain to anyone, so I go straight to predicted probabilities. `avg_predictions()` gives the average predicted probability of each category for each level of education, holding the other variables at their observed values.
+Odds ratios for cumulative splits are hard to explain to anyone, so I go straight to predicted probabilities. `avg_predictions()` gives the average predicted probability of each category for each level of education, holding the other variables at their observed values. `by = "educ"` asks for one set of averages per education group. The result has a `group` column for the outcome category, and for each education group the probabilities of the three categories add up to 1.
 
 ```{r}
 #| label: ordinal-predictions
@@ -154,6 +203,12 @@ gd_cg <- pp$estimate[pp$group == "Good" & pp$educ == "College graduate"]
 
 The model predicts that `r pct(fp_lt)` of adults without a high school diploma report fair or poor health, compared with `r pct(fp_cg)` of college graduates. The middle category behaves differently: the share in good health changes much less across education (`r pct(gd_lt)` versus `r pct(gd_cg)`). That's normal in ordinal models. The middle categories gain from one side and lose to the other, so their probabilities can move in either direction, and sometimes not at all.
 
+::: {.callout-tip title="Reading the result: a right and a wrong interpretation"}
+**Right:** "Comparing adults of the same race and ethnicity, age and sex, the model predicts that `r pct(fp_lt)` of adults without a high school diploma report fair or poor health, against `r pct(fp_cg)` of college graduates. The share reporting good health is similar in the two groups (`r pct(gd_lt)` and `r pct(gd_cg)`)."
+
+**Wrong:** "College graduates have a negative coefficient, so they're less likely to be in every category below excellent or very good." The coefficient says college graduates are less likely to be in a *worse* category at each cut point. It doesn't say anything directly about the probability of a middle category, which can rise, fall or stay put. That's why we report the predicted probabilities.
+:::
+
 ::: {.callout-note}
 I pass `wts = "(weights)"` so the averaging uses the survey weights. The standard errors come from the design-based variance of the coefficients through the delta method.
 :::
@@ -169,6 +224,8 @@ split1 <- svyglm(I(genhlth3 >= "Good") ~ race_eth + educ + agec + female,
 split2 <- svyglm(I(genhlth3 == "Fair/poor") ~ race_eth + educ + agec + female,
                  design = des, family = quasibinomial())
 ```
+
+`I(genhlth3 >= "Good")` makes a 0/1 outcome on the fly, as in week 1: `TRUE` (1) for good or fair/poor health. Comparing an ordered factor with `>=` uses the order of the levels.
 
 ```{r}
 #| label: fig-split-logits
@@ -202,9 +259,11 @@ fit_ppo <- svy_vglm(genhlth3 ~ race_eth + educ + agec + female, design = des,
 summary(fit_ppo)
 ```
 
+`svy_vglm()` takes a formula and a design like `svyglm()`, and the `family` says which model. `cumulative()` is the family of cumulative logit models; `parallel` sets which coefficients are shared across splits, and `reverse = TRUE` flips the direction of the cumulative probabilities. There's a lot in the summary. You don't need to read every line; we'll use predicted probabilities to compare the models.
+
 `VGAM` writes the model as $\text{logit}\, P(y \ge j+1) = \alpha_j + \mathbf{x}'\boldsymbol\beta$ when `reverse = TRUE`, so the slopes have the same sign as in `svyolr()` and the intercepts have the opposite sign. The age coefficients now come in pairs, with `:1` for the first split and `:2` for the second.
 
-To test whether age needs separate coefficients, I use a design-based Wald test that the pairs are equal. `svy_vglm()` stores the coefficients and their design-based covariance matrix, so the test only takes a contrast matrix.
+To test whether age needs separate coefficients, I use a design-based Wald test that the pairs are equal. The idea is simple: for each age group, take the difference between its two coefficients (one per split), and ask whether all those differences could be zero, given their standard errors. The code below does that with matrix algebra. It's optional to follow line by line; the result (the p-value) is what matters.
 
 ```{r}
 #| label: ppo-wald
@@ -224,6 +283,10 @@ wald <- drop(t(diffs) %*% solve(L %*% V %*% t(L)) %*% diffs)
 c(chisq = wald, df = nrow(L),
   p = pchisq(wald, df = nrow(L), lower.tail = FALSE))
 ```
+
+::: {.callout-note title="Code explanation: the Wald test by hand *(optional)*"}
+`b` and `V` are the coefficients and their design-based variance-covariance matrix, stored in the fit. The `grep()` and `str_remove()` line lists the age terms. `L` is a **contrast matrix** with one row per age group, holding a 1 for that age group's first-split coefficient and a $-1$ for its second-split coefficient, so `L %*% b` (`%*%` is matrix multiplication) gives the differences. The Wald statistic is $d'(LVL')^{-1}d$, where $d$ is the vector of differences; `solve()` takes the matrix inverse and `t()` the transpose. Under the hypothesis that every difference is zero, it has a $\chi^2$ distribution with one degree of freedom per difference, and `pchisq(..., lower.tail = FALSE)` gives the p-value.
+:::
 
 The test rejects equality, so the partial proportional odds model is the better description of these data. Is the difference big enough to matter? In a sample of this size, almost any departure from proportional odds will be "significant," so look at the coefficients too. The race, education and sex effects barely move between the two models, which tells you the substantive conclusions about them don't depend on the assumption.
 
@@ -257,7 +320,9 @@ $$
 
 That's a lot of coefficients. With three categories every predictor gets two of them, and the exponentiated coefficients (relative risk ratios) compare each category to the reference, not to "everything else." Predicted probabilities are even more important here than in the ordinal model.
 
-The multinomial logit also assumes the **independence of irrelevant alternatives** (IIA): the odds of choosing A over B don't depend on whether C is available. Formal tests for IIA perform poorly, so the practical advice is to think about whether your categories are distinct alternatives that people actually choose among, and to avoid near-duplicate categories [@long_freese2014].
+The multinomial logit also assumes the **independence of irrelevant alternatives** (IIA): the odds of choosing A over B don't depend on whether C is available. The classic example of where it fails: suppose commuters choose between driving and a red bus, half and half. Add a blue bus that's identical to the red one. Realistically, the bus riders split between the two buses and drivers keep driving, so driving stays at half. But IIA forces the odds of driving versus the red bus to stay the same, so the model would put driving at a third. The assumption is questionable whenever two categories are close substitutes. Formal tests for IIA perform poorly, so the practical advice is to think about whether your categories are distinct alternatives that people actually choose among, and to avoid near-duplicate categories [@long_freese2014].
+
+The **reference outcome** matters for reading the coefficients but not for the predictions. Every equation compares one category with the reference, so changing the reference changes every coefficient (they now compare with a different category), but the predicted probabilities of each category stay exactly the same. Exercise 4 asks you to check this.
 
 ### The data: contraceptive use and intentions
 
@@ -290,6 +355,8 @@ dhs_des <- svydesign(ids = ~v021, strata = ~v022, weights = ~wt,
 svymean(~fp, dhs_des)
 ```
 
+`v364` is the DHS contraceptive use and intention variable: codes 1 and 2 are using a method, 3 is not using but intends to, and 4 is not using with no intention. `filter(v502 == 1)` keeps women who are currently married or living with a partner.
+
 ### Fitting the model
 
 ```{r}
@@ -299,6 +366,8 @@ fit_mn <- svy_vglm(fp ~ age + I(age^2) + children + educ + wealth + rural,
                    family = multinomial(refLevel = "Using"))
 summary(fit_mn)
 ```
+
+`multinomial(refLevel = "Using")` is the multinomial logit family, with "Using" as the reference outcome. The summary is long: two coefficients for every predictor. Skim it for the structure, then move on to the predicted probabilities, which are what you'd report.
 
 Each coefficient ending in `:1` belongs to the equation for "intends to use" versus "using," and each ending in `:2` belongs to "no intention" versus "using." Rural women have `r round(exp(fit_mn$coef[["ruralRural:2"]]), 2)` times the relative risk of having no intention to use (rather than using) compared with urban women, holding the other variables constant. Secondary education is associated with lower relative risks of both non-use categories, and much more so for no intention (`r round(exp(fit_mn$coef[["educSecondary:2"]]), 2)`) than for intending to use (`r round(exp(fit_mn$coef[["educSecondary:1"]]), 2)`).
 
@@ -324,6 +393,14 @@ mn_pred |>
   pivot_wider(names_from = outcome, values_from = probability) |>
   knitr::kable(digits = 3)
 ```
+
+::: {.callout-note title="Code explanation: average predicted probabilities by hand"}
+This is the `map()` pattern again, once per education level `e`:
+
+1. `mutate(dhs, educ = factor(e, levels = levels(dhs$educ)))` makes a copy of the data in which every woman has education `e` (keeping the same factor levels, so the model recognizes them).
+2. `predict(fit_mn$fit, newdata = nd, type = "response")` gives a matrix of predicted probabilities, one row per woman and one column per outcome category. `type = "response"` asks for probabilities rather than log-odds.
+3. `colSums(p * dhs$wt) / sum(dhs$wt)` is the weighted average of each column: multiply each woman's probabilities by her weight, add up each column, and divide by the total weight.
+:::
 
 ```{r}
 #| label: fig-multinomial
@@ -370,6 +447,8 @@ fit_srh_mn <- svy_vglm(genhlth_u ~ race_eth + educ + agec + female, design = des
 round(exp(fit_srh_mn$coef[grep("^educ|^race_ethHispanic", names(fit_srh_mn$coef))]), 2)
 ```
 
+`factor(genhlth3, ordered = FALSE)` turns the ordered factor into a plain one, so the multinomial model treats the categories as unordered. The last line exponentiates the coefficients whose names start with `educ` or `race_ethHispanic` (`^` means "starts with" in a pattern).
+
 ```{r}
 #| label: srh-mn-values
 #| include: false
@@ -412,6 +491,8 @@ srh_pred |>
   knitr::kable(digits = 3)
 ```
 
+`avg_probs()` wraps the by-hand calculation above in a function, so it can be run on each of the three models with `map()`. The averages use only the complete cases, the respondents the models were fit to.
+
 ```{r}
 #| label: srh-compare-values
 #| include: false
@@ -426,7 +507,13 @@ The three models tell the same story. The two ordinal models are nearly identica
 
 These exercises are Homework 5.
 
-**1.** Fit the proportional odds model for `genhlth3` with income (`income`) added. Use `avg_predictions()` to get the predicted probability of each health category by income group, and describe the pattern in two or three sentences.
+**Purpose.** Match the model to the kind of outcome, check the assumption the model makes, and report the results as probabilities.
+
+**What is provided.** The BRFSS data with `recode_mmsa()` and the design `des` (the outcome `genhlth3` is ordered from excellent or very good to fair or poor); the DHS design `dhs_des` and the multinomial model from this chapter, with "Using" as the reference outcome.
+
+**A satisfactory answer** says what kind of outcome each one is and why; reports predicted probabilities for every category, checking that they add up to 1 for each group; and describes results as associations.
+
+**1.** Explain in a sentence or two why `genhlth3` is an ordinal outcome, and why its categories shouldn't be treated as equally spaced numbers. Fit the proportional odds model for `genhlth3` with income (`income`) added. Using `avg_predictions()`, report the predicted probability of every health category for adults in the lowest and the highest income groups, and check that each group's probabilities add up to 1. Then describe the proportional odds assumption in your own words, and say what you would examine if it seemed unreasonable for income.
 
 ```{r}
 #| label: ex-ordinal-income

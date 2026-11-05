@@ -1,0 +1,60 @@
+# Week 8: Spring Break and an Optional Review {#sec-spring-break-review}
+
+No new statistical material is assigned this week, and there's no class. Take the break.
+
+If you want to review, the questions below cover the first half of the course. They're optional and ungraded, and nobody sees your answers. Use them to find the ideas you'd like to revisit after the break, and bring those to office hours or to class. Each question has an answer you can open, but try it first.
+
+::: {.callout-important title="Homework 7 is due after the break"}
+Homework 7 (decomposition, week 7) is due before class on **March 18**, the first class after spring break.
+:::
+
+## What kind of outcome, and what kind of model?
+
+For each outcome, say whether it's continuous, binary, ordered, unordered or a count, and which model family from weeks 2 to 6 could fit it. More than one answer can be reasonable; say why you'd choose yours.
+
+1. Whether a woman had a birth in the past year.
+2. The number of births in each Texas county last year.
+3. A respondent's answer to "How satisfied are you with your neighborhood?" (very satisfied, satisfied, dissatisfied, very dissatisfied).
+4. Body mass index.
+5. How a migrant found their first job: through family, through friends, through an agency, or on their own.
+
+<details>
+<summary>Answers</summary>
+
+1. Binary. A logit (or probit) model, fit to the survey design (week 3).
+2. A count of events across places with different numbers of women at risk. A Poisson or negative binomial model with the log of the number of women 15 to 44 as an offset (week 6). Without the offset, the model mostly describes county size.
+3. Ordered. A proportional odds model (week 5), checking the proportional odds assumption. A multinomial model would also work but throws away the ordering.
+4. Continuous. A linear model with `svyglm()` (week 2).
+5. Unordered. A multinomial logit (week 5). Think about whether any two categories are close substitutes, which would strain the IIA assumption.
+
+</details>
+
+## Interpreting results
+
+6. A weighted analysis of the BRFSS finds that 18.5% of adults report fair or poor health (95% CI 18.1% to 18.9%). Write one sentence interpreting it, and say what population it describes.
+7. In a logit model, college graduates have an average marginal effect of $-0.15$ on the probability of fair or poor health, compared with adults without a high school diploma. Write a sentence interpreting it, with the units, and without claiming a causal effect.
+8. A Poisson model of county death counts, with a population offset, gives an exponentiated coefficient of 1.03 for the percent of the county in poverty. Interpret it.
+9. A Kitagawa decomposition of the difference in crude death rates between two states gives a rate effect of 120 and a composition effect of $-100$ (deaths per 100,000). What's the difference in crude rates, and what does each part mean?
+10. A classmate says, "The odds ratio for women is 2.0, so women are twice as likely to report fair or poor health." What's wrong?
+
+<details>
+<summary>Answers</summary>
+
+6. "An estimated 18.5% of adults in the metro and micro areas covered by the 2024 BRFSS SMART file report fair or poor health (95% CI 18.1% to 18.9%)." It describes that adult population, not the respondents, and not all U.S. adults.
+7. "College graduates are 15 percentage points less likely to report fair or poor health than adults without a high school diploma, comparing people with the same values of the other variables in the model." Percentage points, not percent, and "less likely," not "a degree lowers."
+8. Each additional percentage point of poverty is associated with a death rate 3% higher (a rate ratio of 1.03), comparing counties with the same values of the other variables. Because it's a rate model, it's about the rate, not the number of deaths, and it describes counties, not individuals.
+9. The difference is $120 + (-100) = 20$ per 100,000. The first state's age-specific death rates are higher, which alone would make its crude rate 120 points higher, but its population is younger (or otherwise differently composed), which alone would make it 100 points lower.
+10. An odds ratio isn't a ratio of probabilities. Unless the outcome is rare, a doubling of the odds is much less than a doubling of the probability (from 0.20, doubling the odds gives 0.33, not 0.40). Report the predicted probabilities or a risk ratio as well.
+
+</details>
+
+## A self-check on your final paper
+
+Your proposal was due in week 6. Before the second half of the semester, check that you can answer each of these in a sentence:
+
+1. **The question.** What, specifically, do you want to know? Could someone tell from your question what the outcome and the comparison are?
+2. **The data.** Which data set will you use, and do you have it (or have you applied for it)?
+3. **The outcome.** What's your outcome variable, and what kind is it (continuous, binary, ordered, unordered, count)?
+4. **The population.** Which population will your results describe? Does your data set, with its weights, represent it?
+
+If any of these is hard to answer, that's the conversation to have with me in week 9.

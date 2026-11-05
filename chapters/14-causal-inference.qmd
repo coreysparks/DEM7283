@@ -12,6 +12,30 @@ All semester, I've been careful to say "associated with" and not "causes." In we
 
 The example is a question with real policy stakes: if people without health insurance had it, how much more likely would they be to get a routine checkup?
 
+Before any method, pin the question down. A causal question has five parts, and vague answers to any of them make the estimate hard to interpret:
+
+| Part | For this example |
+|---|---|
+| **Treatment** | Having any health insurance coverage, compared with having none |
+| **Outcome** | Having a routine checkup in the past year |
+| **Eligible population** | Adults 18 to 64 in the BRFSS SMART metro areas (nearly everyone 65 and over has Medicare) |
+| **Follow-up period** | The year after the treatment is set; this is where our data fall short, as you'll see below |
+| **Causal contrast** | The difference in the probability of a checkup, insured versus uninsured, among the currently uninsured (the ATC, defined below) |
+
+::: {.callout-note title="This week at a glance"}
+**The question.** For adults who are currently uninsured, how much more likely would they be to have a routine checkup if they had insurance?
+
+**By the end of this week you should be able to**
+
+1. define a causal question (treatment, outcome, population, timing and contrast) and say which average effect (ATE, ATT or ATC) answers it;
+2. draw a DAG, use it to decide what to adjust for, and state the assumptions (consistency, exchangeability, positivity) in plain language;
+3. estimate an effect with propensity score weighting, check overlap and balance, and explain what those checks can and can't establish.
+
+**Before you begin.** You need logit models and average marginal effects from [week 3](03-logit-probit.qmd#average-marginal-effects), survey designs from [week 2](02-survey-design.qmd), and the warnings about association and causation from weeks [7](07-decomposition.qmd#decomposition-is-accounting), [10](10-longitudinal.qmd#what-does-it-mean) and [12](12-multilevel-1.qmd#centering).
+
+**Required and optional.** Propensity score weighting is the method to learn in depth, and nearest neighbor matching is the required alternative. The variations on matching and entropy balancing are optional.
+:::
+
 ## Setup
 
 `dagitty` and `ggdag` draw and analyze DAGs [@textor2016], `MatchIt` [@ho2011] matches on the propensity score, `WeightIt` [@greifer_weightit] estimates propensity score weights, `cobalt` checks balance, and `EValue` does the sensitivity analysis.
@@ -55,11 +79,13 @@ pct <- function(x, d = 1) paste0(format(round(100 * x, d), nsmall = d), "%")
 
 The modern framework for causal inference starts with **potential outcomes**. For each person $i$, imagine two versions of the outcome: $Y_i(1)$, whether they'd get a checkup *if* they had insurance, and $Y_i(0)$, whether they'd get one *if* they didn't. The causal effect of insurance for that person is $Y_i(1) - Y_i(0)$. The problem, sometimes called the fundamental problem of causal inference, is that we only ever see one of the two. An insured person's $Y_i(0)$ is a counterfactual: it didn't happen.
 
+Take one person. Rosa is 34 and uninsured, and she didn't have a checkup last year, so we observe $Y_{\text{Rosa}}(0) = 0$. Would she have had one if she'd been insured? Maybe; maybe not. We'll never see $Y_{\text{Rosa}}(1)$, because Rosa wasn't insured last year, and we can't rerun the year. Nothing in the data tells us her individual effect. That's why causal inference works with *averages* over many people: we can't see both outcomes for any one person, but under the right assumptions we can learn about the average of $Y(1)$ and the average of $Y(0)$ in a group by comparing different people.
+
 So we settle for averages over groups of people. Three are common.
 
-1. The **average treatment effect** (ATE), $E[Y(1) - Y(0)]$, averages over everyone.
-2. The **average treatment effect on the treated** (ATT) averages over people who actually got the treatment: what did insurance do for the insured?
-3. The **average treatment effect on the controls** (ATC) averages over people who didn't: what *would* insurance do for the uninsured?
+1. The **average treatment effect** (ATE), $E[Y(1) - Y(0)]$, averages over everyone: what would the checkup rate be if *every* adult were insured, compared with if none were? It's computed over the characteristics (age, income and so on) of the whole population.
+2. The **average treatment effect on the treated** (ATT) averages over people who actually got the treatment: what did insurance do for the insured? It's computed over the characteristics of the people who are insured, who are older and richer, on average.
+3. The **average treatment effect on the controls** (ATC) averages over people who didn't: what *would* insurance do for the uninsured, like Rosa? It's computed over the characteristics of the currently uninsured.
 
 These can differ, because the effect of insurance is probably different for different people. For policy, the ATC is usually the question: an insurance expansion would cover the people who are currently uninsured, so we want the effect for them. That's what I'll estimate.
 
@@ -67,7 +93,13 @@ These can differ, because the effect of insurance is probably different for diff
 
 If we just compare insured and uninsured people, we're comparing $E[Y(1) \mid \text{insured}]$ with $E[Y(0) \mid \text{uninsured}]$. That's only the causal effect if the insured and uninsured would have had the same checkup rates under the same insurance status, and they wouldn't. Insured people are older, richer, more educated, and more likely to be employed, and all of those affect getting a checkup on their own. Those variables are **confounders**: they affect both the treatment and the outcome.
 
-The key assumption that lets us estimate a causal effect from observational data is **conditional exchangeability** (also called no unmeasured confounding, or ignorability): among people with the same values of the confounders $X$, insurance status is as good as random. If that holds, and if people with every combination of $X$ have some chance of being both insured and uninsured (**positivity**), we can estimate causal effects by comparing like with like. @hernan_robins2020 is the best book-length introduction, and it's free online.
+Three assumptions let us estimate a causal effect from observational data. In plain language:
+
+1. **Consistency.** The treatment is well defined, so a person's observed outcome is their potential outcome under the treatment they actually got. "Insured" lumps together employer plans, Medicaid and marketplace plans, which might have different effects, so this assumption is already doing some work.
+2. **Conditional exchangeability** (also called no unmeasured confounding, or ignorability). Among people with the same values of the confounders $X$, who is insured is as good as random: the insured and uninsured would have had the same checkup rates if they'd had the same insurance status.
+3. **Positivity.** People with every combination of $X$ have some chance of being both insured and uninsured, so there's someone to compare with.
+
+If all three hold, we can estimate causal effects by comparing like with like. None of them can be fully checked with the data; you argue for them. @hernan_robins2020 is the best book-length introduction, and it's free online.
 
 ## Directed acyclic graphs
 
@@ -115,7 +147,7 @@ adjustmentSets(dag)
 
 The minimal set is the seven demographic and socioeconomic variables. Two things are *not* in it, and both matter.
 
-1. **Mediators.** Having a regular doctor is on the path from insurance to checkups. Adjusting for it would remove part of the effect we're trying to estimate, the part that works by giving people a doctor. Don't adjust for variables caused by the treatment.
+1. **Mediators.** Having a regular doctor is on the path from insurance to checkups. When the question is the *total* effect of insurance, as ours is, adjusting for it would remove part of the effect we're trying to estimate, the part that works by giving people a doctor. So, for a total effect, don't adjust for variables caused by the treatment. (Questions about *direct* effects, like "how much does insurance matter apart from getting people a doctor?", are a different question, with their own methods and stronger assumptions.)
 2. **Colliders.** A collider is a variable caused by two others, like $X \rightarrow C \leftarrow Y$. Two causes of a collider are independent until you condition on it; then they become associated. The classic example: if admission to a selective program depends on either talent or connections, then among the admitted, talent and connections are negatively correlated, even if they're unrelated in the population [@elwert_winship2014]. Adjusting for a collider, or selecting your sample on one, creates bias that wasn't there. A surprising number of "controls" in published regressions are colliders.
 
 ```{r}
@@ -167,6 +199,10 @@ naive <- avg_comparisons(fit_naive, variables = "insured", wts = "(weights)")
 ```
 
 `r pct(1 - weighted.mean(brfss$insured, brfss$sw))` of these adults are uninsured. The unadjusted difference in the share with a checkup in the past year is `r round(100 * naive$estimate, 1)` percentage points. Some of that is confounding.
+
+::: {.callout-warning title="The timing problem"}
+A causal claim needs the treatment to come before the outcome. These data don't give us that. The BRFSS asks whether someone is insured *now* and whether they had a checkup in the *past year*. Someone insured today may have been uninsured at the time of their checkup, or may have gotten coverage *because* a checkup found a problem. So the example illustrates the methods, and the assumptions they need, but even with perfect adjustment it wouldn't establish that insurance came first. A real study would use data that measure insurance before the outcome period, like a panel survey or administrative records. Keep this in mind for every estimate below.
+:::
 
 ::: {.callout-note}
 I dropped people with missing values on any of these variables, which is about a quarter of the sample, mostly because of income. A real analysis would use multiple imputation from week 9 first, and then do everything below within each imputed data set.
@@ -221,6 +257,8 @@ love.plot(w_glm, thresholds = c(m = 0.1), abs = TRUE, binary = "std",
 
 Before weighting, the insured and uninsured differ by more than 0.1 standard deviations on most of the confounders, by more than 0.5 on some, like income and Hispanic ethnicity. After weighting, every one is under 0.1. In the weighted data, insured and uninsured adults look alike on everything in the model. That's the thing propensity scores can do that ordinary regression can't: you can see whether the adjustment worked, before you look at the outcome.
 
+Be precise about what "worked" means, though. Balance is about the *measured* covariates, and about the summaries you checked (here, means). A standardized difference below 0.1 says the groups have similar means on age, income and the rest. It says nothing about health status, motivation, or anything else we didn't measure, so it doesn't establish exchangeability. Good balance is necessary, not sufficient.
+
 ::: {.callout-note title="Code explanation: `love.plot()`"}
 `love.plot()` from `cobalt` plots the standardized mean difference for every covariate, before and after adjustment. `abs = TRUE` plots absolute values, `binary = "std"` standardizes binary variables too, `thresholds = c(m = 0.1)` draws the 0.1 line, and `var.order = "unadjusted"` sorts the covariates by how unbalanced they were. `bal.tab(w_glm)` gives the same information as a table.
 :::
@@ -239,6 +277,12 @@ atc_ps <- avg_comparisons(fit_ps, variables = "insured", wts = "(weights)")
 atc_ps
 ```
 
+::: {.callout-tip title="Reading the result: a right and a wrong interpretation"}
+**Right:** "If insured and uninsured adults are exchangeable given the measured characteristics, and setting aside the timing problem, weighting estimates that having insurance would raise the probability of a past-year checkup among the currently uninsured by `r round(100 * atc_ps$estimate, 1)` percentage points (95% CI `r round(100 * atc_ps$conf.low, 1)` to `r round(100 * atc_ps$conf.high, 1)`)."
+
+**Wrong:** "Insurance causes a `r round(100 * atc_ps$estimate, 1)` percentage point increase in checkups." That states the causal conclusion without the assumptions it rests on. Weighting made the insured and uninsured similar on measured characteristics; it can't establish that insurance came before the checkup or remove confounding from variables we didn't measure. The calculation illustrates a method; the causal interpretation needs a separate argument.
+:::
+
 ::: {.callout-warning}
 The standard errors here treat the propensity weights as fixed, which isn't quite right, because they were estimated. In practice, that usually makes them a little conservative for the ATE and ATC. For exact standard errors, use the `glm_weightit()` function in `WeightIt`, which accounts for the estimation of the weights (but not the survey strata), or bootstrap the whole procedure with replicate weights, as in week 7.
 :::
@@ -247,7 +291,7 @@ The standard errors here treat the propensity weights as fixed, which isn't quit
 
 ### Nearest neighbor matching
 
-Matching is the oldest and most intuitive way to use the propensity score [@stuart2010]. For the ATC, the uninsured are the group we want to learn about, so for each uninsured person we find the insured person whose propensity score is closest, and set the rest of the insured aside. If the matching works, the matched insured group looks like the uninsured group on all the confounders, and comparing their checkup rates is comparing like with like. That's what an experiment would give us, if we could randomly assign insurance.
+Matching is the oldest and most intuitive way to use the propensity score [@stuart2010]. For the ATC, the uninsured are the group we want to learn about, so for each uninsured person we find the insured person whose propensity score is closest, and set the rest of the insured aside. If the matching works, the matched insured group looks like the uninsured group on all the *measured* confounders, and comparing their checkup rates is comparing like with like on those characteristics. An experiment would balance the unmeasured ones too; matching can't.
 
 `MatchIt` does the matching. Its main function, `matchit()`, uses the same formula as `weightit()`, and I'll also set a **caliper**: a maximum distance allowed between the propensity scores of a matched pair. An uninsured person with no insured person within the caliper goes unmatched, instead of being paired with someone who isn't really similar.
 
@@ -402,7 +446,7 @@ The estimate is the difference between the two weighted shares above. The design
 The `MatchIt` documentation recommends standard errors that account for the matched pairs, since the two people in a pair were chosen to be alike. You can do that by using `ids = ~subclass` in `svydesign()`, but then you can't also use the survey strata. Here, the standard error is about the same either way, but with smaller samples or stronger matching it may not be. The "Estimating Effects After Matching" vignette that comes with `MatchIt` covers this in detail.
 :::
 
-### Matching choices
+### Matching choices *(optional)*
 
 Nearest neighbor 1:1 matching without replacement is the default, but there are other choices to make, and matching is usually a process of trying a few, checking balance each time, and improving. Four choices matter here.
 
@@ -521,7 +565,7 @@ With pair weights, the largest standardized mean difference drops from `r round(
 Like the propensity score model, the matching method is chosen by looking at balance, not at the outcome. Try different specifications, keep the one that balances best with the sample you can live with, and only then fit the outcome model. If you look at the estimate while you're choosing, it's easy to talk yourself into the specification that gives the answer you hoped for.
 :::
 
-### Other ways to get there
+### Other ways to get there *(optional)*
 
 Logit propensity weights and nearest neighbor matching are two choices among many. **Entropy balancing** [@hainmueller2012] skips the propensity model and finds weights that make the means of the covariates exactly equal across groups, while keeping the weights as even as possible. And plain regression adjustment, followed by averaging the predicted difference over the uninsured (like the average marginal effects from week 3), estimates the same ATC under different assumptions.
 
@@ -577,7 +621,9 @@ ev <- evalues.RR(est = rr_ps$estimate, lo = rr_ps$conf.low, hi = rr_ps$conf.high
 ev
 ```
 
-The risk ratio is `r round(rr_ps$estimate, 2)`: insurance makes a past-year checkup about `r round(rr_ps$estimate, 1)` times as likely for the uninsured. The E-value is `r round(ev[2, 1], 2)`. To explain the whole effect, an unmeasured confounder would need to make people `r round(ev[2, 1], 1)` times as likely to be insured *and* `r round(ev[2, 1], 1)` times as likely to get a checkup, after accounting for age, income, education and the rest. For the confidence interval to include no effect, it would need associations of `r round(ev[2, 2], 1)`. Those are strong associations, stronger than most of the measured confounders have, so I'm fairly confident that insurance increases checkups, though less confident about the exact size.
+The risk ratio is `r round(rr_ps$estimate, 2)`: insurance makes a past-year checkup about `r round(rr_ps$estimate, 1)` times as likely for the uninsured. The E-value is `r round(ev[2, 1], 2)`. To explain the whole effect, an unmeasured confounder would need to make people `r round(ev[2, 1], 1)` times as likely to be insured *and* `r round(ev[2, 1], 1)` times as likely to get a checkup, after accounting for age, income, education and the rest. For the confidence interval to include no effect, it would need associations of `r round(ev[2, 2], 1)`. Those are strong associations, stronger than most of the measured confounders have. So *unmeasured confounding* alone would have to be quite strong to explain the result away.
+
+Notice how narrow that statement is. The E-value answers one question, about an unmeasured confounder of a given strength. It says nothing about the timing problem (insurance measured now, checkups over the past year), about who is in the sample, about errors in how insurance or checkups were reported, or about whether "insured" is one well-defined treatment. Those are separate threats, and each needs its own argument. A fair summary of this example is: under the stated assumptions, the methods agree on an increase of about this size, and the result is robust to moderate unmeasured confounding, but the data can't establish that insurance preceded the checkup.
 
 ::: {.callout-tip}
 Sensitivity analyses like this don't prove anything. They translate "there might be unmeasured confounding" into a specific question that readers can think about: is there plausibly a confounder that strong? That's a much better conversation than either ignoring the problem or giving up.
@@ -585,13 +631,27 @@ Sensitivity analyses like this don't prove anything. They translate "there might
 
 ## Summary
 
-A causal effect compares potential outcomes that we can never see together, so we estimate averages, like the ATE, ATT or ATC, and need assumptions to do it: conditional exchangeability and positivity. A DAG makes the assumptions explicit and tells you what to adjust for, and what not to: never mediators or colliders. Propensity scores summarize the confounders in one number, and weighting or matching on them lets you check balance before looking at the outcome. Matching with `MatchIt` builds a comparison group of people who look like the group you care about, and it makes positivity problems visible as people who can't be matched. With survey data, use the survey weights in the propensity model and in the outcome model: `WeightIt` leaves them out of its weights, so you multiply them in, and `MatchIt`'s `match.data()` already includes them. Different adjustment methods should give similar answers if the model is reasonable, but they all share the assumption of no unmeasured confounding, and an E-value tells you how strong a confounder would have to be to change your conclusion.
+A causal effect compares potential outcomes that we can never see together, so we estimate averages, like the ATE, ATT or ATC, and need assumptions to do it: conditional exchangeability and positivity. A DAG makes the assumptions explicit and tells you what to adjust for, and what not to: for a total effect, not mediators, and never colliders. Propensity scores summarize the confounders in one number, and weighting or matching on them lets you check balance before looking at the outcome. Matching with `MatchIt` builds a comparison group of people who look like the group you care about, and it makes positivity problems visible as people who can't be matched. With survey data, use the survey weights in the propensity model and in the outcome model: `WeightIt` leaves them out of its weights, so you multiply them in, and `MatchIt`'s `match.data()` already includes them. Different adjustment methods should give similar answers if the model is reasonable, but they all share the assumption of no unmeasured confounding, and an E-value tells you how strong a confounder would have to be to change your conclusion.
 
 ## Exercises
 
 These exercises are Homework 14.
 
-**1.** Add `doctor` (having a personal doctor, from `persdoc3`: codes 1 and 2 are yes, 3 is no) to the propensity score model and redo the weighting. What happens to the estimate, and why is this the wrong thing to do?
+**Purpose.** Practice stating a causal question and its assumptions, estimating an effect with propensity scores, and being clear about what the analysis can and can't establish.
+
+**What is provided.** The BRFSS analysis data `brfss`, the propensity score formula `f_ps`, the weights `w_glm` and the matched data from this chapter.
+
+**A satisfactory answer** defines the causal question before estimating anything; states the assumptions the estimate needs; reports balance and overlap; and explains what those checks don't prove, including the timing limitation of these data.
+
+**1.** In your own words, define the causal question this chapter estimates: the treatment, outcome, eligible population, follow-up period and causal contrast. Draw a DAG for it (you can adapt the one in this chapter) and state the three assumptions the estimate needs, in plain language. Using the propensity score weights, show the overlap of the propensity scores and the balance of the covariates, and explain in two or three sentences why good balance and overlap don't prove the estimate is causal. Finally, explain the timing limitation of using current insurance and a past-year checkup.
+
+```{r}
+#| label: ex-question
+#| eval: false
+# YOUR CODE HERE
+```
+
+**2.** Add `doctor` (having a personal doctor, from `persdoc3`: codes 1 and 2 are yes, 3 is no) to the propensity score model and redo the weighting. What happens to the estimate, and why is this the wrong thing to do?
 
 ```{r}
 #| label: ex-mediator
@@ -599,7 +659,7 @@ These exercises are Homework 14.
 # YOUR CODE HERE
 ```
 
-**2.** Estimate the ATT instead of the ATC (the effect of insurance for the people who have it). How do the weights, the effective sample size and the estimate change? Which estimand would you report to a state legislature considering a Medicaid expansion?
+**3.** Estimate the ATT instead of the ATC (the effect of insurance for the people who have it). How do the weights, the effective sample size and the estimate change? Which estimand would you report to a state legislature considering a Medicaid expansion?
 
 ```{r}
 #| label: ex-att
@@ -608,7 +668,7 @@ These exercises are Homework 14.
 ```
 
 <details>
-<summary>One solution for exercise 2</summary>
+<summary>One solution for exercise 3</summary>
 
 ```{r}
 #| label: ex-att-solution
@@ -626,7 +686,7 @@ For the ATT, the uninsured get weights of $e/(1 - e)$, and uninsured people who 
 
 </details>
 
-**3.** Redo the 1:1 nearest neighbor match with a tighter caliper (`caliper = 0.05`) and with no caliper. For each, report how many uninsured people go unmatched, the largest standardized mean difference, and the estimate. Then fit the outcome model on `md_nn` with all the confounders included (checkup on insurance plus the confounders, as in the regression adjustment model) and average the predicted difference over the matched uninsured. The `MatchIt` documentation recommends this, since the regression cleans up the balance that matching leaves behind. Does it change the estimate?
+**4.** *(Optional.)* Redo the 1:1 nearest neighbor match with a tighter caliper (`caliper = 0.05`) and with no caliper. For each, report how many uninsured people go unmatched, the largest standardized mean difference, and the estimate. Then fit the outcome model on `md_nn` with all the confounders included (checkup on insurance plus the confounders, as in the regression adjustment model) and average the predicted difference over the matched uninsured. The `MatchIt` documentation recommends this, since the regression cleans up the balance that matching leaves behind. Does it change the estimate?
 
 ```{r}
 #| label: ex-matching
@@ -634,7 +694,7 @@ For the ATT, the uninsured get weights of $e/(1 - e)$, and uninsured people who 
 # YOUR CODE HERE
 ```
 
-**4.** Draw a DAG for a different question in the BRFSS, the effect of current smoking on fair or poor health. Use `adjustmentSets()` to find what you'd need to adjust for, and name at least one variable that would be a mediator and one that would be a collider.
+**5.** Draw a DAG for a different question in the BRFSS, the effect of current smoking on fair or poor health. Use `adjustmentSets()` to find what you'd need to adjust for, and name at least one variable that would be a mediator and one that would be a collider. Say whether the question you're answering is about a total effect.
 
 ```{r}
 #| label: ex-dag
@@ -642,7 +702,7 @@ For the ATT, the uninsured get weights of $e/(1 - e)$, and uninsured people who 
 # YOUR CODE HERE
 ```
 
-**5.** Estimate the effect of insurance separately for Hispanic and NH White adults (subset the data, refit the weights or the match, and estimate the ATC in each group). Is the effect the same size? Calculate an E-value for each.
+**6.** Estimate the effect of insurance separately for Hispanic and NH White adults (subset the data, refit the weights or the match, and estimate the ATC in each group). Is the effect the same size? Calculate an E-value for each.
 
 ```{r}
 #| label: ex-subgroup

@@ -12,6 +12,22 @@ Almost every interesting demographic finding starts as a difference between two 
 
 This week covers the two workhorses. **Kitagawa decomposition** splits a difference in crude rates into a part due to the rates themselves and a part due to population composition, using aggregate data like the death counts from week 6. **Oaxaca-Blinder decomposition** does the same thing with microdata and a regression model, splitting a gap in means into a part *explained* by differences in characteristics and a part that is *unexplained*. I'll finish with the extension to binary outcomes, where the regression is a logit and the arithmetic needs a little more care. Along the way you'll use the survey weights and replicate weights from week 2, because a decomposition is just another estimate, and it needs a standard error.
 
+::: {.callout-note title="This week at a glance"}
+**The question.** Texas and California have nearly the same crude death rate, men earn more than women, and Hispanic adults are more likely to be uninsured. How much of each difference goes along with differences in who is in each group, and how much with differences in outcomes for the same kinds of people?
+
+**By the end of this week you should be able to**
+
+1. compute a Kitagawa decomposition by hand, and show that its two parts add up to the difference;
+2. run an Oaxaca-Blinder decomposition with survey weights, report the gap and both components in the same units, and say which reference coefficients you used;
+3. explain why the explained part isn't a causal effect and the unexplained part isn't a measure of discrimination.
+
+**Before you begin.** You need crude and age-specific rates and the Texas and California data from [week 6](06-count-models.qmd#age-standardization-in-a-regression-model), linear regression, the IPUMS data and replicate weights from [week 2](02-survey-design.qmd#replicate-weights), and predicted probabilities from [week 3](03-logit-probit.qmd).
+
+**Required and optional.** Splitting the explained part of a binary-outcome decomposition into individual variables is an extension, and so is the by-hand matrix version of Oaxaca-Blinder.
+
+**When it's due.** Homework 7 is due before class on March 18, the first class after spring break.
+:::
+
 ## Setup
 
 We need the Texas and California mortality data from week 6, the IPUMS ACS extract for Texas from week 2, and the BRFSS. The `oaxaca` package does the linear decomposition in one line [@hlavac_oaxaca], but it doesn't know about survey weights. So for the regression decompositions, we'll use `svy_oaxaca()`, a function I wrote for this course. It's in the course's `R/` folder, next to `get_mmsa()`. It takes a survey design object, the same kind you've been passing to `svyglm()` since week 2. Because it comes from a file you `source()` and not from a package, `?svy_oaxaca` won't find its help page. Run `svy_oaxaca_help()` instead, which opens the same kind of page in the Viewer.
@@ -58,7 +74,7 @@ $$\text{difference} = \text{part due to composition} + \text{part due to rates (
 
 Different fields use different names for the two parts. Demographers say **composition** and **rate** effects. Economists, who developed the regression version, say **explained** (or endowments) and **unexplained** (or coefficients). They're the same idea.
 
-Before we start, one warning that I'll repeat at the end. A decomposition is *accounting*, not causal inference. It tells you how a difference is arithmetically put together, given a model. It does not tell you what would happen if you changed someone's education or moved them to California. We'll come back to that distinction in week 14.
+Before we start, one warning that I'll repeat at the end. A decomposition is *accounting*, not causal inference. It divides an observed difference into components under a chosen accounting rule. It doesn't tell you what would happen if a policy changed someone's education or moved them to California, and its unexplained component isn't a direct estimate of discrimination. We'll come back to that distinction in week 14.
 
 ## Part 1: Kitagawa decomposition
 
@@ -68,11 +84,35 @@ A crude death rate is a weighted average of age-specific death rates, where the 
 
 $$CDR = \sum_i c_i m_i$$
 
+Before the formula, here is the whole idea with two made-up populations and just two age groups, young and old. Rates are deaths per 1,000.
+
+| | Population A: share | Population A: rate | Population B: share | Population B: rate |
+|---|---:|---:|---:|---:|
+| Young | 0.8 | 2 | 0.6 | 2 |
+| Old | 0.2 | 50 | 0.4 | 40 |
+| **Crude rate** | | $0.8 \times 2 + 0.2 \times 50 = 11.6$ | | $0.6 \times 2 + 0.4 \times 40 = 17.2$ |
+
+Population A's old people die at a *higher* rate (50 against 40), and young people die at the same rate in both. Yet A's crude rate is *lower*, by $11.6 - 17.2 = -5.6$, because A has far fewer old people. A crude difference can reflect differences in the rates, differences in composition, or both, pulling in opposite directions.
+
 For two populations $A$ and $B$, @kitagawa1955 showed that the difference in crude rates can be split exactly into two parts:
 
 $$CDR_A - CDR_B = \underbrace{\sum_i \frac{c_{iA} + c_{iB}}{2}(m_{iA} - m_{iB})}_{\text{rate effect}} + \underbrace{\sum_i \frac{m_{iA} + m_{iB}}{2}(c_{iA} - c_{iB})}_{\text{composition effect}}$$
 
 The rate effect asks how different the death rates are, weighting each age by its average share of the two populations. The composition effect asks how different the age structures are, weighting each age by its average death rate. Using the averages of the two populations, rather than one or the other, is what makes the two parts add up exactly to the total, with nothing left over. You can check the algebra yourself: multiply out the two sums and the cross terms cancel. @preston2001 walk through it, and @das_gupta1993 extends it to rates with more than two factors (age, sex and race at once, for example).
+
+Here's every term for the small example. The **rate effect** weights each difference in rates by the average share of the two populations in that age group:
+
+- young: $\frac{0.8 + 0.6}{2} \times (2 - 2) = 0.7 \times 0 = 0$
+- old: $\frac{0.2 + 0.4}{2} \times (50 - 40) = 0.3 \times 10 = 3.0$
+- total rate effect: $0 + 3.0 = 3.0$
+
+The **composition effect** weights each difference in shares by the average rate in that age group:
+
+- young: $\frac{2 + 2}{2} \times (0.8 - 0.6) = 2 \times 0.2 = 0.4$
+- old: $\frac{50 + 40}{2} \times (0.2 - 0.4) = 45 \times (-0.2) = -9.0$
+- total composition effect: $0.4 - 9.0 = -8.6$
+
+And the two parts add up to the difference exactly: $3.0 + (-8.6) = -5.6$. Population A's higher old-age death rate would make its crude rate 3 points higher, and its younger age structure makes it 8.6 points lower. Keep this example in mind, because Texas and California turn out to look a lot like it.
 
 ### Texas and California
 
@@ -117,6 +157,8 @@ kit_total <- kit |>
 knitr::kable(kit_total, digits = 1)
 ```
 
+`1e5` is R's way of writing $1 \times 10^5$, or 100,000, so `m` is deaths per 100,000.
+
 ::: {.callout-note title="Code explanation: `pivot_wider()` with two value columns"}
 The data start out "long," with one row for each state and age group (26 rows). The formula needs Texas and California values next to each other, so we want them "wide," with one row per age group (13 rows).
 
@@ -155,7 +197,7 @@ Two practical points. First, the age groups matter. Wide open-ended groups like 
 
 ### From rates to regressions
 
-Kitagawa works with a handful of categories. With microdata, we usually want to account for many characteristics at once, some continuous, and that's where a regression comes in. @oaxaca1973 and @blinder1973 independently proposed the same idea, in the same year, for the same question: how much of the gap in wages between groups is due to differences in productive characteristics, and how much is due to the groups being paid differently for the same characteristics?
+Kitagawa works with a handful of categories. With microdata, we usually want to account for many characteristics at once, some continuous, and that's where a regression comes in. The goal is the same: we start from the observed gap between two groups, and we split it into a part that goes with differences in characteristics (composition) and a part that goes with differences in how characteristics relate to the outcome (rates). What changes is the accounting tool: instead of age-specific rates and shares, we use regression coefficients and group means. @oaxaca1973 and @blinder1973 independently proposed the same idea, in the same year, for the same question: how much of the gap in wages between groups is due to differences in productive characteristics, and how much is due to the groups being paid differently for the same characteristics?
 
 Fit the same linear regression separately to two groups, $A$ and $B$:
 
@@ -169,11 +211,11 @@ Now add and subtract a set of reference coefficients $\beta^*$ and rearrange:
 
 $$\bar y_A - \bar y_B = \underbrace{(\bar X_A - \bar X_B)\beta^*}_{\text{explained}} + \underbrace{\bar X_A(\beta_A - \beta^*) + \bar X_B(\beta^* - \beta_B)}_{\text{unexplained}}$$
 
-The **explained** part is how much the gap would be if both groups were paid according to the same coefficients, so the only thing that differs is their characteristics. The **unexplained** part is everything else: differences in the coefficients, including the intercepts. It's the same structure as Kitagawa, with $\bar X$ playing the part of composition and $\beta$ the part of the rates.
+The **explained** part is how much the gap would be if both groups were paid according to the same coefficients, so the only thing that differs is their characteristics. "Explained" is a technical word here, and it means much less than it sounds like: the part of the gap *attributed to the measured characteristics in this model, using this choice of reference coefficients*. It doesn't mean causally explained. The **unexplained** part is everything else: differences in the coefficients, including the intercepts. It's the same structure as Kitagawa, with $\bar X$ playing the part of composition and $\beta$ the part of the rates.
 
 ### Choosing the reference coefficients
 
-The decomposition is exact for any $\beta^*$, but the split between explained and unexplained depends on which one you choose. This is the **index number problem**, and it's the same reason Kitagawa used the average of the two populations. There are four common choices:
+The decomposition is exact for any $\beta^*$, but the split between explained and unexplained depends on which one you choose. The reason is easy to see in the formula. The explained part is the difference in characteristics *times* $\beta^*$. If one group's coefficients put a big value on education and the other's a small one, the same difference in education is "worth" more under the first set. The observed gap doesn't change at all; only the way it's divided up does. This is the **index number problem**, and it's the same reason Kitagawa used the average of the two populations. There are four common choices:
 
 1. $\beta^* = \beta_A$, the coefficients of the advantaged group, as in @oaxaca1973. It treats group $A$'s wage structure as the "fair" one.
 2. $\beta^* = \beta_B$, the coefficients of the disadvantaged group.
@@ -223,6 +265,8 @@ wages |>
 My extract doesn't have hours or weeks worked, so these are *annual* wages, and part of any gap between men and women in annual wages is a gap in how much they work. A real analysis would add usual hours (`UHRSWORK`) and weeks worked (`WKSWORK2`) to the extract, and either model hourly wages or restrict to full-time, full-year workers. Exercise 2 asks you to think about what that does to the decomposition.
 :::
 
+In the recode, `cut(EDUC, breaks = c(-1, 5, 6, 8, 10, 11), labels = ...)` groups the IPUMS education codes into five categories (each category runs from just above one break to the next). `case_when()` with `.default = "NH Other"` gives everyone not matched by an earlier rule the last category, `fct_relevel(..., "NH White")` makes non-Hispanic White the first (reference) level, and `substr(OCCSOC, 1, 2)` keeps the first two characters of the occupation code.
+
 Women in this sample are *more* likely than men to have a bachelor's degree, and the two groups have the same average age. So education and age won't explain the gap, and if anything, education will work against it.
 
 ### The decomposition with `svy_oaxaca()`
@@ -267,6 +311,14 @@ The output has one row per component. `estimate` is in the units of the outcome 
 The gap in mean log wages is `r round(est(ob, "gap"), 3)`, which means men's geometric mean wage is about `r pct(exp(est(ob, "gap")) - 1, 0)` higher than women's. Of that gap, only `r round(est(ob, "explained"), 3)` is explained by the characteristics in the model, and `r round(est(ob, "unexplained"), 3)`, or `r pct(est(ob, "unexplained") / est(ob, "gap"), 0)` of it, is unexplained.
 
 The detailed explained part shows why. Education *reduces* the gap by `r round(abs(est(ob, "education")), 3)`, because women are more educated, and women would earn more than men if that were the only difference. Occupation *adds* `r round(est(ob, "occupation"), 3)`, because men and women work in different occupations, and men's are better paid. Age and race and ethnicity contribute almost nothing, because men and women in the labor force are about the same age and come from the same population. So the small explained total is really two moderate effects that mostly cancel, the same pattern as Texas and California.
+
+That's also why components can be negative, and why "share of the gap" can do strange things. A negative component, like education here, means that difference in characteristics works *against* the gap: it would make the gap smaller (or reverse it) if it were the only difference. When components have opposite signs, one of them can be larger than the whole gap, so a share above 100% (or below 0%) isn't an error. It means the other components pull the other way. Report the components in the units of the outcome, and use shares only as a rough summary.
+
+::: {.callout-tip title="Reading the result: a right and a wrong interpretation"}
+**Right:** "The gap in mean log annual wages between men and women is `r round(est(ob, "gap"), 3)`. Using pooled coefficients as the reference, `r round(est(ob, "explained"), 3)` of it is attributed to differences in measured education, age, race and ethnicity and occupation, and `r round(est(ob, "unexplained"), 3)` is not accounted for by those characteristics."
+
+**Wrong:** "`r pct(est(ob, "unexplained") / est(ob, "gap"), 0)` of the gender wage gap is due to discrimination." The unexplained part includes everything the model leaves out (hours worked most of all, here), and the split depends on the reference coefficients. It's a residual, not a measurement of discrimination.
+:::
 
 Every component is precisely estimated, which shouldn't be surprising with `r fmt(nrow(wages))` workers. The point is that a decomposition is an estimate like any other, so you *can* get a design-based standard error for it, and you should report one.
 
@@ -329,6 +381,8 @@ bind_rows(`Pooled, with group indicator` = as.data.frame(ob),
 
 `bind_rows()` stacks the three tables, and `.id = "reference"` adds a column holding the name each one was given, so we can tell the rows apart after filtering. The share of the gap that's "explained" ranges from `r pct(min(est(ob, "explained"), est(ob_men, "explained"), est(ob_women, "explained")) / est(ob, "gap"), 0)` to `r pct(max(est(ob, "explained"), est(ob_men, "explained"), est(ob_women, "explained")) / est(ob, "gap"), 0)`, depending on whose wage structure you take as the benchmark. With women's coefficients, the explained part can't even be distinguished from zero. The conclusion (most of the gap is not explained by these characteristics) holds under all three, but the numbers move, which is why you report the reference you used.
 
+Remember that the gap itself, `r round(est(ob, "gap"), 3)`, is the same in all three rows of the underlying output. Only the allocation between explained and unexplained changes.
+
 ### The detailed unexplained part, and why I didn't report it
 
 You'll see papers that split the unexplained part by variable too, as $\bar X_{kA}(\beta_{kA} - \beta^*_k)$ for each $k$. For continuous variables that's fine. For categorical ones, it isn't: the contribution of a set of dummies to the unexplained part changes when you change the omitted category, even though the model is the same [@oaxaca_ransom1999]. The intercept changes too, so you can move "unexplained" from the intercept to education and back by picking a different reference group. @yun2005 proposed a normalization that makes the detailed results invariant to the choice. My advice is to report the detailed *explained* part, which doesn't have this problem, and the unexplained part as a total, unless you have a good reason to do more. That's why `svy_oaxaca()` only reports the detailed explained part.
@@ -363,7 +417,7 @@ The middle term is the counterfactual: the share of group $A$ we'd expect to hav
 
 ### Health insurance among Hispanic and NH White adults
 
-Back to the BRFSS. The outcome is having no health insurance, for adults 18 to 64 (nearly everyone 65 and over has Medicare), and the groups are Hispanic and non-Hispanic White adults in all of the metro areas in the 2024 MMSA file. As in week 2, I build the design on the whole file and subset it, so the variance calculation knows about everyone.
+Back to the BRFSS. The outcome is having no health insurance, for adults 18 to 64 (nearly everyone 65 and over has Medicare), and the groups are Hispanic and non-Hispanic White adults in all of the metro areas in the 2024 MMSA file. As in week 2, I build the design on the whole file and subset it, so the variance calculation knows about everyone. `in_sample` is `TRUE` for respondents who meet every condition joined by `&`: NH White or Hispanic, 18 to 64, and not missing any variable in the model.
 
 ```{r}
 #| label: brfss-data
@@ -412,7 +466,7 @@ The gap in uninsurance is `r round(100 * est(fair, "gap"), 1)` percentage points
 
 There's no simple formula for the variance of a counterfactual average prediction, but replication doesn't need one: the function computes the whole decomposition once per replicate, exactly as it did with the ACS.
 
-### Which characteristics matter?
+### Which characteristics matter? *(optional)*
 
 @fairlie2005 gets the contributions of individual variables by swapping them one at a time between matched samples, which is fiddly. @yun2004 proposed a simpler approximation, and it's what the indented rows above use. For each variable, compute its contribution in the *linear* version, $(\bar X_{kA} - \bar X_{kB})\hat\beta_{kB}$, using the logit coefficients, and then share out the explained part in proportion to those contributions. So the detail rows still add up to the explained total.
 
@@ -430,7 +484,13 @@ Kitagawa decomposition splits a difference in crude rates into a rate effect and
 
 ## Exercises
 
-These exercises are Homework 7.
+These exercises are Homework 7. **Homework 7 is due before class on March 18, after spring break.**
+
+**Purpose.** Decompose a difference between two groups, report the components honestly, and say what they do and don't mean.
+
+**What is provided.** The Texas and California mortality data, the IPUMS wage data and replicate design `acs_rep`, and the BRFSS design `des_boot` from this chapter, with `svy_oaxaca()` from the course's `R/` folder.
+
+**A satisfactory answer** reports the total gap and every component in the units of the outcome; shows that the components add up to the gap (allowing for rounding); names the reference used; and doesn't describe the explained part as a cause or the unexplained part as discrimination.
 
 **1.** Collapse the 13 age groups in the Texas and California data into five broad groups (under 25, 25-44, 45-64, 65-84, and 85+) and redo the Kitagawa decomposition. How much do the rate and composition effects change, and why would wider age groups move part of the composition effect into the rate effect?
 
@@ -440,9 +500,9 @@ These exercises are Homework 7.
 # YOUR CODE HERE
 ```
 
-**2.** My wage data don't include hours worked. Suppose women work fewer hours than men on average, and that part-time workers are concentrated in some occupations. Which part of the decomposition (explained or unexplained) is the hours difference hiding in now, and how do you expect the explained part, and the contribution of occupation, to change if you added hours to the model? You don't need to run anything, but if you want to, make your own IPUMS extract with `UHRSWORK` and `WKSWORK2` and try it.
+**2.** My wage data don't include hours worked. Suppose women work fewer hours than men on average, and that part-time workers are concentrated in some occupations. Leaving hours out doesn't just leave one piece of the gap unaccounted for: because hours are related to occupation and other variables, it can also change their coefficients, and so their contributions. In a paragraph, describe how adding hours to the model could change the explained part, the unexplained part, and the contribution of occupation. Where the direction of a change depends on assumptions (for example, on how hours relate to occupation), say what you'd need to assume. You don't need to run anything, but if you want to, make your own IPUMS extract with `UHRSWORK` and `WKSWORK2` and try it.
 
-**3.** Using the Texas IPUMS data, decompose the gap in log wages between NH White and Hispanic men who are employed and 25 to 64, using the pooled reference with a group indicator. Report the explained and unexplained parts, the detailed explained part by variable group, and standard errors from the replicate weights.
+**3.** Using the Texas IPUMS data, decompose the gap in log wages between NH White and Hispanic men who are employed and 25 to 64, using the pooled reference with a group indicator. Report the total gap, the explained and unexplained parts, and the detailed explained part by variable group, all in log wage units with standard errors from the replicate weights. Show that the components add up to the gap, allowing for rounding. Name the reference you used, and explain in two or three sentences how changing the reference could change the explained and unexplained parts without changing the observed gap.
 
 ```{r}
 #| label: ex-ob-race

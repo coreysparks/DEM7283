@@ -6,15 +6,17 @@ The first course gave you the linear model and the logic of inference. This one 
 
 ## How the book is organized
 
-The chapters keep their week numbers, because the text refers to "week 2" or "next week" all the time, and week 8 is spring break, so there is no Week 8 chapter.
+The chapters keep their week numbers, because the text refers to "week 2" or "next week" all the time. Week 8 is spring break, so its chapter is a short, optional review sheet, and week 16 is the final paper, so its chapter is a guide to the paper and the presentation.
+
+Every chapter opens with a box that states the week's question, what you should be able to do by the end, what you need from earlier weeks, and which sections are optional. Sections marked *(optional)* or *(extension)* go beyond what the homework requires. Each chapter also includes at least one example of a right and a wrong way to interpret a result, because the wrong ways are usually the tempting ones.
 
 - **Workflow and survey data** (weeks 1 and 2) sets up a reproducible project with Quarto, renv and Git, and then covers weights, strata, clusters and replicate weights.
 - **Categorical and count outcomes** (weeks 3 to 6) covers logit and probit models, comparing coefficients across nested logits, ordinal and multinomial models, and models for counts and rates, with predicted probabilities and average marginal effects throughout.
-- **Decomposition and missing data** (weeks 7 and 9) covers Kitagawa and Oaxaca-Blinder decomposition, and multiple imputation that respects the survey design.
+- **Decomposition and missing data** (weeks 7 to 9) covers Kitagawa and Oaxaca-Blinder decomposition, an optional review over spring break, and multiple imputation that respects the survey design.
 - **Longitudinal, nonlinear and multilevel models** (weeks 10 to 13) covers GEE, fixed effects and within-between models, splines and GAMs, and two weeks of multilevel models, ending with growth curves and the age-period-cohort identification problem.
-- **Causal inference and prediction** (weeks 14 and 15) covers DAGs and propensity score weighting, and tree-based machine learning with `tidymodels`.
+- **Causal inference and prediction** (weeks 14 to 16) covers DAGs and propensity score weighting, tree-based machine learning with `tidymodels`, and a guide to the final paper.
 
-Each chapter ends with exercises. The code chunks for the exercises are left empty for you to fill in, and some have hints you can open.
+Each chapter ends with exercises, which are that week's homework. Each set starts with its purpose, what's provided, and what a satisfactory answer looks like. The code chunks are left empty for you to fill in, and some have hints you can open.
 
 ## Getting set up
 

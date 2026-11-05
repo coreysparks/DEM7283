@@ -10,6 +10,20 @@ source(here::here("_common.R"))
 
 Demographers have always cared about where people live, and in week 6 we modeled places directly. This week and next, we put people back *inside* places: individual outcomes, individual predictors, and characteristics of the places they live, in one model. That's what multilevel models are for. This week covers the basic model, how much of the variation in an outcome is between places, how to center predictors so the coefficients mean what you think they mean, random slopes, and how to use survey weights in a multilevel model, which is harder than it sounds. Next week extends all of this to binary outcomes, growth curves and age-period-cohort models.
 
+::: {.callout-note title="This week at a glance"}
+**The question.** How much does average BMI differ between metro areas, and is living in a more educated metro associated with lower BMI beyond a person's own education?
+
+**By the end of this week you should be able to**
+
+1. identify the levels in a multilevel data set and which variables vary at each level;
+2. fit a random intercept model, interpret the variance of the intercepts and the ICC, and explain shrinkage (partial pooling);
+3. use group-mean centering to separate a within-metro comparison from a between-metro comparison, and interpret each.
+
+**Before you begin.** You need the within-between split from [week 10](10-longitudinal.qmd#the-within-between-model), which this week applies to people in places instead of rounds in children, and the difference between sampling weights and other kinds of weights from [week 2](02-survey-design.qmd#regression-with-survey-data).
+
+**Required and optional.** Random slopes and cross-level interactions build on random intercepts, so make sure you can interpret a random intercept model first. The Bayesian alternative at the end is optional.
+:::
+
 ## A fundamental problem of names
 
 Before we start, the vocabulary. These models go by many names, depending on the discipline you come from:
@@ -84,7 +98,7 @@ With a normally distributed outcome, there are two sources of variation: the per
 
 $$\text{ICC} = \frac{\sigma^2_u}{\sigma^2_u + \sigma^2_e}$$
 
-The ICC is the share of the variance that's between groups, and it's also the correlation between two randomly chosen people in the same randomly chosen group: how similar you are, on average, to one of your neighbors. It runs from 0 to 1. An ICC of 0.5 is very large, and 0.01 means you're barely more like your neighbors than like a stranger.
+The ICC is the share of the variance that's between groups, and it's also the correlation between two randomly chosen people in the same randomly chosen group: how similar you are, on average, to one of your neighbors. It runs from 0 to 1. Notice what it is and isn't. It's a way of partitioning the variance *under this model*: add predictors and it changes. It isn't the share of the outcome *caused* by place. Metros differ in BMI partly because different kinds of people live in them, and the empty model's ICC lumps that in with anything about the places themselves. An ICC of 0.5 is very large, and 0.01 means you're barely more like your neighbors than like a stranger.
 
 ### When to use fixed effects and when to use random effects
 
@@ -168,6 +182,17 @@ brfss |>
             smallest = min(table(mmsa)), largest = max(table(mmsa)))
 ```
 
+Before any model, sort the variables by level. **Level 1** is people, and **level 2** is metro areas. Each person belongs to exactly one metro.
+
+| Variable | Level | Varies... |
+|---|---|---|
+| `bmi` (the outcome) | 1 (person) | between people, within and across metros |
+| `college`, `age_c`, `female`, `race_eth` | 1 (person) | between people in the same metro |
+| `college_mean` (share of a metro's respondents who are college graduates) | 2 (metro) | only between metros; everyone in a metro has the same value |
+| `z_pct_poverty`, `z_pct_unemp`, `z_pct_ba` (from the ACS) | 2 (metro) | only between metros |
+
+A level-2 variable can only explain differences *between* metros, because it doesn't vary within them.
+
 ::: {.callout-note title="Code explanation: `across()` with `.names`"}
 `across(c(pct_poverty, pct_unemp, pct_ba), \(x) as.numeric(scale(x)), .names = "z_{.col}")` z-scores three columns at once. `scale()` subtracts the mean and divides by the standard deviation, and returns a matrix, so `as.numeric()` turns it back into a plain vector. `.names = "z_{.col}"` keeps the original columns and adds new ones, with `{.col}` replaced by each original name: `z_pct_poverty`, `z_pct_unemp` and `z_pct_ba`.
 :::
@@ -190,6 +215,12 @@ icc0 <- vc0$vcov[1] / sum(vc0$vcov)
 ```
 
 The standard deviation of the metro intercepts is `r round(vc0$sdcor[1], 2)` BMI points, and the person-level residual standard deviation is `r round(vc0$sdcor[2], 2)`. So the ICC is `r round(icc0, 3)`: about `r pct(icc0)` of the variation in BMI is between metro areas. That's small, and typical for individual health outcomes across large places. Most of the variation in BMI is between people, not places. But a 1% ICC isn't nothing, and it doesn't mean context is unimportant: a standard deviation of `r round(vc0$sdcor[1], 2)` across metros means the metros in the middle 95% span about `r round(4 * vc0$sdcor[1], 1)` BMI points, which matters for a population.
+
+::: {.callout-tip title="Reading the result: a right and a wrong interpretation"}
+**Right:** "In a model with no predictors, about `r pct(icc0)` of the variance in BMI is between metro areas, and the rest is between people within metros."
+
+**Wrong:** "Where people live causes `r pct(icc0)` of the differences in BMI." The ICC is a split of the variance, not a causal share. Part of the between-metro variance comes from who lives in each metro (their age, education and so on), and part from anything about the places; the empty model can't tell those apart.
+:::
 
 ::: {.callout-note title="Code explanation: `VarCorr()`"}
 `VarCorr()` pulls the variance components out of a fitted `lmer()` model, and `as.data.frame()` turns them into a table with one row per component: `vcov` is the variance and `sdcor` the standard deviation. The first row is the metro intercepts and the last is the residual.
@@ -216,7 +247,9 @@ re0 |>
   theme(axis.text.y = element_blank(), panel.grid.major.y = element_blank())
 ```
 
-Each point is one metro's predicted deviation from the overall mean. The predictions are **shrunk** toward zero, more so for metros with few respondents. If a metro has 500 respondents, its sample mean is noisy, and the model pulls it toward the overall mean; with 10,000 respondents, the sample mean speaks for itself. This is one of the real advantages of the multilevel model: it borrows strength from the other groups to make better estimates for the small ones.
+`ranef(fit0, condVar = TRUE)` gets the predicted metro intercepts and their uncertainty; as a data frame, `condval` is each prediction, `condsd` its standard deviation, and `grp` the metro ID. `count(brfss, mmsa, place)` counts respondents per metro (keeping the name), and `fct_reorder(grp, condval)` sorts the metros by their predicted deviation for the plot.
+
+Each point is one metro's predicted deviation from the overall mean. The predictions are **shrunk** toward zero, more so for metros with few respondents. If a metro has 500 respondents, its sample mean is noisy, and the model pulls it toward the overall mean; with 10,000 respondents, the sample mean speaks for itself. This is called **partial pooling**. Two extremes are possible: "no pooling" would use each metro's own sample mean, however noisy, and "complete pooling" would ignore the metros and use the overall mean for everyone. The random intercept model does something in between, and how far it leans toward the overall mean depends on how much information each metro has. Small metros are pulled more toward the overall pattern; big ones mostly keep their own means. This is one of the real advantages of the multilevel model: it borrows strength from the other groups to make better estimates for the small ones.
 
 ```{r}
 #| label: shrinkage
@@ -245,6 +278,19 @@ The likelihood ratio test says the individual predictors explain a lot, as you'd
 ### Why centering matters in multilevel models
 
 In week 10, we split poverty into a within-child part and a between-child part. The same issue comes up whenever a person-level predictor varies both within and between groups. College graduation varies across people within every metro, and the share of college graduates varies across metros, from `r pct(min(tapply(brfss$college, brfss$mmsa, mean)), 0)` to `r pct(max(tapply(brfss$college, brfss$mmsa, mean)), 0)` of respondents. A single coefficient on `college` mixes the two, just as the random effects coefficient on poverty did. @enders_tofighi2007 lay out the options.
+
+Here's a small example first. Two metros, three people each, with `college` coded 1 for college graduates:
+
+| Person | Metro | `college` | Metro mean, $\bar x_j$ | Group-mean centered, $x_{ij} - \bar x_j$ | Grand-mean centered, $x_{ij} - \bar x$ |
+|---|---|---:|---:|---:|---:|
+| 1 | A | 1 | 0.67 | 0.33 | 0.50 |
+| 2 | A | 1 | 0.67 | 0.33 | 0.50 |
+| 3 | A | 0 | 0.67 | −0.67 | −0.50 |
+| 4 | B | 1 | 0.33 | 0.67 | 0.50 |
+| 5 | B | 0 | 0.33 | −0.33 | −0.50 |
+| 6 | B | 0 | 0.33 | −0.33 | −0.50 |
+
+The grand mean is $\bar x = 0.5$ (three of six people). Look at persons 1 and 4, both college graduates. Their grand-mean-centered values are the same, 0.5, because they're compared with everyone. But their group-mean-centered values differ: person 1 is a college graduate in a metro where most people are (0.33 above the metro mean), and person 4 is a college graduate in a metro where most people aren't (0.67 above it). The group-mean-centered variable compares each person with others *in the same metro*. The metro mean, 0.67 or 0.33, is a separate, between-metro comparison. Including both in the model keeps the two relationships from being blended together.
 
 1. **No centering**, or **grand-mean centering** (subtracting the overall mean): the coefficient on $x_{ij}$ is a blend of the within- and between-group relationships.
 2. **Group-mean centering** (subtracting each group's mean, $x_{ij} - \bar x_j$), and adding the group mean $\bar x_j$ as a level-2 predictor: the coefficient on the centered variable is the pure within-group effect, and the coefficient on $\bar x_j$ is the between-group effect.
@@ -281,6 +327,8 @@ between <- fixef(fit_cwc)["college_mean"]
 contextual <- fixef(fit_cgm)["college_mean"]
 ```
 
+In the table, `coef_map` both picks which coefficients to show and gives them readable labels; any coefficient not listed is left out.
+
 Being a college graduate is associated with a BMI `r round(abs(within), 2)` points lower than other people *in the same metro*. That's the within effect. The between effect is `r round(between, 2)` for a change in the metro share from 0 to 1, so a metro where 10 percentage points more of the respondents are college graduates has an average BMI about `r round(abs(between) / 10, 2)` points lower. The contextual effect, `r round(contextual, 2)`, is the difference between the two (`r round(between, 2)` − (`r round(within, 2)`) = `r round(between - within, 2)`): living in a more educated metro is associated with lower BMI *beyond* what you'd expect from the education of the individuals who live there. Notice that the uncentered coefficient, `r round(fixef(fit_raw)["college"], 2)`, is almost exactly the within effect here. With so many people per metro, the within-metro comparison dominates.
 
 Is the contextual effect causal? Not necessarily. More educated metros differ from less educated ones in many ways (income, the built environment, the age and migration history of the population), and the metro share of college graduates stands in for all of them. It's a description of how BMI is patterned across places, and a starting point for asking why.
@@ -289,7 +337,7 @@ Is the contextual effect causal? Not necessarily. More educated metros differ fr
 
 ### Letting the effect of education differ across metros
 
-So far, every metro has its own intercept but the same slope for college graduation. A **random slope** lets the within-metro association differ too:
+So far, every metro has its own intercept but the same slope for college graduation. A **random slope** lets the within-metro association differ too. Get comfortable with random intercepts before this step: a random intercept lets each metro's baseline differ, and a random slope also lets each metro's *relationship* between education and BMI differ:
 
 $$y_{ij} = \beta_{0j} + \beta_{1j} x_{ij} + \cdots + e_{ij}$$
 $$\beta_{0j} = \beta_0 + u_{0j}, \qquad \beta_{1j} = \beta_1 + u_{1j}$$
@@ -312,7 +360,7 @@ The standard deviation of the college slopes across metros is `r round(attr(VarC
 
 ### Explaining the slope variation: a cross-level interaction
 
-If the college gap in BMI differs across metros, it's natural to ask whether it's related to something about the metros. Interacting a person-level variable with a metro-level variable is the cross-level interaction from the beginning of the document.
+If the college gap in BMI differs across metros, it's natural to ask whether it's related to something about the metros. Interacting a person-level variable with a metro-level variable is the cross-level interaction from the beginning of the document: it asks whether the slopes differ *systematically* with a characteristic of the metro, rather than just at random.
 
 ```{r}
 #| label: cross-level
@@ -339,6 +387,8 @@ as.data.frame(ranef(fit_rs)) |>
   labs(x = "Normal quantile", y = "Predicted random effect")
 ```
 
+`stat_qq()` plots the sorted values against the quantiles of a normal distribution, and `stat_qq_line()` adds the line they'd follow if they were exactly normal.
+
 The random effects are close to normal, with a few metros out in the tails. BMI itself is right-skewed, so the person-level residuals are too. With over 200,000 people, that doesn't threaten the fixed effects, but it would be worth trying log BMI in a real analysis.
 
 ## Survey weights in multilevel models
@@ -347,7 +397,7 @@ The random effects are close to normal, with a few metros out in the tails. BMI 
 
 Every multilevel model above ignored the BRFSS weights. You might think `lmer(..., weights = mmsawt)` would fix that. It doesn't. In `lmer()`, as in `lm()`, the `weights` argument means **precision weights**: an observation with weight 2 is treated as having half the residual variance, as if it were the average of two measurements. That's a different thing from a sampling weight, which says how many people in the population a respondent represents. Using sampling weights as precision weights gives wrong standard errors and, in a multilevel model, wrong variance components.
 
-The right approach is pseudo-maximum likelihood with weights at each level [@pfeffermann1998; @rabe_hesketh_skrondal2006]. A two-level model needs two weights: a level-2 weight for the probability that the group was sampled, and a level-1 weight for the probability that a person was sampled *given* that their group was. In the BRFSS, metro areas aren't sampled (every metro with enough respondents is included), so the level-2 weight is 1 for every metro, and the level-1 weight is the person weight. In the ECLS-K, schools are sampled, and both weights matter. There's a further complication: in a multilevel model, the *scale* of the level-1 weights affects the variance components, so different methods of rescaling the weights within groups give different answers, and @rabe_hesketh_skrondal2006 discuss which to prefer.
+The right approach is pseudo-maximum likelihood with weights at each level [@pfeffermann1998; @rabe_hesketh_skrondal2006]. A two-level model needs two weights: a level-2 weight for the probability that the group was sampled, and a level-1 weight for the probability that a person was sampled *given* that their group was. In the BRFSS, metro areas aren't sampled (every metro with enough respondents is included), so the level-2 weight is 1 for every metro, and the level-1 weight is the person weight. Be clear about what that weight of 1 does and doesn't mean. It says no metro was more likely than another to be *chosen at random*. It doesn't say the metros in the file represent all U.S. metros: a metro is in the SMART file only if it had enough respondents, which favors larger metros. So conclusions about "metros" here are about the metros that meet CDC's reporting rules, not every metro in the country. In the ECLS-K, schools are sampled, and both weights matter. There's a further complication: in a multilevel model, the *scale* of the level-1 weights affects the variance components, so different methods of rescaling the weights within groups give different answers, and @rabe_hesketh_skrondal2006 discuss which to prefer.
 
 ### Weighted multilevel models with `WeMix`
 
@@ -385,7 +435,7 @@ tibble(term = names(fixef(fit_unw)),
 The weighted and unweighted estimates are similar for the education terms, but not for age, which is `r round(fixef(fit_unw)["age_c"], 2)` unweighted and `r round(fit_wm$coef["age_c"], 2)` weighted. I left the squared age term out of this model to keep it quick, so it's misspecified: BMI rises and then falls with age, and a straight line can't follow that. The weights give younger adults, who are underrepresented in the BRFSS, more influence, which changes which part of the curve the line fits. Weighting makes the biggest difference when the model is wrong, and comparing weighted and unweighted estimates is a useful check on the specification. The weighted standard errors are larger, about `r round(median(fit_wm$SE[names(fixef(fit_unw))] / sqrt(diag(vcov(fit_unw)))), 1)` times as large at the median. That's the same pattern as week 2: unequal weights cost precision, and an analysis that ignores them is overconfident. The weighted metro-level variance is `r round(fit_wm$vars[1], 3)`, compared with `r round(as.data.frame(VarCorr(fit_unw))$vcov[1], 3)` unweighted.
 
 ::: {.callout-tip title="Few groups? Consider a Bayesian model"}
-Multilevel models estimate the variance of the group effects from the groups, so with only a handful of groups (fewer than 20 or so), that variance is poorly estimated, and `lmer()` and `glmer()` often report it as zero or fail to converge. A Bayesian multilevel model with a weakly informative prior on the variance, using the `brms` package, handles that gracefully, and the syntax is the same as `lme4`'s:
+Multilevel models estimate the variance of the group effects from the groups, so with only a handful of groups (fewer than 20 or so), that variance is poorly estimated, and `lmer()` and `glmer()` often report it as zero or fail to converge. A Bayesian multilevel model is one option *(optional for this course)*. You have to choose explicit **priors**, statements of what values the parameters could plausibly take before seeing the data. A weakly informative prior on the variance keeps the estimate away from implausible values like exactly zero, and the `brms` package makes this easy, with the same syntax as `lme4`'s. But it doesn't create information that isn't there: with few groups, the estimate of the variance still depends heavily on the prior, so you should say what prior you used and check how much the results change with a different one.
 
 ```{r}
 #| label: brms-example
@@ -406,7 +456,13 @@ Multilevel models put individuals inside places and estimate how much of the var
 
 These exercises are Homework 12.
 
-**1.** Fit an empty model for the number of poor mental health days in the past month (`ment_days`), with a random intercept for metro area. What's the ICC? How does it compare to BMI's?
+**Purpose.** Fit and interpret multilevel models, keeping the person-level and metro-level comparisons apart.
+
+**What is provided.** The BRFSS data `brfss` with metro context, `college_mean`, `college_cwc` and `college_cgm`, and the models from this chapter.
+
+**A satisfactory answer** names the two levels; interprets the random intercept variance and the ICC as a split of the variance, not a causal share; interprets within-metro and between-metro terms separately; and says which population of metros the conclusions describe.
+
+**1.** Fit an empty model for the number of poor mental health days in the past month (`ment_days`), with a random intercept for metro area. Identify the two levels of the data. Interpret the random intercept variance and the ICC, and compare the ICC with BMI's. Then add the group-mean centered college variable and the metro share of college graduates, and interpret the within-metro and between-metro terms separately, in days. Explain shrinkage in a sentence, using what happens to the predicted intercepts for the smallest metros. Finally, say which population of metro areas your conclusions can reasonably describe.
 
 ```{r}
 #| label: ex-icc

@@ -14,6 +14,22 @@ The first part is about explanation. Demographers love nested models: enter race
 
 The second part is about prediction. Here we don't care much about any one coefficient, we care about how well the model sorts people it has never seen. That calls for different tools (training and test data, cross-validation, thresholds and calibration), and I'll use the `tidymodels` framework for them [@kuhn_silge2022].
 
+These are different goals, and it's worth being clear about which one you have. Explaining a disparity asks how a comparison between groups changes when we account for other characteristics. Prediction asks how accurately a model guesses an outcome for people it hasn't seen. A model can be excellent at one and useless for the other.
+
+::: {.callout-note title="This week at a glance"}
+**The question.** How much of the Hispanic-White difference in fair or poor health goes along with differences in education and income? And, separately, how well can a simple model predict which women use modern contraception?
+
+**By the end of this week you should be able to**
+
+1. explain why a logit coefficient that shrinks when you add variables doesn't, by itself, tell you how much those variables explain;
+2. compare nested models on the probability scale, using average marginal effects for the same population;
+3. evaluate a prediction model on data it wasn't fit to, and tell discrimination, calibration and a decision threshold apart.
+
+**Before you begin.** You need the logit model, odds ratios and average marginal effects from [week 3](03-logit-probit.qmd#average-marginal-effects), and the latent-variable way of writing a logit from [week 3's optional section](03-logit-probit.qmd#probit-and-other-links-optional-on-a-first-reading) (it's repeated below).
+
+**Required and optional.** The idea behind the KHB method is required; doing it by hand, and its standard errors (exercise 2), are optional. Part 2 is a first look at prediction, and week 15 comes back to every piece of it in more depth.
+:::
+
 ## Setup
 
 ```{r}
@@ -64,6 +80,8 @@ $$
 
 and then watch what happens to the race and ethnicity coefficients from one block to the next. When an effect gets smaller after we control for something, the fancy word is that it has been *attenuated*.
 
+Keep in mind what adding a block does. Each model answers a different question. Model 1 compares racial and ethnic groups among people of the same age and sex. Model 2 compares them among people of the same age, sex, education *and* income. Those are different comparisons, of differently matched people, so the race coefficient means something different in each model, even before we get to the special problems of logit models below.
+
 I'll use the 2024 BRFSS SMART MMSA data with the standard recodes from week 2 (they live in `R/recode_mmsa.R` now). The question is the classic one: how much of the difference in fair or poor self-rated health across racial and ethnic groups is associated with differences in education and income, and what changes when we add smoking and health insurance?
 
 ```{r}
@@ -76,6 +94,8 @@ brfss <- get_mmsa(2024) |>
 des <- svydesign(ids = ~1, strata = ~ststr, weights = ~mmsawt, data = brfss)
 des_cc <- subset(des, complete)
 ```
+
+`complete.cases()` returns `TRUE` for each row that has no missing values in any of the variables listed, so `complete` flags the respondents who can be in all three models. `subset(des, complete)` keeps the full design and restricts the analysis to them, as in week 2.
 
 ```{r}
 #| label: missing-income
@@ -112,6 +132,8 @@ I use `quasibinomial()` here because it gives the same estimates as `binomial()`
 regTermTest(m2, ~ educ + income, method = "Wald")
 ```
 
+In the model summary table, `coef_omit = "agec|female|Intercept"` hides every coefficient whose name matches any of those words (`|` means "or"), so the table shows only the coefficients we're comparing. `regTermTest(m2, ~ educ + income)` tests all the education and income coefficients at once.
+
 ```{r}
 #| label: m3-values
 #| include: false
@@ -134,6 +156,8 @@ There are several ways to ask whether a bigger model explains the outcome better
 anova(m1, m2)
 anova(m2, m3)
 ```
+
+`anova(smaller, larger)` compares two nested models fit to the same respondents. With `svyglm()` models it runs the design-corrected test described above; read its p-value as a test of whether the added block improves the fit. `AIC(m1, m2, m3)` lists the AIC of each model.
 
 Both blocks significantly improve the fit. The **Akaike information criterion** is the other common tool. It has two parts, a measure of how badly the model fits (the deviance) and a penalty for the number of parameters $k$:
 
@@ -161,7 +185,7 @@ naive <- tibble(term = str_remove(re, "race_eth"),
 hisp <- filter(naive, term == "Hispanic")
 ```
 
-The traditional reading goes like this. The Hispanic coefficient falls from `r round(hisp$m1, 3)` to `r round(hisp$m2, 3)` once we control for education and income, so SES "explains" about `r pct(hisp$change, 0)` of the Hispanic disadvantage in self-rated health. Similar stories for the other groups. That's the kind of sentence that ends up in a lot of abstracts. The problem is that the two coefficients aren't measured in the same units.
+The traditional reading goes like this. The Hispanic coefficient falls from `r round(hisp$m1, 3)` to `r round(hisp$m2, 3)` once we control for education and income, so SES "explains" about `r pct(hisp$change, 0)` of the Hispanic disadvantage in self-rated health. Similar stories for the other groups. That's the kind of sentence that ends up in a lot of abstracts, and it has two problems. The first, from above, is that the two coefficients come from different comparisons. The second, special to logit and probit models, is that the two coefficients aren't even measured in the same units. A smaller logit coefficient after adding variables doesn't, by itself, show how much of a disparity those variables explain. The coefficient is conditional on a different model, and logit coefficients don't behave like coefficients from ordinary linear regression.
 
 ### Why logit coefficients from nested models aren't comparable
 
@@ -187,13 +211,21 @@ c(without_z = coef(glm(y ~ x, data = sim, family = binomial))[["x"]],
   with_z = coef(glm(y ~ x + z, data = sim, family = binomial))[["x"]])
 ```
 
-The true coefficient on `x` is 1. Leave out `z` and we estimate about 0.6, and that has nothing to do with confounding, because `z` is unrelated to `x`. It's purely rescaling. In a nested comparison like ours, the change in the race coefficient between Model 1 and Model 2 mixes two things: the real confounding (or mediation) by SES, which we want, and this rescaling, which we don't. The rescaling works *against* finding attenuation, so naive comparisons tend to understate how much the SES variables account for.
+::: {.callout-note title="Code explanation: simulating data"}
+A **simulation** makes up data from a model we choose, so we know the right answer and can check whether a method finds it. `set.seed(7283)` fixes R's random number generator so you get the same "random" data every time. `rnorm(n)` draws `n` values from a standard Normal distribution, and `rbinom(n, 1, p)` draws `n` 0/1 outcomes, each equal to 1 with probability `p`. So `y` is 1 with probability `plogis(1 * x + 2 * z)`: a logit model where the true coefficient on `x` is 1 and on `z` is 2. `glm(..., family = binomial)` is the ordinary (non-survey) logit model, and `c(without_z = ..., with_z = ...)` puts the two estimates side by side with names.
+:::
+
+The true coefficient on `x` is 1. Leave out `z` and we estimate about 0.6, and that has nothing to do with confounding, because `z` is unrelated to `x`. It's purely rescaling. Statisticians call this property **noncollapsibility**: in a logit model, the odds ratio for `x` changes when you add or drop another predictor of the outcome, even one that's completely unrelated to `x`. Linear regression coefficients don't do this, which is why the "watch the coefficient shrink" habit came from linear models and doesn't carry over. In a nested comparison like ours, the change in the race coefficient between Model 1 and Model 2 mixes two things: the part of the race difference that goes along with SES, which we want, and this rescaling, which we don't. Even the first part is only an association. Whether SES *confounds* the race difference, *mediates* it (lies on a causal path from race to health), or neither, is a causal question that the change in a coefficient can't settle. The rescaling works *against* finding attenuation, so naive comparisons tend to understate how much the SES variables account for.
 
 ### The KHB method
 
+The question KHB answers is: how much does the race and ethnicity coefficient change when we add the SES variables, *if we hold the scale of the model fixed*? It splits the naive change into the part due to adding SES and the part due to rescaling, so you can report just the first.
+
 @khb2012 proposed a fix that is simple once you see it. The trouble is that Model 1 and Model 2 explain different amounts of the variance in $y^*$. So build a version of Model 1 that explains exactly as much as Model 2 does. Take each SES variable, regress it on the race and control variables, and keep the residuals. The residuals carry all the information in the SES variables *except* the part that overlaps with race. Put them in Model 1 in place of the SES variables, and now the "reduced" model and the full model have the same fit and the same scale, but the race coefficient in the reduced model still hasn't been adjusted for SES.
 
-There's a `khb` command in Stata, but I'm not aware of a maintained R package, and it only takes a few lines to do by hand.
+#### Doing KHB by hand *(optional)*
+
+There's a `khb` command in Stata, but I'm not aware of a maintained R package, and it only takes a few lines to do by hand. You don't need to follow every line of the code below to understand the result in the table after it.
 
 ```{r}
 #| label: khb
@@ -219,6 +251,14 @@ f_khb <- reformulate(c("race_eth", "agec", "female", colnames(Z_resid)),
                      response = "badhealth")
 m1_khb <- svyglm(f_khb, design = des_khb, family = quasibinomial())
 ```
+
+::: {.callout-note title="Code explanation: residualizing by hand"}
+1. `model.matrix(~ educ + income, data = cc)` builds the dummy variables R would make for those factors, one column per category, plus an intercept column; `[, -1]` drops the intercept.
+2. `apply(Z, 2, ...)` runs a function on each column of `Z` (the `2` means columns; `1` would mean rows). For each SES dummy, `lm.wfit(X, z, w = ...)` fits a weighted regression of that dummy on the race and control variables, and `resid()` keeps the residuals.
+3. `make.names()` turns the column names into legal R names (no spaces), and `paste0("r_", ...)` adds a prefix.
+4. The residuals exist only for complete cases, so the next three lines add them to a copy of the full data, with `NA` for everyone else, and build a design from it.
+5. `reformulate(c(...), response = "badhealth")` builds the model formula `badhealth ~ race_eth + agec + female + r_...` from a vector of names.
+:::
 
 ```{r}
 #| label: khb-table
@@ -246,7 +286,7 @@ hisp_k <- filter(khb_tab, term == "Hispanic")
 The naive and KHB versions of the Model 1 coefficients are close here, so the KHB change for Hispanic respondents (`r pct(hisp_k$change_khb, 0)`) is almost the same as the naive one (`r pct(hisp_k$change, 0)`). I want to be honest about that: in this example the rescaling problem turns out to be small. The KHB and naive Model 1 coefficients are almost the same, which tells us education and income add little to what the model explains on the latent scale beyond race, age and sex. The simulation above shows it isn't small in general. When the variables you add are strong predictors of the outcome, the naive comparison can understate the change by a lot, and you can't know which situation you're in without checking. So check.
 
 ::: {.callout-note}
-KHB standard errors for the difference need a delta-method calculation, which the Stata command does for you. In R, the most direct route is to repeat the calculation over replicate weights (`as.svrepdesign()`, from week 2) and use the spread of the differences. Exercise 2 asks you to do this for a smaller sample.
+KHB standard errors for the difference need a delta-method calculation, which the Stata command does for you. In R, the most direct route is to repeat the calculation over replicate weights (`as.svrepdesign()`, from week 2) and use the spread of the differences. Exercise 2, which is optional, asks you to do this for a smaller sample.
 :::
 
 ### Average marginal effects
@@ -288,6 +328,14 @@ ame_h <- ame |> filter(contrast == "Hispanic")
 
 Now the result reads in percentage points, which is what most readers think in anyway. Before adjusting for SES, Hispanic adults are `r round(100 * ame_h$estimate[1], 1)` percentage points more likely than non-Hispanic White adults to report fair or poor health. After adjustment the gap is `r round(100 * ame_h$estimate[2], 1)` points. I'd report the AMEs next to (or in place of) the odds ratios in a paper, and I'll expect them in yours.
 
+AMEs fix the scale problem, but not the interpretation problem. Both AMEs here are averaged over the same people (the complete-case sample, with the same weights), which is what makes them comparable; if the two models were fit to different samples, the comparison would mix in the difference between the samples. And the drop from one to the other describes how the race difference changes when we compare people with the same education and income. It doesn't show that education and income *cause* that part of the difference.
+
+::: {.callout-tip title="Reading the result: a right and a wrong interpretation"}
+**Right:** "Comparing adults of the same age and sex, Hispanic adults are `r round(100 * ame_h$estimate[1], 1)` percentage points more likely than non-Hispanic White adults to report fair or poor health. Among adults who also have the same education and income, the difference is `r round(100 * ame_h$estimate[2], 1)` points."
+
+**Wrong:** "Education and income explain `r pct(hisp$change, 0)` of the Hispanic health disadvantage." That number is the naive change in the logit coefficient, which mixes in rescaling, and "explain" implies a causal story (that the disadvantage runs *through* SES) the model can't establish.
+:::
+
 ### Stratified models
 
 You'll often see models in the literature **stratified** by some predictor, fit separately for men and women, say, or for each racial and ethnic group. This is usually because the hypothesis is that the effect of one variable differs across the groups. Does education protect everyone's health equally, or does it pay off more for some groups than others?
@@ -300,6 +348,8 @@ m_int <- svyglm(badhealth ~ race_eth * educ + agec + female + income + smoke + i
                 design = des_cc, family = quasibinomial())
 regTermTest(m_int, ~ race_eth:educ, method = "Wald")
 ```
+
+In a formula, `race_eth * educ` means "both variables and their interaction": R adds `race_eth`, `educ`, and every product of a race dummy with an education dummy. The interaction terms alone are written `race_eth:educ`, which is what `regTermTest()` tests here.
 
 ```{r}
 #| label: interaction-p
@@ -343,6 +393,8 @@ bind_rows(z_test(strat[["Hispanic"]], strat[["NH White"]], "educCollege graduate
           z_test(strat[["NH Black"]], strat[["NH White"]], "educCollege graduate"))
 ```
 
+`z_test()` is a small function, like `mymean()` in week 1, that turns the formula above into code. `pnorm(-abs(z))` is the probability of a standard Normal value below $-|z|$, and doubling it gives the two-sided p-value. `bind_rows()` stacks the two one-row results. In the stratified models above, `subset(des_cc, race_eth == g)` restricts the design to one group at a time inside `map()`.
+
 ```{r}
 #| label: z-values
 #| include: false
@@ -382,6 +434,8 @@ educ_ame |>
          p = 2 * pnorm(-abs(z)))
 ```
 
+`diff(estimate)` subtracts the first value from the second (women minus men), and `sqrt(sum(std.error^2))` is the formula above.
+
 ```{r}
 #| label: ame-sex-values
 #| include: false
@@ -392,6 +446,8 @@ ame_w <- educ_ame$estimate[educ_ame$sex == "Women"]
 Compared with a high school diploma, a college degree goes with a probability of fair or poor health that is `r round(abs(100 * ame_m), 1)` points lower for men and `r round(abs(100 * ame_w), 1)` points lower for women. The difference between the two is small and not statistically significant, and because both are on the probability scale, that comparison means what it says.
 
 ## Part 2: Logistic regression for prediction
+
+This part is an introduction. Week 15 builds on every piece of it with more flexible models, so aim to understand the logic here (fit on some data, judge on other data, and decide what "good" means for your purpose) rather than every function.
 
 ### Explanation versus prediction
 
@@ -419,6 +475,8 @@ dhs <- get_dhs_model() |>
 count(dhs, modern) |> mutate(share = n / sum(n))
 ```
 
+`filter(v213 == 0, v536 %in% 1:3)` keeps women who aren't pregnant and were sexually active recently. The `factor(v106, 0:3, c(...))` calls are the `factor(x, levels, labels)` pattern from week 2 with the argument names left off; R matches them by position. `select()` keeps only the variables the model will use.
+
 I put "yes" first because `yardstick` treats the first factor level as the event of interest. I'm also ignoring the survey design in this part. That's common in prediction work, because the goal is to sort individuals, not to estimate a population quantity. But if you want performance measures that describe the *population* (say, sensitivity among all women in the country), you'd use the weights, and `tidymodels` supports case weights for that.
 
 ### Training and test data
@@ -431,6 +489,27 @@ set.seed(7283)
 dhs_split <- initial_split(dhs, prop = 0.8, strata = modern)
 dhs_train <- training(dhs_split)
 dhs_test <- testing(dhs_split)
+```
+
+`initial_split()` decides which rows go where, at random (hence `set.seed()`), and `training()` and `testing()` pull out the two pieces. Here is the whole plan for the data in one picture, so you can see where each piece is used:
+
+```{mermaid}
+%%| fig-cap: "How the data are used in prediction. The test set is set aside at the start and used once, at the end. All the choices (which predictors, which threshold) are made with cross-validation on the training data."
+flowchart LR
+  A["All data"] --> B["Training data<br/>(80%)"]
+  A --> C["Test data (20%)<br/>set aside, untouched"]
+  B --> D["10 folds"]
+  D --> E["Fit on 9 folds,<br/>check on the 10th,<br/>10 times"]
+  E --> F["Cross-validated<br/>performance:<br/>choose model and threshold"]
+  F --> G["Refit on all<br/>training data"]
+  G --> H["Evaluate once<br/>on the test data"]
+  C --> H
+  classDef data fill:#C8DCFF,stroke:#032044,color:#032044
+  classDef step fill:#FFFFFF,stroke:#032044,color:#032044
+  classDef final fill:#F15A22,stroke:#032044,color:#032044
+  class A,B,C,D data
+  class E,F,G step
+  class H final
 ```
 
 ### A recipe and a workflow
@@ -456,6 +535,14 @@ dhs_recipe <- recipe(modern ~ ., data = dhs_train) |>
 logit_wf <- workflow(dhs_recipe, logistic_reg())
 ```
 
+::: {.callout-note title="Code explanation: recipes and workflows"}
+1. `recipe(modern ~ ., data = dhs_train)` says `modern` is the outcome and every other column (the `.`) is a predictor.
+2. `step_dummy(all_nominal_predictors())` turns every factor predictor into dummy variables, the same thing `glm()` does behind the scenes.
+3. `step_poly(age, degree = 2)` replaces age with age and age squared (in a numerically stable form), so the probability can rise and then fall with age.
+4. `logistic_reg()` is the model specification: an ordinary logit.
+5. `workflow(recipe, model)` bundles the two, so every time the model is fit (on each fold, and at the end), the same preparation is done first, using only the data it's being fit to.
+:::
+
 ### Cross-validation
 
 To get an honest estimate of performance without touching the test set, we use 10-fold cross-validation on the training data. The data are split into 10 pieces, and the model is fit 10 times, each time on 9 pieces and evaluated on the one left out.
@@ -472,6 +559,10 @@ logit_cv <- fit_resamples(logit_wf, resamples = dhs_folds, metrics = dhs_metrics
 collect_metrics(logit_cv)
 ```
 
+::: {.callout-note title="Code explanation: cross-validation"}
+`vfold_cv(dhs_train, v = 10, strata = modern)` splits the training data into 10 folds, each with about the same share of users. `metric_set()` lists the performance measures to compute. `fit_resamples()` fits the workflow 10 times, once per fold, and computes the metrics on each held-out fold; `control_resamples(save_pred = TRUE)` keeps the held-out predictions so we can look at them later. `collect_metrics()` averages each metric over the 10 folds (`mean`) and gives its standard error.
+:::
+
 ```{r}
 #| label: cv-values
 #| include: false
@@ -480,7 +571,13 @@ get_m <- function(m) cvm$mean[cvm$.metric == m]
 base_rate <- mean(dhs_train$modern == "yes")
 ```
 
-These metrics measure different things:
+Before the list, it helps to know that these metrics answer three different questions, and a model can do well on one and badly on another:
+
+1. **Discrimination**: does the model give higher probabilities to the women who use a modern method than to those who don't? (AUC)
+2. **Calibration**: when the model says 30%, do about 30% of those women use one? (the Brier score, partly, and the calibration plot below)
+3. **Classification at a threshold**: once we turn probabilities into yes/no predictions with a cutoff, how many of each kind of mistake do we make? (accuracy, sensitivity, specificity)
+
+In detail:
 
 - **Accuracy** is the share classified correctly at a threshold of 0.5.
 - **Sensitivity** is the share of modern method users the model catches.
@@ -503,6 +600,8 @@ cv_class <- collect_predictions(logit_cv) |>
 
 conf_mat(cv_class, truth = modern, estimate = pred_05)
 ```
+
+`collect_predictions()` gathers the held-out predictions from all 10 folds into one data frame, with each woman's predicted probability of "yes" in `.pred_yes`. The `mutate()` turns those into predicted classes with two different thresholds, and `conf_mat()` cross-tabulates the true classes against the predicted ones.
 
 The columns are the truth and the rows are the predictions. The diagonal holds the women the model gets right, the **true positives** (users predicted to be users) and **true negatives** (non-users predicted to be non-users). The off-diagonal cells are the mistakes: **false positives**, non-users the model calls users, and **false negatives**, users it misses. Accuracy is the diagonal divided by the total. Sensitivity is the true positives divided by all actual users (the first column), and specificity is the true negatives divided by all actual non-users (the second column). With the 0.5 rule, most of the users end up in the false negative cell.
 
@@ -549,7 +648,9 @@ thresholds |>
   labs(x = "Threshold", y = "Estimate", colour = NULL, linetype = NULL)
 ```
 
-Youden's J, which weights sensitivity and specificity equally, peaks at a threshold of `r best_j$.threshold`. That's close to the share of users in the data, which is a common and sensible starting point when the outcome is uncommon.
+Youden's J, which weights sensitivity and specificity equally, peaks at a threshold of `r best_j$.threshold`. That's close to the share of users in the data, which is a common and sensible starting point when the outcome is uncommon. But it's a statistical criterion, not a decision. Youden's J assumes missing a user and wrongly flagging a non-user are equally bad. If they aren't (and for most real programs they aren't), the best threshold for the program is somewhere else, and choosing it means deciding how much each kind of mistake costs.
+
+`threshold_perf()` computes the chosen metrics at each threshold in `thresholds`, and `slice_max(.estimate, n = 1)` keeps the row with the highest J.
 
 ### Calibration
 
@@ -572,7 +673,9 @@ cv_preds |>
   labs(x = "Mean predicted probability", y = "Observed share using a modern method")
 ```
 
-The points sit close to the diagonal, which is typical of logistic regression fit to a reasonably large sample. Flexible machine learning models (week 15) often discriminate better and calibrate worse, so check both.
+`ntile(.pred_yes, 10)` sorts the women by predicted probability and splits them into 10 equal-sized groups (deciles). For each decile, the plot compares the average predicted probability with the share who actually use a modern method. `geom_abline()` draws the diagonal line where the two are equal.
+
+The points sit close to the diagonal, so this model's probabilities can be taken roughly at face value, on data like these. That's common for logistic regression fit to a reasonably large sample, but it isn't guaranteed, so always check calibration on data the model wasn't fit to. Flexible machine learning models (week 15) often discriminate better and calibrate worse, so check both.
 
 ### The test set, once
 
@@ -584,6 +687,8 @@ final_fit <- last_fit(logit_wf, split = dhs_split, metrics = dhs_metrics)
 collect_metrics(final_fit)
 ```
 
+`last_fit()` fits the workflow to all of the training data and evaluates it on the test data, in one step, so you can't accidentally peek.
+
 The test-set numbers are close to the cross-validated ones, which is what we hope to see. If they had been much worse, that would be a sign of overfitting, or of a test set that differs from the training data in some way. And the rule matters: if you look at the test set, change the model, and look again, it's no longer a test set.
 
 ::: {.callout-warning}
@@ -594,7 +699,13 @@ A predictive model is only as fair as the data and the decision it feeds. A mode
 
 These exercises are Homework 4.
 
-**1.** Repeat the nested comparison in Part 1 for obesity (`obese`) as the outcome. Report the naive and KHB changes in the race and ethnicity coefficients, and the AMEs from both models. Is the rescaling problem bigger or smaller than it was for self-rated health? Why might that be?
+**Purpose.** Compare nested models in a way that means what it says, and judge a prediction model by how it will be used.
+
+**What is provided.** The BRFSS data with `recode_mmsa()`, the complete-case design `des_cc`, and the code for Models 1 and 2 from this chapter; the DHS prediction data, split, folds and workflow from Part 2.
+
+**A satisfactory answer** compares models on the probability scale for the same people; describes changes in a comparison as associations, not as what a variable "explains" or "causes"; and, for prediction, says which kind of performance (discrimination, calibration or classification) each number measures.
+
+**1.** Repeat the nested comparison for obesity (`obese`) as the outcome, using Models 1 and 2 (age and sex, then add education and income). Report the Hispanic-White and Black-White average marginal effects from both models, in percentage points, for the same complete-case sample. Describe how each estimated difference changes when education and income are added. Then, in two or three sentences, explain why a coefficient that shrinks when variables are added doesn't by itself show that those variables mediate the difference. (Optional: also report the naive and KHB changes in the logit coefficients, and say whether rescaling is bigger or smaller than it was for self-rated health.)
 
 ```{r}
 #| label: ex-khb-obesity
@@ -602,7 +713,7 @@ These exercises are Homework 4.
 # YOUR CODE HERE
 ```
 
-**2.** Get a standard error for the KHB change in the Hispanic coefficient. Restrict the data to the Texas metro areas, convert the design to 100 bootstrap replicates with `as.svrepdesign()`, and repeat the KHB calculation within each replicate using `withReplicates()` or a loop over the replicate weights.
+**2.** *(Optional.)* Get a standard error for the KHB change in the Hispanic coefficient. Restrict the data to the Texas metro areas, convert the design to 100 bootstrap replicates with `as.svrepdesign()`, and repeat the KHB calculation within each replicate using `withReplicates()` or a loop over the replicate weights.
 
 ```{r}
 #| label: ex-khb-se
@@ -632,6 +743,8 @@ After `rep_des <- as.svrepdesign(...)`, `weights(rep_des, "analysis")` gives you
 #| eval: false
 # YOUR CODE HERE
 ```
+
+**5.** Suppose the model in exercise 3 predicted modern method use very well (an AUC of 0.90). Would that tell you why wealthier women are more likely to use modern methods? In two or three sentences, explain the difference between a model that predicts well and a model that explains a difference between groups.
 
 ## Additional resources {.unnumbered}
 

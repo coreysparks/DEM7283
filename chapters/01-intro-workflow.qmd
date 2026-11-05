@@ -12,6 +12,35 @@ Welcome to the second semester of statistics for demographers. The first course 
 
 This first week is about the plumbing. I want you to leave with a working project that holds your code and data, a Quarto document that runs from top to bottom, a record of the package versions you used, and a Git repository that tracks all of it. None of this is glamorous, but I have watched enough final papers fall apart the night before they were due (sometimes my own analyses, if I'm honest) to know that the workflow matters as much as the model.
 
+::: {.callout-note title="This week at a glance"}
+**The question.** How do you produce an analysis that another person can check, from the data to the sentence in your paper?
+
+**By the end of this week you should be able to**
+
+1. name the parts of a finished analysis (question, data, result, model, interpretation, limitations) in an example you didn't write;
+2. say what each file in an analysis project is for, and which ones another reader needs to reproduce a result;
+3. render a Quarto document, record it with Git, and publish it, and say whether a number describes the survey respondents or the population.
+
+**Before you begin.** You should know what a mean, a regression coefficient and a standard error are. The self-check in [My assumptions about you](#my-assumptions-about-you) will tell you whether to review anything. You don't need to know any R yet.
+
+**Required and optional.** Everything this week is required, because every later week depends on it.
+:::
+
+## The anatomy of an analysis
+
+Before any software, here is what we're building toward. Every analysis in this course, and every paper you write, has the same six parts. This table walks through one you'll do yourself in weeks 2 and 3.
+
+| Part | What it is | In the example |
+|---|---|---|
+| Research question | One question, specific enough to answer with data | Do adults with less education report fair or poor health more often than adults with more? |
+| Data | Where the numbers come from, what one row is, and which population they describe | The 2024 BRFSS SMART file. One row is one adult who answered the survey. With the survey weights, the rows describe adults 18 and over living in households in the metro and micro areas in the file, not all U.S. adults. |
+| Descriptive result | What the data show before any model | The weighted share reporting fair or poor health in each education group, with a confidence interval (week 2) |
+| Model | A statement of how the outcome relates to several predictors at once | A survey-weighted logit model of fair or poor health on education, age, sex and race and ethnicity (week 3) |
+| Interpretation | What the numbers mean, in units a reader cares about | "Adults without a high school diploma are about so many percentage points more likely to report fair or poor health than college graduates of the same age, sex and race and ethnicity." |
+| Limitations | What the analysis can't tell you | Health is self-reported. The survey is a telephone survey with low response rates, and the weights only partly fix that. The data are measured at one time, so they show an association, not that more education *causes* better health. |
+
+Keep this table in mind. The software we set up this week exists to make every row of it traceable: someone reading your interpretation should be able to find the code and the data that produced it.
+
 ## Setup
 
 This document only needs a few packages. `here` finds files relative to the project root, so the same code runs on my machine, your laptop and the course container without editing paths. The `get_mmsa()` function in `R/get_mmsa.R` reads the 2024 BRFSS MMSA file, and I'll use it in every exercise this semester.
@@ -61,13 +90,59 @@ The course meets for sixteen weeks, with spring break in week 8 and final papers
 
 Two things are deliberately missing. Principal components no longer has its own week; if your final paper needs a composite index for places, I'll show you how to build and defend a standardized index when we get there. Event history models are also out, because they have their own full course, and when we reach longitudinal data in week 10 I'll point you to where that material picks up.
 
+### Reading, getting the files, and turning in homework
+
+These are three different jobs, and they happen in three different places.
+
+1. **Reading the course book.** The weekly chapters are on the web at <https://coreysparks.github.io/DEM7283/>. You can read them in any browser, and you don't need anything installed. Read the week's chapter before class.
+2. **Getting the course files.** To run the code yourself, you need the course repository on your computer: the chapters' `.qmd` source files, the data in `data/` and the helper functions in `R/`. You'll clone it with Git this week ([Getting the course repository](#getting-the-course-repository)) and pull my updates each week.
+3. **Turning in homework.** Each week's exercises are the homework. You do them in **your own** homework project, not in the course repository. You turn in **two links** through Canvas: the link to your rendered homework document on **Posit Connect Cloud** (the website that hosts it; you send it there with the **Posit Publisher** tool built into Positron), and the link to your **GitHub** repository that holds the code. Homework is due before class one week after it's assigned.
+
 ### My assumptions about you
 
 In statistics we always make assumptions, they are often wrong, and we adapt to our mistakes daily. Here are mine about the people in this room. You took the first course (or something like it), so you know what a regression coefficient and a standard error are. You're interested in demography or population research, as a student or as someone who works with population data. You may have used SAS, SPSS or Stata before and are curious about R, or you may be an R user from some other strange and exotic discipline who wants to see how demographers work. And you want to see *how* to do things, rather than being bombarded with theoretical and often unnecessary gate-keeping mathematical treatments of statistical models. There will be some equations, but every one of them is there because it helps you read the output or avoid a mistake.
 
 This course is not a review of all of statistics, and it's not an encyclopedic tour of the R language. I imagine the latter is on the same scale of hopelessness as the search for the Holy Grail, and I'm not falling on my sword here, folks.
 
+Assumptions are only useful if you check them, so here's a short self-check. It isn't graded, and nobody sees your answers. Try each one before you open the answer. If more than one or two give you trouble, reread the regression chapters from your first course before week 3, or come see me; it's much easier to fix now than in week 12.
+
+1. A linear regression of BMI on age (in years) gives a coefficient of 0.05 for age, with a standard error of 0.01. What does 0.05 mean, in words?
+2. What does the standard error of 0.01 tell you?
+3. The 95% confidence interval for that coefficient is 0.03 to 0.07. What does that interval say?
+4. Another coefficient has a p-value of 0.20. Does that show the predictor has no association with BMI?
+5. A data set follows 1,000 people and measures each of them in three different years, with one row per person per year. How many rows does it have? How many people?
+6. What's the difference between the mean BMI of the people in a survey and the mean BMI of the population the survey was drawn from?
+
+<details>
+<summary>Answers</summary>
+
+1. Comparing people who differ in age by one year (and are the same on anything else in the model), the older person's BMI is 0.05 points higher on average. Over ten years, that's half a point.
+2. How much the coefficient would vary if we drew many samples the same way and fit the same model to each. It measures the uncertainty in the estimate that comes from sampling.
+3. If we repeated the sampling many times and built an interval the same way each time, 95% of those intervals would contain the true coefficient. Informally, values from 0.03 to 0.07 are consistent with the data.
+4. No. It says the data are consistent with no association, but they may also be consistent with an association of a meaningful size. A large p-value can come from a small sample or a noisy measure. Look at the estimate and its confidence interval, not just whether p is below 0.05.
+5. 3,000 rows, but only 1,000 people. The three rows for the same person aren't independent observations, and week 10 is about what to do with that.
+6. The first describes the respondents, the people who happened to answer. The second describes the population. They're only equal if the sample represents the population, which is what survey weights (week 2) are for.
+
+</details>
+
 ## Software
+
+### A vocabulary guide
+
+You'll meet a lot of new tools this week, and they're easy to confuse. Here they are in one place. Come back to this table whenever a word stops making sense.
+
+| Term | What it is | An example from this course |
+|---|---|---|
+| **R** | The program that does the computing | R 4.6 |
+| **Editor** | The program you work in. It sends your code to R and shows you the results | Positron |
+| **Package** | A bundle of R functions someone else wrote, which you install once and load with `library()` | `survey`, `ggplot2` |
+| **Function** | A named piece of code that takes inputs (arguments) and returns a result | `mean()`, `svyglm()`, `get_mmsa()` |
+| **Script** | A plain text file of R code, ending in `.R` | `R/get_mmsa.R` |
+| **Quarto document** | A file (`.qmd`) that mixes your writing with the code that produces the evidence, and renders to a report | Your weekly homework |
+| **Project** | The folder that holds one analysis and everything it needs: code, data, documents | Your homework project; the course repository |
+| **Git** | A program that records the history of the files in a project | Each commit is one saved snapshot |
+| **GitHub** | A website that keeps an online copy of a Git project | `github.com/yourname/homework` |
+| **Published document** | A rendered Quarto document on the web, with its own link | Your homework on Posit Connect Cloud |
 
 ### Why R?
 
@@ -171,7 +246,7 @@ R also has packages for Excel (`readxl`), JSON, shapefiles and other spatial for
 
 ## A reproducible workflow
 
-When I say an analysis is reproducible, I mean that someone else (or you, six months from now, with no memory of what you did) can take your files, run them, and get the same numbers. In practice that takes four pieces:
+When I say an analysis is reproducible, I mean that another person can trace how your evidence supports your conclusion: from the sentence in your paper, to the number behind it, to the code that computed it, to the data it came from. That other person is often you, six months from now, with no memory of what you did. The test is simple: can someone take your files, run them, and get the same numbers? The tools below are just ways of making the answer yes. In practice that takes four pieces:
 
 1. a **project** that keeps code, data and output together,
 2. a **Quarto document** that runs from the first line to the last with no hidden steps,
@@ -650,6 +725,12 @@ per_resp <- function(p) fmt(tx_counts$adults_per_respondent[str_detect(tx_counts
 
 The big metros get more respondents, but not in proportion to their size. Each Houston respondent stands in for about `r per_resp("^Houston")` adults on average, and each San Antonio respondent for about `r per_resp("^San Antonio")`. So a San Antonio respondent counts for less than half as much as a Houston respondent when we add things up. Next week we'll take this seriously and use the weights and the design of the survey to get estimates, and standard errors, that describe the population and not just the sample.
 
+::: {.callout-tip title="Reading the result: a right and a wrong interpretation"}
+**Right:** "The 2024 file has `r fmt(tx_counts$respondents[str_detect(tx_counts$place, '^San Antonio')])` respondents in San Antonio, and their weights add up to about `r fmt(tx_counts$adults_represented[str_detect(tx_counts$place, '^San Antonio')])` adults, the estimated adult population the respondents represent."
+
+**Wrong:** "The BRFSS surveyed `r fmt(tx_counts$adults_represented[str_detect(tx_counts$place, '^San Antonio')])` adults in San Antonio." The number of people surveyed is the number of rows. The sum of the weights is the number of people those respondents stand in for. Mixing the two up is the most common mistake people make with survey data, and week 2 shows what it does to a standard error.
+:::
+
 ## A refresher on describing data
 
 The first course covered descriptive statistics, but it's worth a quick tour of how I do this in R, because these are the tools you'll use every week. One warning before we start: everything in this section ignores the survey weights. These are descriptions of the *sample*, and that's fine for getting to know a data file and checking recodes, but they are not estimates for the population. Week 2 fixes that.
@@ -760,9 +841,19 @@ Median BMI rises through middle age and falls after 65 for both men and women, a
 
 ## Exercises
 
-These exercises are Homework 1. Submit the link to your GitHub repository and the link to your document on Posit Connect Cloud.
+These exercises are Homework 1.
 
-**1.** Create a folder for your homework this semester and open it in Positron with **File > Open Folder**. Follow steps 1 to 5 of [the Git section](#sec-git) to put it under version control and connect it to a new GitHub repository, and add `data/` to its `.gitignore`. Run `usethis::git_sitrep()` and check that it reports no problems. Then change a file, commit it and push it, and check on GitHub that your commit arrived.
+**Purpose.** Read a finished analysis closely, then set up the workflow you'll use for every homework this semester.
+
+**What is provided.** [The course data](#the-course-data) section of this chapter, a short descriptive analysis of the BRFSS SMART file; the course repository; and `R/get_mmsa.R`.
+
+**What to turn in.** Through Canvas, two links: your rendered homework on Posit Connect Cloud, and your GitHub repository.
+
+**A satisfactory answer** renders from top to bottom without errors, answers each written question in complete sentences, and says whether each number describes the survey respondents or the population they represent.
+
+**1.** Using [The course data](#the-course-data) section of this chapter as your example, identify (a) the research question the section answers, (b) the unit represented by one row of the data, and (c) the population the data are intended to describe. Report one descriptive result from that section in a complete sentence. Then explain which files another reader would need to reproduce that result.
+
+**2.** Create a folder for your homework this semester and open it in Positron with **File > Open Folder**. Follow steps 1 to 5 of [the Git section](#sec-git) to put it under version control and connect it to a new GitHub repository, and add `data/` to its `.gitignore`. Run `usethis::git_sitrep()` and check that it reports no problems. Then change a file, commit it and push it, and check on GitHub that your commit arrived.
 
 ```{r}
 #| label: ex-project
@@ -770,7 +861,7 @@ These exercises are Homework 1. Submit the link to your GitHub repository and th
 # YOUR CODE HERE
 ```
 
-**2.** Initialize `renv` in the project, install `tidyverse` and `here`, and take a snapshot. Show the output of `renv::status()`.
+**3.** Initialize `renv` in the project, install `tidyverse` and `here`, and take a snapshot. Show the output of `renv::status()`.
 
 ```{r}
 #| label: ex-renv
@@ -778,7 +869,7 @@ These exercises are Homework 1. Submit the link to your GitHub repository and th
 # YOUR CODE HERE
 ```
 
-**3.** Copy `R/get_mmsa.R` into your project, read the 2024 MMSA data with it, and report the number of respondents and the sum of `mmsawt` for one metro area other than San Antonio. Use `here()` for every file path.
+**4.** Copy `R/get_mmsa.R` into your project, read the 2024 MMSA data with it, and report the number of respondents and the sum of `mmsawt` for one metro area other than San Antonio. Use `here()` for every file path.
 
 ```{r}
 #| label: ex-data
@@ -787,7 +878,7 @@ These exercises are Homework 1. Submit the link to your GitHub repository and th
 ```
 
 <details>
-<summary>One solution for exercise 3</summary>
+<summary>One solution for exercise 4</summary>
 
 ```{r}
 #| label: ex-data-solution
@@ -806,7 +897,7 @@ brfss |>
 
 </details>
 
-**4.** For the metro area you chose in exercise 3, use `dplyr` to make a table of the number of respondents, the mean BMI and the percent who report fair or poor health (`genhlth` of 4 or 5) by sex and age group, and make one `ggplot` figure that shows how BMI differs by age. Remember that these are unweighted descriptions of the sample, and say so in a sentence.
+**5.** For the metro area you chose in exercise 4, use `dplyr` to make a table of the number of respondents, the mean BMI and the percent who report fair or poor health (`genhlth` of 4 or 5) by sex and age group, and make one `ggplot` figure that shows how BMI differs by age. Remember that these are unweighted descriptions of the sample, and say so in a sentence.
 
 ```{r}
 #| label: ex-describe
@@ -814,7 +905,7 @@ brfss |>
 # YOUR CODE HERE
 ```
 
-**5.** End your document with a chunk that runs `sessionInfo()`, render the document to a self-contained HTML file, then commit and push the `.qmd` file, the rendered HTML and `renv.lock`.
+**6.** End your document with a chunk that runs `sessionInfo()`, render the document to a self-contained HTML file, then commit and push the `.qmd` file, the rendered HTML and `renv.lock`.
 
 ```{r}
 #| label: ex-session
@@ -822,7 +913,7 @@ brfss |>
 # YOUR CODE HERE
 ```
 
-**6.** Create a Posit Connect Cloud account and publish the rendered, self-contained HTML file from exercise 5 (not the `.qmd`) with whichever method you prefer. Open the link in a private browser window to check that it works, then commit the `.posit/` folder or `_publish.yml` file that the publishing step created, and push.
+**7.** Create a Posit Connect Cloud account and publish the rendered, self-contained HTML file from exercise 6 (not the `.qmd`) with whichever method you prefer. Open the link in a private browser window to check that it works, then commit the `.posit/` folder or `_publish.yml` file that the publishing step created, and push.
 
 ## Session information
 

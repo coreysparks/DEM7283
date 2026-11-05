@@ -10,6 +10,20 @@ source(here::here("_common.R"))
 
 Last week's models had a continuous outcome. Most demographic outcomes aren't continuous: they're yes/no, counts, or categories, the same outcomes we spent the first half of the semester on. This week extends the multilevel model to those outcomes, which gives us **generalized linear mixed models** (GLMMs). Then it uses the multilevel machinery for two other kinds of clustering. A **growth curve** model treats repeated measurements as nested within people, so time is a level-1 variable, and it builds directly on random slopes. An **age-period-cohort** model treats people as nested within survey years and birth cohorts at the same time, and it runs into one of the oldest problems in demography, which no amount of statistical cleverness has solved.
 
+::: {.callout-note title="This week at a glance"}
+**The question.** How much does the risk of obesity differ between metro areas, for people with the same characteristics? And how do children's math trajectories differ by race and ethnicity and family SES?
+
+**By the end of this week you should be able to**
+
+1. fit a multilevel logit model, and describe metro variation with the median odds ratio and the latent-scale ICC;
+2. explain the difference between a prediction for a typical metro and a prediction averaged over metros, and why they differ in a logit model;
+3. fit a growth curve model with time at level 1 and children at level 2, and interpret its intercept and slope given where time starts.
+
+**Before you begin.** You need random intercepts, random slopes and centering from [week 12](12-multilevel-1.qmd), the logit model and predicted probabilities from [week 3](03-logit-probit.qmd), and the long-format ECLS-K data from [week 10](10-longitudinal.qmd#reshaping-to-long-format).
+
+**Required and optional.** Part 1 (multilevel logit models) is the main thread, and Part 2 (growth curves) is its required continuation. Part 3, on age, period and cohort, is an extension: read it for the lesson that a more elaborate model can't create information the data don't have, and use it if your paper involves age, period or cohort comparisons.
+:::
+
 ## Setup
 
 ```{r}
@@ -59,6 +73,8 @@ In a logit model, there's no person-level residual variance to estimate: the var
 $$\text{ICC} = \frac{\sigma^2_u}{\sigma^2_u + \pi^2/3}$$
 
 For a Poisson model, the person-level variance on the log scale is often taken as 1, giving $\sigma^2_u / (\sigma^2_u + 1)$, though that's a rougher approximation.
+
+Keep in mind what the latent ICC is. It's a model-based summary on the scale of the imagined continuous propensity, which we never observe. It isn't the share of the variation in the observed 0/1 outcome that's due to places, and it isn't the share of people who are obese because of where they live.
 
 @merlo2006 suggest a measure that's easier to explain, the **median odds ratio** (MOR). Take two people with the same characteristics who live in two randomly chosen places. The MOR is the median of the odds ratio comparing the person in the higher-risk place to the person in the lower-risk place:
 
@@ -127,7 +143,15 @@ tibble(model = c("Empty", "With predictors"),
   knitr::kable(digits = 3)
 ```
 
+`VarCorr(glmm0)$mmsa` is the variance of the metro intercepts, and `as.numeric()` turns it into a plain number. `pi` is $\pi$, and `qnorm(0.75)` is $\Phi^{-1}(0.75)$, the value with 75% of a standard normal distribution below it.
+
 The latent ICC in the empty model is `r round(sigma2_u0 / (sigma2_u0 + pi^2/3), 3)`, so, as with BMI, metros account for a small share of the variation. The MOR is `r round(exp(sqrt(2 * sigma2_u0) * qnorm(0.75)), 2)`: for two identical people in two randomly chosen metros, the one in the higher-obesity metro has about `r pct(exp(sqrt(2 * sigma2_u0) * qnorm(0.75)) - 1, 0)` higher odds of obesity, at the median. Once we account for who lives where and the metros' poverty and education, the metro variance falls by `r pct(1 - sigma2_u1 / sigma2_u0, 0)`, and the MOR drops to `r round(exp(sqrt(2 * sigma2_u1) * qnorm(0.75)), 2)`. Most of the between-metro variation in obesity is accounted for by the composition and characteristics of the metros.
+
+::: {.callout-tip title="Reading the result: a right and a wrong interpretation"}
+**Right:** "For two people with the same characteristics living in two randomly chosen metro areas, the person in the metro with higher obesity risk has, at the median, `r round(exp(sqrt(2 * sigma2_u0) * qnorm(0.75)), 2)` times the odds of obesity of the person in the lower-risk metro."
+
+**Wrong:** "`r pct(sigma2_u0 / (sigma2_u0 + pi^2/3))` of obesity is caused by the metro area people live in." The latent ICC is a split of the variance of an unobserved propensity under the model. It isn't a share of the observed outcome, and it isn't causal: metros differ partly because different people live in them.
+:::
 
 ```{r}
 #| label: glmm-table
@@ -144,7 +168,25 @@ For education, the difference is at the top: college graduates have `r pct(1 - e
 
 ### Predicted probabilities
 
-Odds ratios are hard to talk about. As in week 3, predicted probabilities are usually better. With a GLMM, you have to decide which random effect to predict for. Setting it to zero (`re.form = NA`) gives predictions for a typical metro, one at the center of the distribution of metros.
+Odds ratios are hard to talk about. As in week 3, predicted probabilities are usually better. With a GLMM, you have to decide which random effect to predict for, and in a nonlinear model the choice matters. There are two common answers:
+
+1. **For a typical metro.** Set the random effect to zero (`re.form = NA`). That's the prediction for a metro at the center of the distribution of metros.
+2. **Averaged over metros.** Average the predictions over the whole distribution of metro effects. That's the prediction for a person in a randomly chosen metro, the population-average answer, like a GEE's in week 10.
+
+In a linear model these are the same. In a logit model they aren't, because the logistic curve bends: averaging probabilities across metros above and below the center doesn't give the probability at the center. Here's the difference for one kind of person, a 50-year-old non-Hispanic White woman with a high school diploma in a metro with average poverty and education:
+
+```{r}
+#| label: typical-vs-average
+one <- tibble(educ = "HS graduate", z_pct_ba = 0, age_c = 0, female = 1,
+              race_eth = "NH White", z_pct_poverty = 0)
+eta <- predict(glmm1, newdata = one, re.form = NA)   # log-odds, random effect = 0
+
+set.seed(7283)
+u <- rnorm(10000, 0, sqrt(sigma2_u1))   # 10,000 draws of a metro effect
+c(typical_metro = plogis(eta), averaged_over_metros = mean(plogis(eta + u)))
+```
+
+`predict(..., re.form = NA)` gives the log-odds with the random effect set to 0. `rnorm()` draws 10,000 metro effects from the estimated normal distribution, and the second number averages the probability over them. Here the metro variance is small, so the two are close; with more variation between groups, they can differ a lot, and you should say which one you're reporting. The figure below uses the typical-metro version.
 
 ```{r}
 #| label: fig-glmm-pred
@@ -165,11 +207,13 @@ nd |>
        shape = "Metro share college graduates")
 ```
 
+`expand_grid()` builds every combination of education and three values of the metro education score (one standard deviation below average, average, one above), holding everything else fixed, as in week 11.
+
 ## Part 2: Growth curve models
 
 ### Time as a level-1 variable
 
-In week 10, we treated the rounds of the ECLS-K as a nuisance and focused on the effect of poverty. A **growth curve model** makes change itself the outcome. Repeated measurements are level 1 and children are level 2, and each child gets their own trajectory: an intercept (where they start) and a slope (how fast they grow), both random [@singer_willett2003]. With time $t$ for child $i$:
+In week 10, we treated the rounds of the ECLS-K as a nuisance and focused on the effect of poverty. A **growth curve model** makes change itself the outcome. It's the same data structure as week 10, seen through week 12's lens: repeated measurements are level 1 and children are level 2, and each child gets their own trajectory: an intercept (where they start) and a slope (how fast they grow), both random [@singer_willett2003]. With time $t$ for child $i$:
 
 $$y_{ti} = \pi_{0i} + \pi_{1i}t + \pi_{2i}t^2 + e_{ti}$$
 $$\pi_{0i} = \beta_{00} + \beta_{01}z_i + r_{0i}, \qquad \pi_{1i} = \beta_{10} + \beta_{11}z_i + r_{1i}$$
@@ -211,7 +255,7 @@ growth |> summarise(children = n_distinct(childid), observations = n())
 Here the round number comes *before* the variable name (`x4mscalk5`, `x4age`), so splitting at an underscore won't work. `names_pattern = "x([0-9])(mscalk5|age)"` is a regular expression with two groups in parentheses: the first captures the digit, and the second captures either `mscalk5` or `age`. Those two pieces go to `names_to = c("round", ".value")` in order, so the digit becomes the round, and the variable name becomes the column the value goes in. I renamed the two kindergarten age variables first, because their names (`x1kage_r`) don't fit the pattern.
 :::
 
-Children were tested at different ages within each round, so I use age, not round, as the time variable, centered at 5.5 years, which is about the average age at the fall kindergarten test. The intercept is then the expected score at age 5.5.
+Children were tested at different ages within each round, so I use age, not round, as the time variable, centered at 5.5 years, which is about the average age at the fall kindergarten test. Where time starts, the **time origin**, decides what the intercept means: with $t = 0$ at age 5.5, the intercept is the expected score at age 5.5, near the start of kindergarten, and the intercept variance describes how much children differ at that age. If I'd left age uncentered, the intercept would be the expected score at age 0, which means nothing for a math test. Always say where time starts.
 
 ```{r}
 #| label: growth-models
@@ -227,6 +271,8 @@ gc1 <- lmer(math ~ (t + I(t^2)) * (race + ses) + female + (1 + t | childid), dat
 summary(gc0)$coefficients
 VarCorr(gc0)
 ```
+
+`(1 + t | childid)` gives each child a random intercept and a random slope on time, as in week 12. In `gc1`, `(t + I(t^2)) * (race + ses)` lets both the linear and quadratic time terms differ by race and SES, which is how the trajectories are allowed to differ between groups.
 
 The average child scores `r round(fixef(gc0)[1], 1)` at age 5.5 and gains `r round(fixef(gc0)["t"], 1)` points a year at that age. The negative quadratic term says the gains slow down: by age 10, the annual gain is about `r round(fixef(gc0)["t"] + 2 * fixef(gc0)["I(t^2)"] * 4.5, 1)` points. Children vary a lot in where they start (a standard deviation of `r round(attr(VarCorr(gc0)$childid, "stddev")[1], 1)` points) and somewhat in how fast they grow (`r round(attr(VarCorr(gc0)$childid, "stddev")[2], 1)` points a year). The correlation between intercepts and slopes is `r round(attr(VarCorr(gc0)$childid, "correlation")[1, 2], 2)`: children who start higher grow a little more slowly, which is partly a ceiling effect on the test.
 
@@ -259,7 +305,7 @@ gap <- nd_g |>
 
 Among children of the same SES, Black and White children start kindergarten close together, a gap of `r round(gap$gap[gap$t == 0], 1)` points at age 5.5, but by age 10.5 the gap is `r round(gap$gap[gap$t == 5], 1)` points, because Black children's scores grow more slowly. That's the kind of finding a growth curve model is built for: the gap isn't something children bring to school, it opens up during the school years. The coefficients on `t:ses` say the same about SES: higher-SES children both start higher and grow faster.
 
-## Part 3: Age, period and cohort
+## Part 3: Age, period and cohort *(extension)*
 
 ### The identification problem
 
@@ -267,7 +313,7 @@ Demographers have long wanted to separate three kinds of time. **Age** effects a
 
 $$\text{cohort} = \text{period} - \text{age}$$
 
-If you know any two, you know the third, so a model with linear terms for all three can't be estimated: there are infinitely many combinations of age, period and cohort slopes that fit the data equally well. Here it is in the NHIS, with BMI for adults from 2000 to 2014 (the subset is built by `R/make_nhis_subset.R`).
+Take one person: interviewed in the 2010 survey (period) at age 40, she was born in 1970 (cohort). Interview her again in 2014 and she's 44; her cohort is still 1970. Once you know her age and the survey year, her birth cohort is fixed. That's the problem in a nutshell: if you know any two, you know the third, so a model with linear terms for all three can't be estimated: there are infinitely many combinations of age, period and cohort slopes that fit the data equally well. Here it is in the NHIS, with BMI for adults from 2000 to 2014 (the subset is built by `R/make_nhis_subset.R`).
 
 ```{r}
 #| label: nhis-data
@@ -279,6 +325,8 @@ nhis <- readRDS(here("data", "nhis_2000_2014_adults.rds")) |>
 
 lm(bmi ~ age + year + I(year - age), data = nhis) |> coef()
 ```
+
+`floor(cohort / 5) * 5` rounds each birth year down to the start of its five-year group (1962 becomes 1960). The `filter()` drops the NHIS codes for missing values (BMI 0 or 990 and over, birth year 9997 and over).
 
 R drops one of the three, because cohort is a linear combination of the other two. (I used `year - age` for cohort here. The reported birth year differs from it by up to a year, depending on whether the person had had their birthday yet at the interview, and that tiny difference is enough to let `lm()` estimate all three coefficients. The estimates would be meaningless, driven entirely by the timing of birthdays, which is a good illustration of how fragile "solutions" to this problem can be.) Any solution to the APC problem has to add information from outside the data, in the form of an assumption, a constraint, or a model that treats the three differently.
 
@@ -331,6 +379,8 @@ hapc_cohort <- lmer(bmi ~ ns(age, df = 4) + female + I((cohort - 1950) / 10) +
 c(logLik_hapc = as.numeric(logLik(hapc)), logLik_with_cohort_trend = as.numeric(logLik(hapc_cohort)))
 ```
 
+`logLik()` returns a model's log-likelihood; higher is a better fit. `I((cohort - 1950) / 10)` adds a linear cohort trend, in decades since 1950, as a fixed effect.
+
 ```{r}
 #| label: fig-apc-age
 #| fig-cap: "Predicted age curves for BMI from two HAPC specifications that fit the data almost equally well."
@@ -355,7 +405,7 @@ age_gain <- function(fit) {
 }
 ```
 
-The two models fit the data almost identically (their log-likelihoods differ by `r round(as.numeric(logLik(hapc_cohort)) - as.numeric(logLik(hapc)), 1)` points out of hundreds of thousands), but they tell different stories about aging. The first says BMI rises `r round(age_gain(hapc), 1)` points from age 20 to 60, and the second says `r round(age_gain(hapc_cohort), 1)`. Shifting a linear trend into the cohort term made the age curve steeper, and the period effects flatter. Neither is wrong, and the data can't choose between them. That's the identification problem, still there, hidden inside the random effects.
+The two models fit the data almost identically (their log-likelihoods differ by `r round(as.numeric(logLik(hapc_cohort)) - as.numeric(logLik(hapc)), 1)` points out of hundreds of thousands), but they tell different stories about aging. The first says BMI rises `r round(age_gain(hapc), 1)` points from age 20 to 60, and the second says `r round(age_gain(hapc_cohort), 1)`. Shifting a linear trend into the cohort term made the age curve steeper, and the period effects flatter. Neither is wrong, and the data can't choose between them. That's the identification problem, still there, hidden inside the random effects. Any fitted age, period or cohort curve depends on a constraint or assumption, whether it's stated or hidden in the model's structure, and should be labeled that way.
 
 ### What to do instead
 
@@ -373,6 +423,12 @@ Generalized linear mixed models extend multilevel models to binary, count and ot
 ## Exercises
 
 These exercises are Homework 13.
+
+**Purpose.** Extend multilevel models to a binary outcome and to growth over time, and report what they show without overstating it.
+
+**What is provided.** The BRFSS data with metro context and the GLMM `glmm1`, the ECLS-K growth data `growth` and models `gc0` and `gc1`, and (for the extension) the NHIS data and HAPC models from this chapter.
+
+**A satisfactory answer** reports predicted probabilities and says whether they're for a typical metro or averaged over metros; states where time starts in any growth model; and, for exercise 4, explains competing interpretations instead of picking one by fit statistics.
 
 **1.** Add a cross-level interaction between race and ethnicity and the metro poverty rate (`race_eth * z_pct_poverty`) to the obesity GLMM. Are the racial and ethnic differences in obesity larger in poorer metros? Show the answer as predicted probabilities, not odds ratios.
 
@@ -426,7 +482,7 @@ summary(gc_read)$coefficients[c("raceBlack", "t:raceBlack", "I(t^2):raceBlack"),
 # YOUR CODE HERE
 ```
 
-**4.** Refit the HAPC model with a linear *period* trend as a fixed effect instead of a cohort trend. Compare its age curve and cohort effects with the two models above, and write a paragraph explaining to a skeptical reader why you can't tell which model is right.
+**4.** *(Extension.)* First, explain the APC identity in your own words, using an example person. Then refit the HAPC model with a linear *period* trend as a fixed effect instead of a cohort trend, and compare its age curve and cohort effects with the two models above. Identify the assumption that differs between the specifications. In a paragraph, explain to a skeptical reader why the different fitted age or cohort patterns don't show that one specification recovered the true effects, and why choosing the one with the best fit statistics wouldn't settle it.
 
 ```{r}
 #| label: ex-apc

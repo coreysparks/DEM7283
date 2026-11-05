@@ -12,6 +12,20 @@ Most of the outcomes demographers care about aren't continuous. Someone migrates
 
 The models themselves are not hard to fit. The hard part, and the part I want you to spend your time on, is saying what the results mean. Logit coefficients are changes in log-odds, which nobody thinks in. Odds ratios are better, but they are routinely misread as risk ratios. So most of this document is about turning model output into predicted probabilities and average marginal effects, the quantities you should report in your papers [@mood2010; @breen2018].
 
+::: {.callout-note title="This week at a glance"}
+**The question.** How much more likely are adults with less education, or Hispanic adults, to report fair or poor health than other adults of the same age and sex?
+
+**By the end of this week you should be able to**
+
+1. convert between a probability, odds, log-odds and an odds ratio, by hand;
+2. fit a survey-weighted logit model and interpret an odds ratio, naming the comparison group;
+3. report an adjusted difference in probabilities in percentage points, and describe it as an association, not an effect.
+
+**Before you begin.** You'll use the survey design object from [week 2](02-survey-design.qmd#the-full-design), `svyglm()` from [the week 2 regression section](02-survey-design.qmd#regression-with-survey-data), and the `map()` pattern from [week 2](02-survey-design.qmd#comparing-the-standard-errors). From your first course, you need linear regression and the idea of a reference category for a categorical predictor.
+
+**Required and optional.** The probit and the other links are an alternative way to write the same kind of model; the section on them is optional on a first reading. Everything else is required.
+:::
+
 ## Setup
 
 `marginaleffects` does the post-estimation work. It handles predicted probabilities, comparisons and marginal effects for almost any model in R, including `svyglm()`.
@@ -49,7 +63,7 @@ pts <- function(x, d = 1) format(round(100 * x, d), nsmall = d)
 
 ### From the linear model to the GLM
 
-Up to now you've mostly relied on linear models that assume a Normal distribution for the outcome. A broader class, **generalized linear models** or GLMs [@nelder_wedderburn1972], allows regression for outcomes that aren't Normal. Every GLM has three parts: a probability distribution suited to the outcome, a **linear predictor** made of the coefficients and covariates, and a **link function** that connects the mean of the distribution to the linear predictor. The linear model is a GLM, too. Its mean is $\mu$, and the linear predictor is connected to it directly:
+Up to now you've mostly relied on linear models that assume Normal errors. Strictly, that's an assumption about the *conditional* distribution of the outcome: for people with the same values of the predictors, the outcomes are spread out Normally around the regression line. The raw outcome itself doesn't have to look Normal. A broader class, **generalized linear models** or GLMs [@nelder_wedderburn1972], allows regression for outcomes that aren't Normal. Every GLM has three parts: a probability distribution suited to the outcome, a **linear predictor** made of the coefficients and covariates, and a **link function** that connects the mean of the distribution to the linear predictor. The linear model is a GLM, too. Its mean is $\mu$, and the linear predictor is connected to it directly:
 
 $$
 g(\mu) = g(E(Y)) = \beta_0 + \beta_1 x_1, \qquad g(\mu) = \mu
@@ -57,11 +71,13 @@ $$
 
 That's the **identity link**: no transformation at all. It works for the Normal because the Normal can take any value from $-\infty$ to $\infty$, so a straight line can't wander off the scale of the data. Other distributions have narrower ranges, and their links transform the mean so the linear predictor stays on the right scale.
 
-For a binary outcome, the distribution is the binomial, which you've probably met in a basic statistics course (remember the coin flips?). It gets used in two ways. When each person has a single "trial," with an outcome of 1 or 0, it's called the **Bernoulli** distribution, and that's the logistic regression you've probably seen before. When we have $y$ events out of $n$ trials, which is the basic makeup of a demographic rate (deaths out of people at risk, low birth weight births out of all births), we have what I call the **count-based binomial**. Either way the mean is a probability, $\pi$, and the model is
+For a binary outcome, the distribution is the binomial, which you've probably met in a basic statistics course (remember the coin flips?). It gets used in two ways. When each person has a single "trial," with an outcome of 1 or 0, it's called the **Bernoulli** distribution, and that's the logistic regression you've probably seen before. When we have $y$ events out of $n$ trials, which is the basic makeup of a demographic rate (deaths out of people at risk, low birth weight births out of all births), we have what I call the **count-based binomial**. Either way the mean is a probability, $\pi$, and the model says how that probability depends on the predictors. For a single person $i$, the expected value of a 0/1 outcome is the probability that it's 1:
 
 $$
-\Pr(y = 1) = \frac{y}{n} = \pi = \text{some function of the predictors}
+E(Y_i \mid \mathbf{x}_i) = \Pr(Y_i = 1 \mid \mathbf{x}_i) = \pi_i = \text{some function of } \mathbf{x}_i
 $$
+
+Read the vertical bar as "given": the probability for someone with predictor values $\mathbf{x}_i$. For grouped data, with $Y_j$ events out of $n_j$ trials in group $j$, the observed proportion $Y_j / n_j$ is our *estimate* of $\pi_j$, but it isn't the same thing. The probability is a property of the population (or the model), and the observed proportion bounces around it from sample to sample.
 
 This week is about the Bernoulli case, with individual survey respondents. We'll use the count-based binomial for rates in places in week 6.
 
@@ -81,7 +97,21 @@ $$
 
 It's worth walking through that one step at a time. The **odds** of an event are the probability it happens divided by the probability it doesn't, $\pi / (1 - \pi)$. A probability is stuck between 0 and 1, but the odds run from 0 to $\infty$, and taking the log of the odds stretches that onto the whole real line, from $-\infty$ to $\infty$. Now a linear function of the covariates can't go out of bounds, and we can write the model as $\text{logit}(\pi) = \beta_0 + \beta_1 x_1$ without worrying about the boundary problem.
 
-The **probit** link is the inverse of the standard normal cumulative distribution function, $\Phi^{-1}(\pi_i) = \mathbf{x}_i'\boldsymbol\beta$, so $\pi_i = \Phi(\mathbf{x}_i'\boldsymbol\beta)$. A third link, the **complementary log-log**, $\log(-\log(1 - \pi_i)) = \mathbf{x}_i'\boldsymbol\beta$, is asymmetric, and it comes up mostly when the binary outcome is really whether an event happened in an interval of time, which is why you'll see it again in your event history course.
+Here's one number taken all the way through, because these scales are easy to mix up:
+
+| Scale | Value | How you get it |
+|---|---|---|
+| Probability | 0.20 | 20 people in 100 |
+| Odds | 0.25 | $0.20 / (1 - 0.20) = 0.20 / 0.80$ |
+| Log-odds (logit) | $-1.39$ | $\log(0.25)$ |
+| Odds doubled | 0.50 | $2 \times 0.25$ |
+| Back to a probability | 0.333 | $\text{odds} / (1 + \text{odds}) = 0.50 / 1.50$ |
+
+Doubling the odds took the probability from 0.20 to 0.333, not to 0.40. An odds ratio of 2 doesn't mean the probability doubles, and we'll come back to that at the end of the chapter.
+
+### Probit and other links *(optional on a first reading)*
+
+The logit is the model we'll use most, and you can skip this section the first time through. The **probit** link is the inverse of the standard normal cumulative distribution function, $\Phi^{-1}(\pi_i) = \mathbf{x}_i'\boldsymbol\beta$, so $\pi_i = \Phi(\mathbf{x}_i'\boldsymbol\beta)$. A third link, the **complementary log-log**, $\log(-\log(1 - \pi_i)) = \mathbf{x}_i'\boldsymbol\beta$, is asymmetric, and it comes up mostly when the binary outcome is really whether an event happened in an interval of time, which is why you'll see it again in your event history course.
 
 Both models can also be written as models for a latent propensity $y_i^* = \mathbf{x}_i'\boldsymbol\beta + \varepsilon_i$, where we only see $y_i = 1$ when $y_i^* > 0$. The logit assumes $\varepsilon$ has a logistic distribution (variance $\pi^2/3$), and the probit assumes a standard normal (variance 1). That's the whole difference between them, and it's why logit coefficients are about 1.6 to 1.8 times the size of probit coefficients for the same data. It's also the source of the nested model problem we'll take on in week 4.
 
@@ -107,6 +137,8 @@ $$
 $$
 
 So a $\beta_1$ of 0.025 gives $\exp(0.025) = 1.025$, and a one-unit increase in $x_1$ raises the odds of $y$ by 2.5%. If $\beta_1 = 0.4$, then $\exp(0.4) = 1.49$, a 49% increase in the odds. A negative coefficient works the same way: $\beta_1 = -0.15$ gives $\exp(-0.15) - 1 = -0.14$, a 14% decrease. Odds ratios are constant across the range of $x$, which is convenient, but odds are not probabilities, and that difference will come back below.
+
+An odds ratio is always a comparison between two groups, so always say what's being compared with what. For a categorical predictor, the comparison is with the **reference category**, the level left out of the model (here, the first level of each factor). "Hispanic adults have 1.5 times the odds" is incomplete; "Hispanic adults have 1.5 times the odds of non-Hispanic White adults with the same education, age and sex" is a complete sentence.
 
 ## The data and some descriptive work
 
@@ -136,6 +168,15 @@ desc <- c("educ", "race_eth") |>
 
 svychisq(~badhealth + educ, design = des)
 ```
+
+::: {.callout-note title="Code explanation: building a formula from text"}
+`recode_mmsa()` (in `R/recode_mmsa.R`) does the week 2 recodes in one step, so every chapter starts from the same variables.
+
+The descriptive pipe runs the same `svyby()` for two variables, using the `map()` pattern from week 2. Two new pieces:
+
+1. `set_names()` names each element of `c("educ", "race_eth")` with its own value, so the results come back labeled `educ` and `race_eth`, and `list_rbind(names_to = "variable")` can use those names.
+2. `reformulate(v)` turns the text `"educ"` into the formula `~educ`. `svyby()` wants a formula, and inside the function `v` is just text, so this converts it. `res[[v]]` then pulls out the column whose name is stored in `v`.
+:::
 
 ```{r}
 #| label: fig-descriptives
@@ -170,7 +211,19 @@ race_educ |>
   labs(x = NULL, y = "Fair or poor health", colour = NULL, shape = NULL)
 ```
 
-The education gradient shows up in every group, and within each level of education the racial and ethnic differences are much smaller than they were overall. The overall Hispanic-White gap is more than 10 percentage points, and within education groups it's closer to 3 to 5. That's the descriptive version of what the model will tell us: some, but not all, of the Hispanic disadvantage is about education.
+```{r}
+#| label: gap-values
+#| include: false
+overall_gap <- with(desc, estimate[group == "Hispanic"] - estimate[group == "NH White"])
+within_gap <- race_educ |>
+  as_tibble() |>
+  filter(race_eth %in% c("Hispanic", "NH White")) |>
+  select(race_eth, educ, badhealth) |>
+  pivot_wider(names_from = race_eth, values_from = badhealth) |>
+  mutate(gap = Hispanic - `NH White`)
+```
+
+The education gradient shows up in every group, and within each level of education the racial and ethnic differences are much smaller than they were overall. The overall Hispanic-White gap is `r pts(overall_gap)` percentage points, and within education groups it runs from `r pts(min(within_gap$gap))` to `r pts(max(within_gap$gap))`. That's the descriptive version of what the model will tell us: some, but not all, of the Hispanic disadvantage is about education.
 
 ## Fitting logit and probit models
 
@@ -187,12 +240,18 @@ fit_probit <- svyglm(badhealth ~ race_eth + educ + agec + female,
 summary(fit_logit)
 ```
 
+::: {.callout-note title="Code explanation: logit and probit models with `svyglm()`"}
+`svyglm()` is the same function you used for BMI in week 2. The `family` argument says what kind of outcome it is. `quasibinomial()` uses the logit link by default, and `quasibinomial(link = "probit")` switches to the probit. `summary()` prints the coefficients, their standard errors, $t$ statistics and p-values, all on the log-odds scale for the logit.
+:::
+
 The coefficients are on the log-odds scale. Positive values mean higher odds of fair or poor health, so everything here goes in the direction the descriptive figures suggested. To test whether a whole set of dummies matters, use a design-based Wald test (likelihood ratio tests aren't valid with survey weights):
 
 ```{r}
 #| label: wald
 regTermTest(fit_logit, ~race_eth, method = "Wald")
 ```
+
+`regTermTest()` tests whether all the coefficients for a variable (here, the four race and ethnicity dummies) are zero at once. The second argument names the variable with a formula. Read its p-value like any other: a small one says race and ethnicity, as a whole, is associated with the outcome after adjusting for the rest of the model.
 
 Here are the odds ratios next to the probit coefficients:
 
@@ -206,6 +265,8 @@ modelsummary(list("Logit (odds ratios)" = fit_logit, "Probit" = fit_probit),
              gof_map = "nobs",
              title = "Models for fair or poor self-rated health")
 ```
+
+In `modelsummary()`, `exponentiate = c(TRUE, FALSE)` exponentiates the first model's coefficients (turning log-odds into odds ratios) and leaves the second's alone, and `coef_omit = "Intercept"` drops the intercept row.
 
 ```{r}
 #| label: or-values
@@ -224,6 +285,8 @@ tbl_regression(fit_logit, exponentiate = TRUE,
                             agec ~ "Age group", female ~ "Female")) |>
   bold_labels()
 ```
+
+`tbl_regression()` is the `gtsummary` table for a fitted model, the partner of `tbl_svysummary()` from week 2. `exponentiate = TRUE` shows odds ratios, and the reference category of each variable gets its own row, marked with a dash, so a reader can see what each odds ratio compares against.
 
 A picture is often easier to digest. On the odds ratio scale, an interval that crosses 1 means the effect isn't statistically different from zero. I put the axis on a log scale, because an odds ratio of 0.5 is as far from 1 as an odds ratio of 2.
 
@@ -260,6 +323,10 @@ eta <- b[["(Intercept)"]] + b[["educCollege graduate"]] + b[["agec45-54"]] + b[[
 plogis(eta)   # plogis() is the inverse logit, 1 / (1 + exp(-eta))
 ```
 
+::: {.callout-note title="Code explanation: a prediction by hand"}
+`coef(fit_logit)` returns the coefficients as a named vector, and `b[["educCollege graduate"]]` pulls out one by its name (the variable name followed by the category). Adding the intercept and the three coefficients that apply to this woman gives her linear predictor, `eta`, on the log-odds scale. `plogis()` converts log-odds to a probability, which is the right-hand side of the logit equation above.
+:::
+
 Doing that for many kinds of people gets tedious, and it doesn't give you a confidence interval. So what's the predicted probability of fair or poor health for a 45-to-54-year-old woman, by race and ethnicity and education? `datagrid()` builds the "people," and `predictions()` computes their probabilities with confidence intervals.
 
 ```{r}
@@ -275,6 +342,10 @@ cases |>
   select(race_eth, educ, estimate, conf.low, conf.high) |>
   knitr::kable(digits = 3)
 ```
+
+::: {.callout-note title="Code explanation: `datagrid()` and `predictions()`"}
+`datagrid()` builds a small data frame of made-up people. Each argument gives the values of one variable, and `datagrid()` makes every combination: here 3 race and ethnicity groups times 2 education levels, all 45 to 54 and female, for 6 rows. `predictions(model, newdata = ...)` computes each row's predicted probability with a confidence interval. The result has one row per made-up person, with the prediction in `estimate` and the interval in `conf.low` and `conf.high`.
+:::
 
 ```{r}
 #| label: case-values
@@ -294,7 +365,11 @@ Choosing interesting cases is a judgment call, and the results depend on what yo
 avg_predictions(fit_logit, variables = "educ", wts = "(weights)")
 ```
 
-This is the answer to the question "what share of adults would report fair or poor health if everyone had this level of education, and nothing else about them changed?" It's a counterfactual quantity, and it's what most people have in mind when they talk about "the effect of education" in a model like this.
+This is **standardization**, the same idea as an age-standardized rate. Each average prediction answers: "according to the model, what share of adults would report fair or poor health if the population had its actual mix of race and ethnicity, age and sex, but everyone was in this education group?" Because every education group is averaged over the same population, differences between them aren't due to differences in age, sex or race and ethnicity.
+
+Be careful with the "if everyone was in this education group" part, though. It describes a comparison the model makes, not what would happen if we actually changed people's education. That's a causal claim, and it needs assumptions we haven't made yet (about everything else that differs between people with more and less education). Week 14 is about those assumptions. Until then, describe these as adjusted associations.
+
+In `avg_predictions()`, `variables = "educ"` says which variable to set to each of its levels in turn, and `wts = "(weights)"` makes the averaging use the survey weights. `svyglm()` stores the weights under the name `(weights)`, parentheses included, which is why it's written that way.
 
 ### Average marginal effects
 
@@ -307,6 +382,8 @@ ame_logit <- avg_comparisons(fit_logit, variables = c("race_eth", "educ"),
 ame_logit
 ```
 
+`avg_comparisons()` computes the differences between the average predictions for each level of a variable and its reference level, with design-based confidence intervals. Each row of the output is one comparison: the `contrast` column says which two groups, and `estimate` is the difference in probability (multiply by 100 for percentage points).
+
 ```{r}
 #| label: ame-values
 #| include: false
@@ -316,6 +393,14 @@ ame_h <- al$estimate[al$term == "race_eth" & str_detect(al$contrast, "Hispanic")
 ```
 
 A college degree, compared with not finishing high school, is associated with a `r pts(abs(ame_cg))` percentage point lower probability of fair or poor health, averaged over the population. Being Hispanic rather than non-Hispanic White is associated with a probability `r pts(ame_h)` points higher.
+
+::: {.callout-tip title="Reading the result: a right and a wrong interpretation"}
+**Right:** "Adults with a college degree are `r pts(abs(ame_cg))` percentage points less likely to report fair or poor health than adults who didn't finish high school, comparing people with the same race and ethnicity, age and sex."
+
+**Wrong:** "Getting a college degree lowers a person's chance of fair or poor health by `r pts(abs(ame_cg))` percentage points." That's a causal claim about what happens to someone who gets more education. The model compares different people who already differ in education, and plenty else about them (income, childhood health, where they grew up) differs too. Say "is associated with" or "are less likely," and save "lowers" for when you've made the case for a cause.
+:::
+
+Notice the units, too. A **percentage point** difference subtracts one percentage from another: from 30% to 20% is 10 percentage points. A **percent** (relative) change divides: from 30% to 20% is a 33% decrease. Both are correct descriptions of the same change, and mixing them up makes effects sound bigger or smaller than they are. AMEs are percentage point differences; risk ratios (below) are relative.
 
 ::: {.callout-note}
 You'll also see **marginal effects at the mean** (MEMs), which compute the slope for a single made-up person with every variable at its mean. With categorical predictors, that person is a fraction Hispanic and a fraction college graduate, which describes nobody. AMEs average over real people instead, and they're the better default [@mood2010]. If you want effects for a specific kind of person, use `datagrid()` and say so.
@@ -341,6 +426,10 @@ ame_all <- list(Logit = fit_logit, Probit = fit_probit, LPM = fit_lpm) |>
                                           paste0("Race: ", levels(brfss$race_eth)[-1]))))
 ```
 
+::: {.callout-note title="Code explanation: stacking the three models' AMEs"}
+This is the `map()` pattern from week 2, run twice: once to compute the AMEs for each model, and once (`map(as_tibble)`) to turn each result into a data frame before stacking. In the `mutate()`, `str_remove(contrast, " - .*$")` deletes everything from " - " to the end of the contrast label (`.*$` means "anything, up to the end"), so "College graduate - Less than HS" becomes "College graduate". `paste0()` glues a prefix onto each label, and `factor(..., levels = ...)` puts the labels in the same order as the categories. `levels(brfss$educ)[-1]` is every education level except the first; `[-1]` drops the first element, the reference group, which has no AME of its own.
+:::
+
 ```{r}
 #| label: fig-compare-ames
 #| fig-cap: "Average marginal effects on the probability of fair or poor health from logit, probit and linear probability models. Reference groups are non-Hispanic White and less than high school."
@@ -363,11 +452,13 @@ range(lpm_fitted)
 sum(lpm_fitted < 0)
 ```
 
+`predict()` returns each respondent's fitted value from the model, `range()` gives the smallest and largest, and `sum(lpm_fitted < 0)` counts the negative ones (`TRUE` counts as 1 and `FALSE` as 0).
+
 Here `r sum(lpm_fitted < 0)` respondents get negative predicted probabilities. That's harmless for the AMEs, but it's a reminder that the linear probability model isn't a model of individual probabilities.
 
 ## Odds ratios are not risk ratios
 
-One last thing, because I see it in published papers all the time. An odds ratio of 2 does *not* mean the outcome is twice as likely. When the outcome is rare (under about 10%), odds and probabilities are close and so are odds ratios and risk ratios. When it's common, the odds ratio is further from 1 than the risk ratio, sometimes by a lot. About 18% of adults report fair or poor health, so we're in the zone where it matters.
+One last thing, because I see it in published papers all the time. An odds ratio of 2 does *not* mean the outcome is twice as likely. When the outcome is rare (under about 10%), odds and probabilities are close and so are odds ratios and risk ratios. When it's common, the odds ratio is further from 1 than the risk ratio, sometimes by a lot. About `r pct(coef(svymean(~badhealth, des, na.rm = TRUE))[[1]], 0)` of adults report fair or poor health, so we're in the zone where it matters.
 
 `avg_comparisons()` with `comparison = "ratio"` computes the average risk ratio directly.
 
@@ -377,6 +468,8 @@ rr <- avg_comparisons(fit_logit, variables = list(educ = c("Less than HS", "Coll
                       comparison = "ratio", wts = "(weights)")
 rr
 ```
+
+Here `variables = list(educ = c("Less than HS", "College graduate"))` picks out one comparison, college graduates against less than high school, and `comparison = "ratio"` divides the two average predictions instead of subtracting them.
 
 ```{r}
 #| label: rr-values
@@ -390,7 +483,13 @@ The odds ratio for a college degree was `r round(or[["educCollege graduate"]], 2
 
 These exercises are Homework 3.
 
-**1.** Fit a survey-weighted logit model for obesity (`obese`) with race and ethnicity, education, age group, sex and smoking status (`smoke`) as predictors. Report the odds ratios and the AMEs in one table or figure, and write two or three sentences interpreting the education results on the probability scale.
+**Purpose.** Fit a logit model to survey data and report its results on the scale readers understand, without claiming more than the data show.
+
+**What is provided.** The BRFSS data with `recode_mmsa()`, and the design object `des` from this chapter. The reference groups are non-Hispanic White, less than high school, ages 18 to 24, men, and never smokers.
+
+**A satisfactory answer** names the comparison group for every odds ratio or difference; gives probability differences in percentage points; describes results as associations ("is associated with," "are more likely"), not effects; and includes a confidence interval with each estimate.
+
+**1.** Fit a survey-weighted logit model for obesity (`obese`) with race and ethnicity, education, age group, sex and smoking status (`smoke`) as predictors. For college graduates compared with adults who didn't finish high school, report (a) the odds ratio and (b) the average marginal effect (the adjusted difference in probability), each with a 95% confidence interval. State the reference group, express the probability difference in percentage points, and explain in two or three sentences why the two numbers answer different questions. Describe the result as an association.
 
 ```{r}
 #| label: ex-obesity

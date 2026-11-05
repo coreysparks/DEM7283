@@ -35,6 +35,7 @@ book:
     - part: "Decomposition and missing data"
       chapters:
         - chapters/07-decomposition.qmd
+        - chapters/08-spring-break-review.qmd
         - chapters/09-missing-data.qmd
     - part: "Longitudinal, nonlinear and multilevel models"
       chapters:
@@ -46,6 +47,7 @@ book:
       chapters:
         - chapters/14-causal-inference.qmd
         - chapters/15-machine-learning.qmd
+        - chapters/16-final-paper.qmd
     - references.qmd
 
 bibliography: references.bib
@@ -56,8 +58,7 @@ format:
       - cosmo
       - utsa.scss
     # Chapters are titled by course week ("Week 9: ..."), and the text refers
-    # to weeks throughout, so book chapter numbers would only confuse things
-    # (week 8 is spring break).
+    # to weeks throughout, so book chapter numbers would only confuse things.
     number-sections: false
     toc: true
     toc-depth: 3

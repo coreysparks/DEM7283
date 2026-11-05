@@ -12,6 +12,20 @@ Counts are everywhere in demography. Births, deaths and migrants in a county; th
 
 Counts are non-negative integers, they're often skewed, and their variance usually grows with their mean, so the linear model fits them badly. This week covers the generalized linear models built for counts, in two settings. The first is **rates for places**, where the key idea is the offset that turns a model for counts into a model for rates. The second is **counts for people**, where the key problem is usually too many zeros. @cameron_trivedi2013 is the standard reference for everything here.
 
+::: {.callout-note title="This week at a glance"}
+**The question.** Do counties with more poverty have higher rates of low birth weight births? And how do poor mental health days differ across groups of adults?
+
+**By the end of this week you should be able to**
+
+1. name the event, the denominator (or exposure), the observation period and the unit of analysis for a count;
+2. explain why a model of event counts across places needs an offset, and interpret an exponentiated coefficient as a rate ratio;
+3. check a count model for overdispersion, and say what overdispersion tells you about the model.
+
+**Before you begin.** You need the GLM, the link function and exponentiated coefficients from [week 3](03-logit-probit.qmd), and the survey design from [week 2](02-survey-design.qmd). From your demography courses, you need crude and age-specific rates.
+
+**Required and optional.** Zero-inflated and hurdle models are extensions: read them once you're comfortable interpreting a basic count model, and use them if your paper has a count outcome with many zeros.
+:::
+
 ## Setup
 
 ```{r}
@@ -99,6 +113,13 @@ n_zero  <- sum(bexar_pov$estimate == 0, na.rm = TRUE)
 
 The tracts with the least precise estimates are the ones with the *lowest* poverty rates, because so few sampled families there report incomes below the poverty line. The rank correlation between the poverty rate and its CV is `r round(cv_rho, 2)`. A CV above about 0.3 is a common warning sign, and `r scales::percent(cv_high)` of Bexar County tracts are over it. So a tract map of family poverty is mostly a map of noise, except in the poorest tracts. The `r n_zero` tracts with an estimate of zero don't have a CV at all, but a zero from a sample isn't a true zero either.
 
+::: {.callout-note title="Code explanation: ACS estimates and a map"}
+1. `get_acs()` downloads ACS summary estimates: the `geography` (tracts here), the `state` and `county`, the table `variables` (`DP03_0119P` is a "data profile" percent), the `year` of the five-year file, and `geometry = TRUE` to attach each tract's boundary. Each row has an `estimate` and its `moe`.
+2. `cut(cv, breaks = ..., labels = ...)` turns a number into categories, using the break points you give (`Inf` is infinity, so the last class is "anything over 0.5").
+3. `geom_sf()` draws the boundaries from the `geometry` column, filled by a variable, and `theme_void()` removes the axes and gridlines, which mean nothing on a map.
+4. `cor(..., method = "spearman", use = "complete.obs")` computes a rank correlation, skipping tracts with a missing value.
+:::
+
 ## Part 1: Rates for places
 
 ### The data
@@ -118,6 +139,8 @@ ahrf <- get_ahrf() |>
          suppressed = is.na(lbw) & !is.na(births))
 ```
 
+`na_if(rucc, "")` turns empty text into `NA`, and `as.integer()` makes it a number. `suppressed` is `TRUE` for counties with a birth count but no low birth weight count (`!` means "not"). In the summary below, `median(births[suppressed])` takes the median of `births` only for the suppressed counties; the square brackets pick out the elements where the condition is `TRUE`.
+
 The predictors are the percent of people in poverty, whether the county is metropolitan (rural-urban continuum codes 1 to 3), and whether it is a primary care health professional shortage area (HPSA), in whole or in part.
 
 ### A problem before we start: suppressed counts
@@ -134,7 +157,7 @@ ahrf |>
             median_births_reported = median(births[!suppressed], na.rm = TRUE))
 ```
 
-NCHS doesn't release counts below 10, so the AHRF has no low birth weight count for `r sum(ahrf$suppressed)` counties. They're missing, not zero, and they aren't missing at random. Most of them are small nonmetropolitan counties: about a third of nonmetro counties are suppressed, compared with fewer than one in ten metro counties. If we drop them, which is what I do below, the results describe counties with enough births to report, and the comparison between metro and nonmetro counties is a comparison between metro counties and the *larger* nonmetro counties. I'd name that limitation explicitly in a paper. Pooling more years, or using restricted-use natality files, are the usual ways around it.
+NCHS doesn't release counts below 10, so the AHRF has no low birth weight count for `r sum(ahrf$suppressed)` counties. They're missing, not zero, and the difference matters: a zero would say the county had no low birth weight births, while a suppressed count says it had somewhere between 1 and 9 that we aren't allowed to see. And they aren't missing at random. Most of them are small nonmetropolitan counties: about a third of nonmetro counties are suppressed, compared with fewer than one in ten metro counties. If we drop them, which is what I do below, the results describe counties with enough births to report, and the comparison between metro and nonmetro counties is a comparison between metro counties and the *larger* nonmetro counties. I'd name that limitation explicitly in a paper. Pooling more years, or using restricted-use natality files, are the usual ways around it.
 
 ```{r}
 #| label: analysis-sample
@@ -182,6 +205,10 @@ ggplot(lbw_map) +
   theme(legend.position = "bottom", text = element_text(colour = utsa_cols("midnight")))
 ```
 
+::: {.callout-note title="Code explanation: a county map"}
+`tigris::counties()` and `tigris::states()` download boundary files; `cb = TRUE` and `resolution = "20m"` get simplified versions that draw quickly. `filter(!STATEFP %in% lower48)` drops Alaska, Hawaii and the territories by their state codes (the vector is named for what's left). `left_join(ahrf, by = c("GEOID" = "fips_st_cnty"))` matches the map to the data when the ID columns have different names. `quantile(lbw_rate, probs = seq(0, 1, 0.2))` finds the quintile break points, and `fct_na_value_to_level()` turns the missing (suppressed) counties into a category of their own so they get a color. `coord_sf(crs = 5070)` draws the map in a projection suited to the lower 48 states.
+:::
+
 The highest rates are concentrated in the Southeast, along the lower Mississippi, across the Black Belt of Alabama and Georgia and up into Appalachia, with another cluster in the high-altitude counties of Colorado, Wyoming and New Mexico. And the gray counties make the suppression problem visible: they're the sparsely populated counties of the Great Plains and the interior West.
 
 ### A GLM for every outcome
@@ -208,7 +235,15 @@ $$
 \log(\mu_i) = \mathbf{x}_i'\boldsymbol\beta
 $$
 
-But a county with 50,000 births will have more low birth weight births than a county with 500 for no reason other than its size. What we care about is the rate, $\mu_i / n_i$, where $n_i$ is the number of births. Taking logs,
+But a county with 50,000 births will have more low birth weight births than a county with 500 for no reason other than its size. Here are three made-up counties:
+
+| County | Births | Low birth weight births | Rate per 1,000 births |
+|---|---:|---:|---:|
+| A | 500 | 40 | 80 |
+| B | 50,000 | 4,000 | 80 |
+| C | 200 | 20 | 100 |
+
+A and B have the same rate, but B has 100 times as many low birth weight births, simply because it has 100 times as many births. And C has the *fewest* events of all, but the highest rate. A count tells us how many events happened; a rate relates the events to the amount of exposure (here, the number of births at risk). A model of the counts alone would mostly describe county size. What we care about is the rate, $\mu_i / n_i$, where $n_i$ is the number of births. Taking logs,
 
 $$
 \log\left(\frac{\mu_i}{n_i}\right) = \mathbf{x}_i'\boldsymbol\beta
@@ -216,7 +251,7 @@ $$
 \log(\mu_i) = \log(n_i) + \mathbf{x}_i'\boldsymbol\beta
 $$
 
-The term $\log(n_i)$ is the **offset**. It's a predictor whose coefficient is fixed at 1, and it turns the count model into a rate model. Any model for demographic counts across units of different sizes needs an offset (or a denominator of some kind), and the most common mistake I see in student papers is leaving it out.
+The term $\log(n_i)$ is the **offset**. It's a predictor whose coefficient is fixed at 1, and it turns the count model into a rate model. That's the difference between an offset and an ordinary predictor. If we put $\log(n_i)$ in the model as a predictor, the model would *estimate* its coefficient. We don't want that, because we already know the relationship: twice the births at risk means, all else equal, twice the expected events. The offset builds that known exposure into the model instead of estimating it. Any model for demographic counts across units of different sizes needs an offset (or a denominator of some kind), and the most common mistake I see in student papers is leaving it out.
 
 So there are really three ways to use the Poisson for places:
 
@@ -235,6 +270,12 @@ fit_pois <- glm(lbw ~ offset(log(births)) + pov_pct + metro + hpsa,
 summary(fit_pois)
 ```
 
+::: {.callout-note title="Code explanation: a Poisson rate model"}
+`glm()` fits a generalized linear model to ordinary (non-survey) data, the way `svyglm()` does for survey data. `family = poisson` makes it a Poisson model with a log link. `offset(log(births))` in the formula adds the log of the number of births as an offset, with its coefficient fixed at 1. The `summary()` coefficients are on the log scale, so exponentiate them (`exp(coef(fit_pois))`) to get rate ratios.
+
+At the top of the chapter, `library(MASS, exclude = "select")` loads `MASS` (for `glm.nb()`, below) without its `select()` function, which would otherwise hide `dplyr::select()`, the package-conflict problem from week 1.
+:::
+
 Exponentiated Poisson coefficients are **rate ratios**. Each percentage point of poverty is associated with a low birth weight rate `r pct(exp(coef(fit_pois)[["pov_pct"]]) - 1)` higher, and nonmetro counties have rates `r pct(1 - exp(coef(fit_pois)[["metroNonmetro"]]))` lower than metro counties with the same poverty and shortage status. The intercept, exponentiated, is the rate in a metro, non-shortage county with zero poverty: `r round(1000 * exp(coef(fit_pois)[["(Intercept)"]]), 1)` per 1,000 births.
 
 Here is what happens without the offset:
@@ -247,14 +288,22 @@ round(cbind(with_offset = coef(fit_pois), without_offset = coef(fit_no_offset)),
 
 Without the offset, the nonmetro coefficient says nonmetro counties have about `r pct(1 - exp(coef(fit_no_offset)[["metroNonmetro"]]), 0)` fewer low birth weight births, which is true and useless: they have fewer births of every kind. The model is describing county size, not risk.
 
+::: {.callout-tip title="Reading the result: a right and a wrong interpretation"}
+**Right:** "Comparing counties with the same metropolitan status and shortage-area status, each additional percentage point of poverty is associated with a low birth weight rate about `r pct(exp(coef(fit_pois)[["pov_pct"]]) - 1)` higher."
+
+**Wrong:** "Each additional percentage point of poverty causes `r pct(exp(coef(fit_pois)[["pov_pct"]]) - 1)` more low birth weight births in a county." It's a rate ratio, so it's about the rate, not the number of births; it compares different counties, not one county getting poorer; and it describes counties, not mothers. A county-level association doesn't tell you that poorer *mothers* have more low birth weight babies, which is the ecological problem from the start of the chapter.
+:::
+
 ### Overdispersion
 
-The Poisson assumes the variance equals the mean. Counts for places almost never behave that way, because counties differ in many ways the model doesn't include. A quick check is the Pearson chi-square divided by its degrees of freedom, which should be near 1.
+The Poisson assumes the variance equals the mean *for places with the same values of the predictors*. That's a statement about the conditional variance: the raw counts across all counties will obviously vary far more than their mean, because counties differ in size and poverty, and that part the model already accounts for. Counts for places still rarely meet the assumption, because counties with the same predictor values differ in many ways the model doesn't include. A quick check is the Pearson chi-square divided by its degrees of freedom, which should be near 1.
 
 ```{r}
 #| label: dispersion
 sum(residuals(fit_pois, type = "pearson")^2) / fit_pois$df.residual
 ```
+
+`residuals(fit_pois, type = "pearson")` gives each county's Pearson residual, its observed minus fitted count divided by the standard deviation the Poisson expects. If the Poisson is right, the squared Pearson residuals average about 1. `fit_pois$df.residual` is the number of counties minus the number of coefficients.
 
 A dispersion of about `r round(sum(residuals(fit_pois, type = "pearson")^2) / fit_pois$df.residual, 1)` means the variance is nearly three times what the Poisson assumes, so the Poisson standard errors are too small. If overdispersion is present and we ignore it, we can call a relationship significant when it isn't.
 
@@ -266,7 +315,9 @@ c(deviance = deviance(fit_pois), df = df.residual(fit_pois),
   p = pchisq(deviance(fit_pois), df.residual(fit_pois), lower.tail = FALSE))
 ```
 
-A p-value of essentially zero says the Poisson doesn't fit these data. (If the p-value were above 0.05, we couldn't reject the hypothesis that it does.) There are two common fixes.
+A p-value of essentially zero says the Poisson doesn't fit these data. (If the p-value were above 0.05, we couldn't reject the hypothesis that it does.)
+
+Treat overdispersion as a clue before you treat it as a nuisance. It says the counties vary more than the model explains, and it's worth asking why. Is an important predictor missing (the racial composition of the county, say, which is strongly associated with low birth weight)? Are a few unusual counties driving it? Are neighboring counties more alike than the model assumes? Fixing any of those can reduce the overdispersion and improve the model's coefficients, not just their standard errors. Once you've done what you can, some extra variation almost always remains, and there are two common ways to account for it.
 
 The **quasi-Poisson** model keeps the Poisson estimates and adds a dispersion parameter, so that $\text{Var}(y_i) = \phi\lambda_i$ instead of $\lambda_i$. In the Poisson, $\phi$ is fixed at 1, and in the quasi-Poisson it's estimated, which multiplies every standard error by $\sqrt{\phi}$. The **negative binomial** model adds a parameter that lets the variance grow faster than the mean. It's a real likelihood, so it can be compared with the Poisson by AIC, and its estimates differ a little from the Poisson's because it weights the counties differently.
 
@@ -294,6 +345,8 @@ modelsummary(list("Poisson" = fit_pois, "Quasi-Poisson" = fit_qp,
 AIC(fit_pois, fit_nb)
 ```
 
+`glm.nb()` (from `MASS`) fits the negative binomial model; it takes the same formula as `glm()` and always uses a log link. `family = quasipoisson` fits the quasi-Poisson. In `modelsummary()`, `statistic = "({std.error})"` puts the standard error in parentheses under each estimate, and `gof_map = c("nobs", "aic")` shows the number of observations and the AIC.
+
 The negative binomial fits far better by AIC. The poverty rate ratio is a bit larger, and the shortage area effects, which looked clearly significant in the Poisson, are much less certain once the extra variation is accounted for. That is the general pattern: an overdispersed Poisson overstates how much you know.
 
 The quasi-Poisson's coefficients are identical to the Poisson's, and its standard errors are not. Form the ratio of the two sets of standard errors and it's the same for every coefficient:
@@ -318,7 +371,11 @@ fit_bin <- glm(cbind(lbw, births - lbw) ~ pov_pct + metro + hpsa,
 round(cbind(poisson = coef(fit_pois), binomial = coef(fit_bin)), 3)
 ```
 
-The coefficients are close, because when an outcome is uncommon (about 8% of births here), the odds and the rate are nearly the same thing. For common outcomes they diverge, and the binomial is the better choice when the count can't exceed the denominator.
+`cbind(lbw, births - lbw)` gives `glm()` two columns: the number of "successes" (low birth weight births) and "failures" (all other births) in each county.
+
+The coefficients are close, because when an outcome is uncommon (about `r pct(sum(ahrf_cc$lbw) / sum(ahrf_cc$births), 0)` of births here), the odds and the rate are nearly the same thing. For common outcomes they diverge.
+
+So which denominator is which? Use the **binomial** when the denominator is a fixed number of trials, each of which can produce the event at most once: births that might be low birth weight, women who might have had a birth this year, people who might have died. The count can't exceed the denominator. Use a **rate model** (Poisson or negative binomial with an offset) when the denominator is person-time or another measure of exposure, and events could in principle happen more than once per unit: hospitalizations per 1,000 person-years, or deaths per person-years lived when people enter and leave the population during the year. For an uncommon event counted over a fixed population, the two give nearly the same answer, as here.
 
 With the count-based binomial, the odds ratio interpretation is less natural than it is for individuals, and when I interpret these coefficients I describe them as approximate *percent changes in the rate*. The poverty coefficient exponentiates to `r round(exp(coef(fit_bin)[["pov_pct"]]), 3)`, so the odds of a low birth weight birth are `r pct(exp(coef(fit_bin)[["pov_pct"]]) - 1)` higher for every percentage point of poverty. `predictions()` shows what that means for the rate itself, for two counties that differ by one point of poverty:
 
@@ -383,7 +440,9 @@ txca |>
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-Texas has a younger population than California, so its crude death rate understates its mortality relative to California's. To standardize in the regression framework, we put age in the model. The state coefficient is then the difference between the states *holding the age structure constant*, which is the difference in age-standardized rates.
+`read_tsv()` reads a tab-separated text file, `rename()` gives the columns shorter names (`new = old`), and the `na` argument says which entries mean "missing."
+
+Texas has a younger population than California, so its crude death rate understates its mortality relative to California's. That's the whole reason for standardizing: a fair comparison between two populations should compare the risk of death at each age, not the accident of how many people each state happens to have at old ages. To standardize in the regression framework, we put age in the model. The state coefficient is then the difference between the states *holding the age structure constant*, which is the difference in age-standardized rates.
 
 ```{r}
 #| label: txca-models
@@ -512,9 +571,13 @@ modelsummary(list("Survey quasi-Poisson" = fit_svy), exponentiate = TRUE,
              title = "Rate ratios for poor mental health days")
 ```
 
+`svytable(~ment_days, des)` in the figure above counts the weighted number of adults at each number of days. The model uses `quasipoisson()` with the design, as described.
+
+Two things are worth being clear about. First, the model is for the *mean* number of days, and that's all it claims to get right. The days are bounded at 30, and a Poisson distribution would put some probability above 30, but that doesn't matter for estimating how the mean differs across groups. It would matter if we wanted to predict the whole distribution of days, which is where the next section goes. Second, there's no offset here, because everyone has the same exposure: 30 days.
+
 The rate ratios read like the county model: adults 65 and older report `r pct(1 - exp(coef(fit_svy)[["agec65+"]]), 0)` fewer poor mental health days than adults 18 to 24, and adults with household incomes of $100,000 or more report `r pct(1 - exp(coef(fit_svy)[["income$100k+"]]), 0)` fewer than those under $25,000. For many questions this is the model I'd report, because it answers a population question with design-based inference.
 
-### Where do the zeros come from?
+### Where do the zeros come from? *(optional)*
 
 Sometimes the zeros themselves are the interesting part. A zero can mean two different things: someone whose mental health was fine this month but who has bad stretches, or someone who basically never has poor mental health days. Two families of models take this seriously [@zeileis2008].
 
@@ -524,9 +587,9 @@ Sometimes the zeros themselves are the interesting part. A zero can mean two dif
 
 The difference is subtle but real. In a zero-inflated model, zeros come from both parts. In a hurdle model, all zeros come from the first part, and the count part only describes people with at least one day. I find hurdle models easier to explain, because each part answers a plain question: who has any poor mental health days, and among them, how many?
 
-### Fitting and comparing the models
+### Fitting and comparing the models *(optional)*
 
-`pscl` fits both. It takes weights but not a survey design, so I pass the survey weights scaled to average 1. The point estimates then describe the population, but the standard errors treat the data as a simple random sample, so they're too small. With almost 180,000 respondents that matters less than usual, but I wouldn't report these standard errors in a paper without fixing them (with replicate weights, as in week 2).
+`pscl` fits both. It takes weights but not a survey design, so I pass the survey weights scaled to average 1. The point estimates then describe the population, but the standard errors treat the data as a simple random sample, so they're too small, and a large sample doesn't fix that. I wouldn't report these standard errors in a paper without fixing them (with replicate weights, as in week 2).
 
 ```{r}
 #| label: count-models
@@ -545,6 +608,10 @@ f_two <- ment_days ~ agec + female + educ + race_eth + income |
 fit_zinb <- zeroinfl(f_two, dist = "negbin", data = cc, weights = w)
 fit_hnb <- hurdle(f_two, dist = "negbin", data = cc, weights = w)
 ```
+
+::: {.callout-note title="Code explanation: two-part count models"}
+`zeroinfl()` and `hurdle()` take a two-part formula: the predictors before the `|` are for the count part, and the ones after it are for the zero part. Here both parts have the same predictors. `dist = "negbin"` makes the count part negative binomial. `mmsawt / mean(mmsawt)` rescales the weights so they average 1, which keeps the estimates the same as with the original weights but stops `pscl` from treating the sample as if it were the size of the population.
+:::
 
 Since the weighted likelihoods aren't true likelihoods, I won't compare these models by AIC. A more useful check is whether each model reproduces the distribution of the outcome. For each model, I average the predicted probability of every count from 0 to 30 and compare it with the observed distribution.
 
@@ -567,6 +634,8 @@ freq |>
   filter(days %in% c(0, 1, 2, 5, 10, 15, 20, 30)) |>
   knitr::kable(digits = 3)
 ```
+
+For each model, this computes the share of people it expects at each count from 0 to 30. `dpois(k, mu)` is the Poisson probability of exactly `k` days for someone with mean `mu`, and `dnbinom()` is the negative binomial version; `fitted()` gives each person's predicted mean. `sapply()` runs the calculation for each `k` and returns a matrix with one column per count, and `wmean()` takes the weighted average of each column. For the two-part models, `predict(..., type = "prob", at = counts)` returns those probabilities directly.
 
 ```{r}
 #| label: fig-expected-frequencies
@@ -598,7 +667,7 @@ The Poisson is hopeless: it predicts that only `r pct(f0$Poisson)` of adults wou
 
 But look at the other end of the distribution, because none of the models gets it right. `r pct(f15$Observed)` of adults report 15 or more poor mental health days, and even the hurdle model predicts only `r pct(f15$"Hurdle NB")`. The spike at 30 is the worst of it. The negative binomial family expects a long, thinning tail, and these data have a second mode at the ceiling, made up of people whose mental health was poor every day, or nearly so. The heaping at 5, 10 and 15 is a smaller version of the same problem, since nothing in a count distribution knows that people round. So the zero-inflated and hurdle models fix the zeros and leave a real misfit in the tail. That's worth knowing before you interpret their count-part coefficients too literally, and it's a good reason to try a model built for a bounded outcome (see the note at the end of this section).
 
-### Interpreting the hurdle model
+### Interpreting the hurdle model *(optional)*
 
 ```{r}
 #| label: hurdle-table
@@ -628,7 +697,13 @@ Because the outcome can't exceed 30, a model for "days out of 30" is a natural a
 
 These exercises are Homework 6.
 
-**1.** Fit a negative binomial model for low birth weight in counties that adds the number of general OB-GYNs per 10,000 population (`obgyn` and `popn_est_23`). Report the rate ratio and explain why you might expect this association to be confounded by county size even with the offset.
+**Purpose.** Model counts and rates with the right denominator, and interpret the results as rates.
+
+**What is provided.** The AHRF county data (`ahrf_cc`, with suppressed counties removed) and the models from Part 1; the BRFSS data and design from Part 2.
+
+**A satisfactory answer** identifies the event, denominator or exposure, period and unit for each model; interprets exponentiated coefficients as rate ratios in a full sentence; says whether the model respects the outcome's limits; and describes county-level results as associations for counties, not for individuals.
+
+**1.** For the low birth weight model in this chapter, identify (a) the event being counted, (b) the denominator, (c) the period it's counted over, and (d) the unit of analysis, and explain in a sentence why `log(births)` is an offset rather than a predictor. Then fit a negative binomial model that adds the number of general OB-GYNs per 10,000 population (from `obgyn` and `popn_est_23`). Interpret its exponentiated coefficient as a rate ratio, explain why you might expect this association to be confounded by county size even with the offset, and say whether the model respects the limits of the outcome (a low birth weight count can't exceed the number of births).
 
 ```{r}
 #| label: ex-obgyn
@@ -659,7 +734,7 @@ Copy `get_ahrf()` to your own project, add `deaths = deth_3yr_avg_23` to the `se
 # YOUR CODE HERE
 ```
 
-**4.** Fit a zero-inflated negative binomial model and a hurdle negative binomial model for `phys_days`. Compare their predicted distributions with the observed distribution, as in this document, and interpret the education coefficients from both parts of the hurdle model.
+**4.** *(Optional.)* Fit a zero-inflated negative binomial model and a hurdle negative binomial model for `phys_days`. Compare their predicted distributions with the observed distribution, as in this document, and interpret the education coefficients from both parts of the hurdle model.
 
 ```{r}
 #| label: ex-phys-hurdle

@@ -12,6 +12,30 @@ Everything so far has used cross-sectional data: each person is observed once. L
 
 This week covers both. **Generalized estimating equations** (GEEs) handle the correlation and give population-average effects. **Fixed effects** models use only the changes within each person. **Random effects** models do something in between, and the **within-between** model shows you exactly what that "something" is, by estimating the within-person and between-person effects separately. The example is children's math scores and family poverty from kindergarten through fifth grade.
 
+Here's the distinction that runs through the whole chapter, with three made-up children followed for three years:
+
+| Child | Year 1 | Year 2 | Year 3 | Average score |
+|---|---|---|---|---:|
+| Ana (never poor) | 50 | 60 | 70 | 60 |
+| Ben (always poor) | 30 | 40 | 50 | 40 |
+| Cal (poor in year 2 only) | 45 | 55 *(poor)* | 65 | 55 |
+
+There are two different questions here. **Between children:** do children in poorer families score lower than other children? Yes: Ben, who is always poor, averages 20 points below Ana. **Within a child:** does a child's score change when that child's family becomes poorer? Look at Cal. His scores rise by 10 points a year whether or not his family is poor, so his poor year isn't lower than his own trend. These two comparisons use different information (differences between children, and changes within a child), and they need not have the same answer. Here they don't.
+
+::: {.callout-note title="This week at a glance"}
+**The question.** Do children in poor families score lower in math, and do a child's scores change when their own family's poverty status changes?
+
+**By the end of this week you should be able to**
+
+1. reshape repeated measurements from wide to long format, and explain why the number of rows isn't the number of independent people;
+2. explain the difference between a between-child and a within-child comparison, and say which variation each model uses;
+3. fit GEE, fixed effects and within-between models, interpret the within and between terms in score units, and say what a fixed effects model does and doesn't control for.
+
+**Before you begin.** You need linear regression, `pivot_longer()` and `pivot_wider()` (from [week 7](07-decomposition.qmd#texas-and-california)), and clustered standard errors from [week 2](02-survey-design.qmd#when-clusters-matter-the-dhs).
+
+**Required and optional.** The estimating equation for GEE is there for reference; the "cookbook version" is what you need.
+:::
+
 ## Setup
 
 `geepack` fits GEEs [@halekoh2006], `fixest` fits fixed effects models quickly [@berge_fixest], and `lme4` fits random effects models [@bates2015], which we'll use much more in weeks 12 and 13.
@@ -45,7 +69,7 @@ pct <- function(x, d = 1) paste0(format(round(100 * x, d), nsmall = d), "%")
 
 The Early Childhood Longitudinal Study, Kindergarten Class of 2010-11 [@ecls_k2011] followed a nationally representative sample of children from kindergarten through fifth grade, testing them in math and reading and interviewing their parents at nine rounds. The full public-use file has 18,174 children and over 26,000 variables, so I made a smaller file with the variables we need (the script is `R/make_eclsk_subset.R`).
 
-I'll use the six spring rounds where the parent interview measured family poverty: spring of kindergarten (round 2), first grade (4), second grade (6), third grade (7), fourth grade (8) and fifth grade (9). The weight is the K-5 longitudinal weight, `w9c29p_9a0`, which is positive only for children who took part in every round, so it adjusts for attrition as well as for the design.
+I'll use the six spring rounds where the parent interview measured family poverty: spring of kindergarten (round 2), first grade (4), second grade (6), third grade (7), fourth grade (8) and fifth grade (9). The weight is the K-5 longitudinal weight, `w9c29p_9a0`, which is positive only for children who took part in every round. Applying it means the analysis describes the population of children who were in kindergarten in 2010-11, adjusted for the design and for **attrition** (children dropping out of the study over the years), as far as the adjustment can go. It corrects for attrition related to the characteristics the weighting used, not for every reason a child might have left, and it doesn't do anything about the scattered items (a missing test score in one round, say) that we drop below. Those are week 9's problem.
 
 ECLS-K codes missing values as negative numbers (-1 for not applicable, -7 for refused, -8 for don't know, -9 for not ascertained), so the first step is to turn those into `NA`.
 
@@ -88,11 +112,31 @@ eclsk_wide <- readRDS(here("data", "eclsk2011_k5.rds")) |>
 nrow(eclsk_wide)
 ```
 
+`transmute()` is like `mutate()`, but it keeps only the columns it creates (and any you name, like `childid`). `neg_to_na()` is a small function, written on the first line, that turns every negative code into `NA`. `paste(w9c29p_9astr, w9c29p_9apsu)` glues the stratum and PSU numbers into one label, so each PSU gets a unique name.
+
 The poverty variables have three categories (below the poverty line, 100-199% of it, and 200% or more), and I've made an indicator for being below the line.
 
 ### Reshaping to long format
 
-Every model this week wants **long** format: one row per child per round, with one column for each variable. `pivot_longer()` does that.
+Every model this week wants **long** format: one row per child per round, with one column for each variable. Here's the difference for two children and two rounds:
+
+*Wide: one row per child*
+
+| childid | female | math_2 | math_4 | poor_2 | poor_4 |
+|---|---|---|---|---|---|
+| 101 | 1 | 45 | 62 | 0 | 0 |
+| 102 | 0 | 38 | 51 | 1 | 0 |
+
+*Long: one row per child per round*
+
+| childid (person) | round (time) | female | math | poor |
+|---|---|---|---|---|
+| 101 | 2 | 1 | 45 | 0 |
+| 101 | 4 | 1 | 62 | 0 |
+| 102 | 2 | 0 | 38 | 1 |
+| 102 | 4 | 0 | 51 | 0 |
+
+The long version has two identifier columns, the **person identifier** (`childid`) and the **time variable** (`round`), and each time-varying variable becomes one column. Time-constant variables like `female` repeat on every row for that child. `pivot_longer()` does the reshaping.
 
 ```{r}
 #| label: data-long
@@ -118,7 +162,7 @@ eclsk |>
 This is why I named the time-varying variables `name_round`. A consistent naming scheme turns a messy reshape into one function call.
 :::
 
-That leaves `r fmt(nrow(eclsk))` child-rounds for `r fmt(n_distinct(eclsk$childid))` children. Here is what math growth looks like for the first ten children.
+That leaves `r fmt(nrow(eclsk))` child-rounds for `r fmt(n_distinct(eclsk$childid))` children. Notice those are very different numbers. The rows aren't `r fmt(nrow(eclsk))` independent observations, because each child contributes up to six of them, and a child's scores in different rounds are related. Here is what math growth looks like for the first ten children.
 
 ```{r}
 #| label: fig-spaghetti
@@ -152,6 +196,8 @@ resid_cor <- eclsk |>
 
 round(resid_cor, 2)
 ```
+
+`residuals(fit_ols)` gives each row's residual. The `pivot_wider()` puts each child's residuals side by side, one column per round, and `cor(use = "pairwise.complete.obs")` computes the correlation between every pair of rounds, using every child who has both. (`lower.tri()`, in the text below, picks out the correlations below the diagonal, leaving out the 1s.)
 
 If the observations were independent, these would all be near zero. They're between `r round(min(resid_cor), 2)` and `r round(max(resid_cor[lower.tri(resid_cor)]), 2)`, and they get smaller as the rounds get further apart. A child who does better than the model predicts in kindergarten keeps doing better. Ignoring that does two things to the standard errors. For time-constant predictors like race, each child counts as six observations when they're really closer to one, so the standard errors are too small. For time-varying predictors, the comparison is partly within children, and the correlation actually helps, so ordinary regression can overstate the standard errors.
 
@@ -216,7 +262,9 @@ modelsummary(list("Independence" = gee_ind, "Exchangeable" = gee_exch, "AR(1)" =
 4. `weights = w` uses the longitudinal weight, rescaled to average 1 (as in week 7, the scale doesn't change the estimates, but it keeps the algorithm stable).
 :::
 
-The working correlation is `r round(gee_exch$geese$alpha, 2)` for the exchangeable model and `r round(gee_ar1$geese$alpha, 2)` for AR(1). The coefficient for poverty is `r round(coef(gee_ind)["poor"], 2)` with independence, `r round(coef(gee_exch)["poor"], 2)` with exchangeable correlation and `r round(coef(gee_ar1)["poor"], 2)` with AR(1). With independence, poverty is mostly a comparison *between* children, poor and not poor. With a correlation structure, the model leans more on children whose poverty status changes, and the coefficient shrinks. Keep that in mind; it's the main story of this week.
+The working correlation is `r round(gee_exch$geese$alpha, 2)` for the exchangeable model and `r round(gee_ar1$geese$alpha, 2)` for AR(1). The coefficient for poverty is `r round(coef(gee_ind)["poor"], 2)` with independence, `r round(coef(gee_exch)["poor"], 2)` with exchangeable correlation and `r round(coef(gee_ar1)["poor"], 2)` with AR(1). With independence, poverty is mostly a comparison *between* children, poor and not poor. With a correlation structure, the model weights the observations differently and leans somewhat more on children whose poverty status changes, and the coefficient shrinks. Keep that in mind; it's the main story of this week.
+
+But don't read the smaller GEE coefficient as the within-child effect. Every GEE coefficient here is still a population-average comparison that mixes between-child and within-child information, just in different proportions. Changing the working correlation changes the mix; it doesn't separate the two. If you want the within-child relationship, you have to ask for it directly, which is what fixed effects and the within-between model do.
 
 ### Choosing a correlation structure
 
@@ -230,10 +278,12 @@ bind_rows(Independence = QIC(gee_ind), Exchangeable = QIC(gee_exch), `AR(1)` = Q
   knitr::kable(digits = 1, format.args = list(big.mark = ","))
 ```
 
+`QIC()` computes the criteria for one model; `bind_rows(..., .id = "structure")` stacks them with a column of names, as in week 7.
+
 Here the two criteria disagree: QIC prefers the exchangeable structure, and CIC prefers AR(1). That happens, and it's a reminder that the working correlation is a working assumption. The robust standard errors protect you if it's wrong, so don't agonize.
 
 ::: {.callout-warning title="What about the survey design?"}
-ECLS-K children were sampled in PSUs (groups of counties) and schools, and `geeglm()` only knows about the clustering of rounds within children. The robust standard errors account for that, but not for the clustering of children within PSUs. The `fixest` models below can cluster at the PSU level, and that's the safer choice for published work.
+There are two kinds of clustering in these data, and it's easy to mix them up. One is the **repeated measurements**: the rounds for one child are correlated because they're the same child. The other is the **survey design**: ECLS-K sampled PSUs (groups of counties) within strata, then schools, then children, so children in the same PSU are correlated with each other too. `geeglm()` only knows about the first kind. The robust standard errors account for it, but not for the clustering of children within PSUs. The `fixest` models below can cluster at the PSU level, and that's the safer choice for published work.
 :::
 
 ## Fixed effects
@@ -246,7 +296,7 @@ $$y_{it} = \alpha_i + \beta x_{it} + \tau_t + \varepsilon_{it}$$
 
 The $\alpha_i$ absorb everything about the child that doesn't change over time: their sex, their race, their parents' education, the neighborhood they started school in, their genes, their motivation in kindergarten, whether we measured it or not. You can't estimate the effect of a time-constant variable in this model, because it's perfectly collinear with the child's intercept. What's left is the effect of *changes* in $x$ within children. Mechanically, fixed effects estimation subtracts each child's mean from every variable, $y_{it} - \bar y_i$ and $x_{it} - \bar x_i$, and runs regression on what's left. @allison2009 is a short, clear introduction.
 
-So in the fixed effects model, the poverty coefficient answers: when a child's family falls below the poverty line, how does that child's math score change compared to their own scores in other years? Only the `r fmt(eclsk |> group_by(childid) |> summarise(v = n_distinct(poor)) |> filter(v > 1) |> nrow())` children whose poverty status changed at some point contribute to that estimate.
+Notice what that means for poverty. The model splits each child's poverty into their own average (the share of rounds they were poor) and their deviation from it in each round, and the fixed effects use only the deviations. So in the fixed effects model, the poverty coefficient answers: when a child's family falls below the poverty line, how does that child's math score change compared to their own scores in other years? Only the `r fmt(eclsk |> group_by(childid) |> summarise(v = n_distinct(poor)) |> filter(v > 1) |> nrow())` children whose poverty status changed at some point contribute to that estimate.
 
 ```{r}
 #| label: fixed-effects
@@ -265,6 +315,12 @@ etable(ols, fe, headers = c("Pooled OLS", "Child fixed effects"))
 
 The pooled regression says children in poor families score `r round(abs(coef(ols)["poor"]), 1)` points lower in math. The fixed effects model says that when a child's family becomes poor, their math score changes by `r round(coef(fe)["poor"], 2)` points, with a standard error of `r round(se(fe)["poor"], 2)`, which is no detectable change at all. The large gap between poor and non-poor children is almost all a difference *between* children, not a consequence of a family's poverty status in a given year.
 
+::: {.callout-tip title="Reading the result: a right and a wrong interpretation"}
+**Right:** "Comparing each child with themselves, math scores in rounds when the child's family was below the poverty line were `r round(coef(fe)["poor"], 2)` points different from the child's scores in other rounds (standard error `r round(se(fe)["poor"], 2)`), which is no detectable within-child difference."
+
+**Wrong:** "Poverty has no effect on children's math scores." The fixed effects estimate says nothing about the large difference *between* children who grow up poor and those who don't, which is where most of the gap is. It only says that short-run changes in a family's poverty status aren't accompanied by changes in that year's score.
+:::
+
 ## Random effects and the within-between model
 
 ### Random effects
@@ -276,6 +332,8 @@ A random effects model also gives each child their own intercept, but treats the
 re <- lmer(math ~ factor(round) + poor + female + race + (1 | childid), data = eclsk)
 fixef(re)["poor"]
 ```
+
+`lmer()` fits a linear random effects model. `(1 | childid)` means "a random intercept for each child"; week 12 explains the notation in detail. `fixef()` pulls out the ordinary (fixed) coefficients.
 
 The random effects estimate, `r round(fixef(re)["poor"], 2)`, sits between the fixed effects estimate and the pooled one. That's not a coincidence: it's a weighted average of the within and between relationships.
 
@@ -320,7 +378,7 @@ The within effect, `r round(coef(wb)["poor_within"], 2)`, is essentially the fix
 Two readings, and the data can't fully decide between them. The between effect is consistent with long-run disadvantage: children who grow up poor arrive at kindergarten behind and stay behind, and a year's change in family income doesn't undo years of accumulated differences. It's also consistent with selection: families that are poor differ from other families in many ways besides income, and some of those affect test scores. The within effect, which rules out every time-constant difference between families, says that short-run changes in poverty status don't move math scores much in the same year. Neither number is "the effect of poverty," but together they tell you far more than either the pooled or the random effects coefficient does.
 
 ::: {.callout-tip}
-Fixed effects only remove *time-constant* confounders. If something changes along with poverty (a parent losing a job, a divorce, a move), it's still a confounder. And fixed effects estimates use only the people who change, who may not be typical: here, families that move in and out of poverty.
+Fixed effects control for stable characteristics of each child and family, measured or not. That's all. They don't remove **time-varying confounders**: if something changes along with poverty (a parent losing a job, a divorce, a move), it's still a confounder. They don't solve **reverse causation** either: if a child's struggles in school led a parent to cut back on work, the arrow runs the other way. And fixed effects estimates use only the people who change, who may not be typical: here, families that move in and out of poverty.
 :::
 
 ## Where this goes next
@@ -335,7 +393,21 @@ Longitudinal data violate the independence assumption, and ordinary regression g
 
 These exercises are Homework 10.
 
-**1.** Repeat the fixed effects and within-between models using reading scores (`x2rscalk5`, `x4rscalk5`, and so on) instead of math. Do you reach the same conclusion?
+**Purpose.** Separate the between-child and within-child parts of a relationship, and say what each one can and can't tell you.
+
+**What is provided.** The long-format ECLS-K data `eclsk` (with the longitudinal weight `wt`, `psu`, and `poor_mean` and `poor_within`), and the models from this chapter.
+
+**A satisfactory answer** interprets each coefficient in score units; says which variation (between children or within children) identifies it; and doesn't describe a fixed effects estimate as the effect of a variable without saying what it does and doesn't control for.
+
+**1.** In the within-between model from this chapter, identify the within-child poverty term and the between-child poverty term. Interpret each in math score units, and say which variation in the data identifies each one (changes within the same child, or differences between children). Then explain one source of bias that the child fixed effects would *not* remove.
+
+```{r}
+#| label: ex-within-between
+#| eval: false
+# YOUR CODE HERE
+```
+
+**2.** Repeat the fixed effects and within-between models using reading scores (`x2rscalk5`, `x4rscalk5`, and so on) instead of math. Do you reach the same conclusion?
 
 ```{r}
 #| label: ex-reading
@@ -343,7 +415,7 @@ These exercises are Homework 10.
 # YOUR CODE HERE
 ```
 
-**2.** Add an interaction between `poor_within` and `race` to the within-between model. Is the within-child association of poverty with math scores different across groups?
+**3.** Add an interaction between `poor_within` and `race` to the within-between model. Is the within-child association of poverty with math scores different across groups?
 
 ```{r}
 #| label: ex-interaction
@@ -351,7 +423,7 @@ These exercises are Homework 10.
 # YOUR CODE HERE
 ```
 
-**3.** Refit the fixed effects model with standard errors clustered by child (`cluster = ~childid`) instead of by PSU. How much do the standard errors change, and which would you report?
+**4.** Refit the fixed effects model with standard errors clustered by child (`cluster = ~childid`) instead of by PSU. How much do the standard errors change, and which would you report?
 
 ```{r}
 #| label: ex-cluster
@@ -360,7 +432,7 @@ These exercises are Homework 10.
 ```
 
 <details>
-<summary>One solution for exercise 3</summary>
+<summary>One solution for exercise 4</summary>
 
 ```{r}
 #| label: ex-cluster-solution
@@ -373,7 +445,7 @@ Children within the same PSU are correlated with each other, not just with thems
 
 </details>
 
-**4.** Make an indicator for food insecurity from `x2fsstat2`, `x4fsstat2` and `x9fsstat2` (codes 2 and 3 are food insecure), reshape it with the math scores from rounds 2, 4 and 9, and estimate the within and between associations of food insecurity with math scores.
+**5.** Make an indicator for food insecurity from `x2fsstat2`, `x4fsstat2` and `x9fsstat2` (codes 2 and 3 are food insecure), reshape it with the math scores from rounds 2, 4 and 9, and estimate the within and between associations of food insecurity with math scores.
 
 ```{r}
 #| label: ex-food

@@ -92,13 +92,15 @@ Journal articles are available through the [UTSA Libraries](https://lib.utsa.edu
 | Final paper | 20% |
 | **Total** | **100%** |
 
-**Homework (60%).** Each week's materials end with a set of exercises, and those exercises are the homework. There are 14 sets (weeks 1--7 and 9--15). I drop your lowest score, and the remaining 13 count equally. Each homework is a Quarto document that renders from top to bottom without errors. Submit the rendered HTML file, published with Posit Publisher, and a link to the GitHub repository that holds your homework, through Canvas. Homework is due before class one week after it's assigned. I grade on whether the code runs and is correct, and just as much on whether your written interpretation is correct and says what the numbers mean.
+**Homework (60%).** Each week's materials end with a set of exercises, and those exercises are the homework. There are 14 sets (weeks 1--7 and 9--15). I drop your lowest score, and the remaining 13 count equally. Each homework is a Quarto document that renders from top to bottom without errors. Through Canvas, turn in two links: the link to your rendered homework on Posit Connect Cloud (published from Positron with Posit Publisher), and the link to the GitHub repository that holds your homework code. Homework is due before class one week after it's assigned. I grade on whether the code runs and is correct, and just as much on whether your written interpretation is correct and says what the numbers mean.
 
 **Final paper (40% total).** The final paper is an original analysis of demographic data using one or more of the methods from this course. It should read like a short research article: a research question and its motivation, a brief literature review, data and methods, results, and a discussion. I expect about 15--20 double-spaced pages, plus tables and figures, along with the Quarto document and code that produce every number in the paper. The paper has three graded parts:
 
 - **Proposal (10%), due February 25 (week 6).** One to two pages: your research question, the data you'll use, the outcome and key predictors, and the model you expect to fit. Talk to me before then if you're unsure about any of it.
 - **Presentation (10%), May 6 (week 16).** A 15-minute presentation of your analysis and results, followed by questions from the class.
 - **Paper (20%), due May 6 (week 16).** The written paper and the files that reproduce it.
+
+The [week 16 chapter](https://coreysparks.github.io/DEM7283/chapters/16-final-paper.html) of the course book has an annotated outline, the criteria I use to grade the paper, suggested (ungraded) checkpoints, and what the presentation should cover. One well-justified model can fully meet the goals of the paper; complex methods don't earn extra credit for being complex.
 
 ## Grade distribution
 

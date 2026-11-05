@@ -1,0 +1,53 @@
+# Week 16: The Final Paper and Presentation {#sec-final-paper}
+
+Your paper should answer a focused demographic question with a justified analysis. Explain why the method fits the outcome and the data structure, interpret the results in meaningful units, and identify the assumptions that limit the conclusion. More complex methods don't receive extra credit merely for being complex. One well-justified model, carefully interpreted, can fully meet the goals of the assignment.
+
+The syllabus sets the basics: an original analysis of demographic data using one or more of the methods from this course, written like a short research article, about 15 to 20 double-spaced pages *not counting* tables and figures, along with the Quarto document and code that produce every number in it. The paper and the presentation are both due May 6.
+
+## An annotated outline
+
+Use this as a skeleton. The section names don't have to match, but each part should be there.
+
+1. **Research question.** One focused question, stated in the first page. A reader should be able to tell the outcome, the main comparison, and the population from the question alone.
+2. **Motivation and literature.** Why the question matters, and where it fits in what's already known. The syllabus asks for a *brief* literature review: enough to motivate your question and show what your analysis adds, not a survey of everything written on the topic.
+3. **Population and data.** Which population your results describe, which data set you use, what one row is, how the sample was drawn, and which weights and design variables you use (week 2). Say who is excluded and why, and how much data is missing (week 9).
+4. **Measures.** How the outcome and the key predictors are defined and coded, with the codebook's variable names.
+5. **Analysis and its rationale.** Which model you fit and *why it fits*: the kind of outcome (weeks 3, 5, 6), the data structure (clustering, repeated measures, places, weeks 10, 12, 13), and the question (description, decomposition, prediction or a causal effect, weeks 7, 14, 15). This section is where you justify your choices, not just list them.
+6. **Results.** Your main findings, in units a reader cares about (percentage points, rates, predicted probabilities), with confidence intervals. Lead with the results that answer your question.
+7. **Assumptions and limitations.** The assumptions your conclusion depends on, and the ones you can't check. Connect each limitation to what it means for the conclusion; a list of generic caveats isn't enough.
+8. **Conclusion.** Your strongest supported finding, and, separately, a claim that your study *can't* establish. Saying clearly what you didn't show is part of saying what you did.
+
+## How the paper will be graded
+
+The paper is graded on six criteria, each judged separately. A paper with a simple method can do well on every one of them.
+
+| Criterion | A strong paper | A paper that needs work |
+|---|---|---|
+| **Question and method fit** | The method matches the outcome, the data structure and the question, and the paper says why | The method is chosen for its sophistication, or doesn't match the kind of outcome or the data structure |
+| **Interpretation** | Results are interpreted correctly, in meaningful units, with the comparison group named | Results are reported as raw coefficients or odds ratios without interpretation, or misread (an odds ratio as a risk ratio, for example) |
+| **Uncertainty** | Every key estimate has a design-based confidence interval, and conclusions don't rest on statistical significance alone | Standard errors ignore the design, or the paper reports only whether results are "significant" |
+| **Assumptions and limitations** | The paper states what its conclusions assume and connects each limitation to the conclusion | Limitations are generic, or the paper makes causal claims its design can't support |
+| **Communication** | Clear writing, readable tables and figures, and a conclusion that follows from the results | The reader has to work out what the results mean |
+| **Reproducibility** | The Quarto document renders from top to bottom and produces every number in the paper | Numbers in the text don't match the output, or the code doesn't run |
+
+## Suggested checkpoints
+
+These are check-ins to keep the paper moving, not graded assignments. Bring each one to office hours or send it to me by email, and I'll give you feedback.
+
+| By | Checkpoint |
+|---|---|
+| February 25 (week 6) | The proposal (graded, from the syllabus): question, data, outcome and key predictors, and the model you expect to fit |
+| March 25 (week 10) | Descriptive results: a weighted table of your outcome and key predictors, for your analysis sample |
+| April 8 (week 12) | Your model and its rationale: a paragraph on why it fits your outcome, data structure and question |
+| April 22 (week 14) | A draft results paragraph for your main finding, with the estimate, its uncertainty and its interpretation |
+
+## The presentation
+
+You'll have 15 minutes to present, followed by questions from the class. A good presentation has:
+
+1. **One question**, stated on the first slide that has content.
+2. **The data and method**, briefly: what data, what population, what model, and why that model.
+3. **Two or three main results**, shown as figures or simple tables, in meaningful units.
+4. **One limitation** that actually affects how your results should be read.
+
+Leave out the literature review except for a sentence or two of motivation, and don't show regression tables with dozens of coefficients. Time yourself; 15 minutes goes fast.
