@@ -198,7 +198,7 @@ title: "Homework 1"
 author: "Your Name"
 format:
   html:
-    self-contained: true
+    embed-resources: true
 execute:
   echo: true
 ---
@@ -212,7 +212,7 @@ library(here)
 ```
 ````
 
-The `self-contained: true` option packs the figures and styles into a single HTML file, so you can submit or share one file. Render the document with the Render button, with `quarto render homework1.qmd` in the terminal, or with `quarto::quarto_render("homework1.qmd")` from R. Rendering starts a fresh R session, so if your document only works because of something you ran in the console an hour ago, rendering will tell you. That's the feature, not a bug.
+The `embed-resources: true` option packs the figures and styles into a single, self-contained HTML file, so you can submit or share one file. (Older tutorials call this option `self-contained: true`. Quarto renamed it in version 1.4, and the old name still works but prints a deprecation warning.) Render the document with the Render button, with `quarto render homework1.qmd` in the terminal, or with `quarto::quarto_render("homework1.qmd")` from R. Rendering starts a fresh R session, so if your document only works because of something you ran in the console an hour ago, rendering will tell you. That's the feature, not a bug.
 
 ### Recording package versions with renv
 
@@ -285,7 +285,7 @@ Before the buttons, one decision that matters for this course. Connect Cloud can
 1. **The source** (the `.qmd` file plus whatever it needs), which Connect Cloud then renders *on its own servers*, installing your packages and running every chunk.
 2. **The rendered output** (the `.html` file), which Connect Cloud just puts on the web as-is.
 
-The first is the more reproducible option in principle, but it falls apart with our data. To render your homework, Connect Cloud's server would need the BRFSS file, and that means uploading a several-hundred-megabyte zip file or having `get_mmsa()` download it from the CDC every time you publish. And if your final paper uses restricted data, uploading the source would put that data on someone else's server, which your data use agreement almost certainly forbids. So in this course **we publish the rendered, self-contained HTML file**. This is why the homework template uses `self-contained: true`: the figures, styles and tables are all packed inside one `.html` file, so that file is the only thing Connect Cloud needs.
+The first is the more reproducible option in principle, but it falls apart with our data. To render your homework, Connect Cloud's server would need the BRFSS file, and that means uploading a several-hundred-megabyte zip file or having `get_mmsa()` download it from the CDC every time you publish. And if your final paper uses restricted data, uploading the source would put that data on someone else's server, which your data use agreement almost certainly forbids. So in this course **we publish the rendered, self-contained HTML file**. This is why the homework template uses `embed-resources: true`: the figures, styles and tables are all packed inside one `.html` file, so that file is the only thing Connect Cloud needs.
 
 Your reproducibility doesn't suffer, because the source, the lockfile and the history are all in your GitHub repository. Connect Cloud is just the display window.
 
@@ -379,7 +379,7 @@ Back on your Connect Cloud **Home** page you'll see a card for each document you
 
 #### If something goes wrong
 
-- **The published page is missing figures or looks unstyled.** The HTML wasn't self-contained, so it's looking for image and style files that weren't uploaded. Check that your YAML header has `self-contained: true` under `format: html:`, render again, and republish.
+- **The published page is missing figures or looks unstyled.** The HTML wasn't self-contained, so it's looking for image and style files that weren't uploaded. Check that your YAML header has `embed-resources: true` under `format: html:`, render again, and republish.
 - **The upload is huge or very slow.** Something big is checked under **PROJECT FILES**, usually the data folder. Uncheck everything except the `.html` file.
 - **Publisher or rsconnect says your credential is invalid.** Delete the credential (right-click it in the **CREDENTIALS** list in Publisher) and add it again, or re-run `rsconnect::connectCloudUser()`.
 - **You published the `.qmd` by accident and the deploy failed with package or file errors.** That's Connect Cloud trying to render your document without your data. Delete that deployment from your Connect Cloud Home page and publish the `.html` file instead.
