@@ -2,21 +2,15 @@
 .Rhistory
 .RData
 .Ruserdata
+Rplots.pdf
 
-# Data files built by R/get_mmsa.R and the weekly exercises
-#data/*.xpt
-#data/mmsa*.rds
-#data/acs_pums_*.rds
-
-# Quarto output for the weekly materials
+# Quarto book: docs/ is built by GitHub Actions; _freeze/ IS committed
 /.quarto/
-weeks/*_files/
-#data/ahrf_*.rds
-#data/AHRF_*.zip
-#data/dhs_model_ir.rds
-#data/ZZIR62FL.DTA
-weeks/*_cache/
-#data/mmsa_context_*.rds
+/docs/
+**/*.quarto_ipynb
+chapters/*_files/
+chapters/*_cache/
+/*_files/
 
 # macOS
 .DS_Store

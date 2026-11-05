@@ -2,7 +2,7 @@
 title: "DEM 5283/7283: Statistics for Demographic Data II"
 subtitle: "Course Syllabus, Spring 2027"
 author: "Corey S. Sparks, PhD"
-bibliography: weeks/references.bib
+bibliography: references.bib
 link-citations: true
 format:
   pdf:
@@ -54,7 +54,7 @@ We use R for everything in this course, through [Positron](https://positron.posi
 To install the packages we'll use this semester, paste this line into the Positron console:
 
 ```r
-source("https://raw.githubusercontent.com/coreysparks/Rcode/master/install_first_7283.R")
+source("https://raw.githubusercontent.com/coreysparks/DEM7283/master/install_first_7283.R")
 ```
 
 The script skips anything you already have, so it's safe to run again if it gets interrupted. All the course materials, data and exercises are in the course repository at <https://github.com/coreysparks/DEM7283>. We'll go over the setup, including `renv` and Git, in the first class.
@@ -112,7 +112,7 @@ Journal articles are available through the [UTSA Libraries](https://lib.utsa.edu
 
 # Course schedule
 
-Readings should be done before the class meeting in the week they're listed. The materials for each week are in the `weeks/` folder of the course repository.
+Readings should be done before the class meeting in the week they're listed. The materials for each week are chapters of the course book, <https://coreysparks.github.io/DEM7283/>, and the source files are in the `chapters/` folder of the course repository.
 
 | Week | Date | Topic | Due |
 |:---:|---|---|---|

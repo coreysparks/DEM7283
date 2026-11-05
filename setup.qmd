@@ -1,0 +1,68 @@
+# Before the First Class {.unnumbered}
+
+This page gets your computer ready for the course. Plan on 30 to 45 minutes, most of which is waiting for things to download, and please do it *before* our first meeting, so we can spend class time on statistics and not on installation troubleshooting. Week 1 explains *why* the workflow looks the way it does; this page is just the steps.
+
+## Step 1: Install R
+
+R does the computing. Download it from [CRAN](https://cran.r-project.org):
+
+- **Windows:** click "Download R for Windows," then "base," then the download link at the top of the page. Run the installer and accept the defaults.
+- **macOS:** click "Download R for macOS" and choose the installer that matches your Mac. Macs with Apple silicon (M1 and later) use the `arm64` version, and older Intel Macs use the `x86_64` version. If you aren't sure, click the Apple menu and choose "About This Mac."
+- **Linux:** follow the instructions for your distribution on the CRAN page.
+
+The course uses R 4.6. If you already have an older version, install the new one.
+
+## Step 2: Install an editor
+
+You'll write code in an editor, not in R itself. I use [Positron](https://positron.posit.co/download), Posit's newer editor, and that's what you'll see in class. [RStudio Desktop](https://posit.co/download/rstudio-desktop/) works just as well for everything in this book. Both include Quarto, so you can open and render the `.qmd` files for the course.
+
+## Step 3: Windows only, install Rtools
+
+A few packages (`brms` in week 12, mainly) compile code in C++, and on Windows that needs [Rtools](https://cran.r-project.org/bin/windows/Rtools/). Choose the version that matches your version of R and accept the defaults. On a Mac, the equivalent is the Xcode command line tools: run `xcode-select --install` in the Terminal.
+
+## Step 4: Install the course packages
+
+Open Positron or RStudio, then copy this line into the R **Console** and press Enter:
+
+```{r}
+#| label: install-script
+#| eval: false
+source("https://raw.githubusercontent.com/coreysparks/DEM7283/master/install_first_7283.R")
+```
+
+The script installs `pak`, a faster installer that uses prebuilt packages, and then hands it the list of packages for the semester, plus my `sparkscolors` package from GitHub. It skips anything you already have, so if it stops partway through (a dropped connection, a laptop going to sleep), run it again and it picks up where it left off. When it finishes, it prints `Done. Restart R before you start working.`
+
+You should never run code from the internet that you haven't looked at, mine included. The script is [short](https://github.com/coreysparks/DEM7283/blob/master/install_first_7283.R).
+
+## Step 5: Get the course repository
+
+The data and the helper functions the chapters use live in the [course repository](https://github.com/coreysparks/DEM7283). Week 1 shows you how to clone it with Git. If you want to look around before then, the green **Code** button on the repository page has a **Download ZIP** option.
+
+## Step 6: Get a Census API key
+
+A few of the chapters download data from the Census Bureau with `tidycensus`, which needs a free key. Request one at <https://api.census.gov/data/key_signup.html>; it arrives by email in a few minutes. Weeks 2 and 6 show you where to put it.
+
+## Troubleshooting
+
+**A package fails to install.** Read the message, then try installing that package by itself, for example `pak::pak("survey")`. On Windows, if the error mentions `make` or a compiler, check that Rtools is installed (step 3). On a Mac, if it mentions `clang` or `gfortran`, install the Xcode command line tools.
+
+**The script can't reach GitHub.** Campus and corporate networks sometimes block it. Try again from a different network.
+
+**Something else.** Copy the full error message and bring it to class or office hours, or email it to me. Error messages look scary, but they usually tell you exactly what went wrong.
+
+## What gets installed
+
+| Packages | What we use them for |
+|---|---|
+| `knitr`, `rmarkdown`, `quarto`, `here`, `renv`, `usethis`, `gitcreds`, `rsconnect` | Rendering documents, project paths, package versions, Git, and publishing (week 1) |
+| `tidyverse`, `haven`, `ipumsr`, `tidycensus`, `tigris`, `skimr`, `scales` | Reading and managing data, Census downloads, and graphics |
+| `survey`, `srvyr`, `svyVGAM` | Complex survey design (week 2 onward) |
+| `modelsummary`, `marginaleffects`, `gtsummary`, `broom`, `broom.helpers`, `car`, `Hmisc` | Model tables, predicted probabilities and marginal effects |
+| `VGAM`, `pscl`, `betareg` | Ordinal, multinomial, count and proportion models (weeks 3 to 6) |
+| `oaxaca` | Decomposition (week 7) |
+| `mice`, `mitools` | Multiple imputation (week 9) |
+| `geepack`, `fixest` | GEE and fixed effects models (week 10) |
+| `lme4`, `WeMix`, `brms` | Multilevel models (weeks 12 and 13) |
+| `dagitty`, `ggdag`, `MatchIt`, `WeightIt`, `cobalt`, `EValue` | Causal inference (week 14) |
+| `tidymodels`, `probably`, `ranger`, `xgboost`, `rpart.plot` | Machine learning (week 15) |
+| `sparkscolors` | UTSA colors for graphs (from GitHub) |

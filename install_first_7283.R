@@ -1,6 +1,6 @@
 # DEM 7283 package installer, Spring 2027
 # Run once, before the first class:
-#   source("https://raw.githubusercontent.com/coreysparks/Rcode/master/install_first_7283.R")
+#   source("https://raw.githubusercontent.com/coreysparks/DEM7283/master/install_first_7283.R")
 # Packages you already have are skipped, so it is safe to re-run.
 
 message("Installing DEM 7283 packages. This may take a while the first time.")
@@ -12,12 +12,14 @@ if (!requireNamespace("pak", quietly = TRUE)) {
 pkgs <- c(
   # workflow: Quarto, renv, Git (week 1)
   "knitr", "rmarkdown", "quarto", "here", "renv", "usethis", "gitcreds",
+  "rsconnect",
   # data access and wrangling
   "tidyverse", "haven", "ipumsr", "tidycensus", "tigris", "skimr", "scales",
   # survey design (week 2 onward)
   "survey", "srvyr", "svyVGAM",
   # model output and interpretation
-  "modelsummary", "marginaleffects", "gtsummary", "broom", "car", "Hmisc",
+  "modelsummary", "marginaleffects", "gtsummary", "broom", "broom.helpers",
+  "car", "Hmisc",
   # categorical, ordinal and count models (weeks 3-6)
   "VGAM", "pscl", "betareg",
   # decomposition (week 7)

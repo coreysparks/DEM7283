@@ -1,0 +1,52 @@
+# Publishes the book to https://coreysparks.github.io/DEM7283/ on every push
+# to master. Pages source must be set to "GitHub Actions" (it is).
+#
+# The book is rendered from the frozen results in _freeze/, so this workflow
+# does not install R or run any R code. Render locally (quarto render) and
+# commit _freeze/ along with any chapter you change. If a chapter's frozen
+# results are missing or stale, Quarto tries to run it, there is no R here,
+# and the build fails, which is the reminder to render locally first.
+name: Publish Book to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Quarto
+        uses: quarto-dev/quarto-actions/setup@v2
+
+      - name: Render book from frozen results
+        run: quarto render
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

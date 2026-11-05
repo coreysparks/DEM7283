@@ -1,0 +1,10 @@
+# Quarto's freeze (in _freeze/) stores an MD5 hash of each source file, and
+# GitHub Actions checks files out with LF line endings. Keep the book sources
+# LF on every machine, so a local render's hashes match the CI checkout and
+# CI never tries to rerun R.
+*.qmd text eol=lf
+*.R   text eol=lf
+*.yml text eol=lf
+*.bib text eol=lf
+*.scss text eol=lf
+*.json text eol=lf

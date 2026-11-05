@@ -1,0 +1,80 @@
+project:
+  type: book
+  output-dir: docs
+  execute-dir: project   # code runs from the project root, so here() and data/ paths work
+  # Render only the book. The repo also holds archive/, code/ and the Python
+  # ports, which are not part of the book.
+  render:
+    - index.qmd
+    - setup.qmd
+    - chapters/*.qmd
+    - references.qmd
+
+book:
+  title: "Statistics for Demographic Data II"
+  subtitle: "Course notes and R code for DEM 5283/7283"
+  author: "Corey S. Sparks, PhD"
+  date: last-modified
+  repo-url: https://github.com/coreysparks/DEM7283
+  repo-branch: master
+  repo-actions: [source, issue]
+  search: true
+  chapters:
+    - index.qmd
+    - setup.qmd
+    - part: "Workflow and survey data"
+      chapters:
+        - chapters/01-intro-workflow.qmd
+        - chapters/02-survey-design.qmd
+    - part: "Categorical and count outcomes"
+      chapters:
+        - chapters/03-logit-probit.qmd
+        - chapters/04-nested-logits-prediction.qmd
+        - chapters/05-ordinal-multinomial.qmd
+        - chapters/06-count-models.qmd
+    - part: "Decomposition and missing data"
+      chapters:
+        - chapters/07-decomposition.qmd
+        - chapters/09-missing-data.qmd
+    - part: "Longitudinal, nonlinear and multilevel models"
+      chapters:
+        - chapters/10-longitudinal.qmd
+        - chapters/11-splines-gams.qmd
+        - chapters/12-multilevel-1.qmd
+        - chapters/13-multilevel-2.qmd
+    - part: "Causal inference and prediction"
+      chapters:
+        - chapters/14-causal-inference.qmd
+        - chapters/15-machine-learning.qmd
+    - references.qmd
+
+bibliography: references.bib
+
+format:
+  html:
+    theme:
+      - cosmo
+      - utsa.scss
+    # Chapters are titled by course week ("Week 9: ..."), and the text refers
+    # to weeks throughout, so book chapter numbers would only confuse things
+    # (week 8 is spring break).
+    number-sections: false
+    toc: true
+    toc-depth: 3
+    code-link: true
+    code-copy: true
+    code-overflow: wrap
+    fig-width: 7
+    fig-height: 5
+    fig-align: center
+
+execute:
+  echo: true
+  warning: false
+  message: false
+  freeze: auto
+
+knitr:
+  opts_chunk:
+    comment: "#>"
+    collapse: false

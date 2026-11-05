@@ -1,0 +1,37 @@
+/*-- scss:defaults --*/
+// UTSA brand palette
+$utsa-midnight: #032044;
+$utsa-orange: #F15A22;
+$utsa-orange-a11y: #D3430D;
+$utsa-talavera: #265BF7;
+$utsa-river-mist: #C8DCFF;
+$utsa-limestone: #F8F4F1;
+$utsa-concrete: #EBE6E2;
+$utsa-smoke: #D5CFC8;
+
+$primary: $utsa-midnight;
+$body-color: $utsa-midnight;
+$headings-color: $utsa-midnight;
+$link-color: $utsa-talavera;
+$code-color: $utsa-orange-a11y;
+$code-block-bg: $utsa-limestone;
+$sidebar-bg: $utsa-limestone;
+$sidebar-fg: $utsa-midnight;
+$navbar-bg: $utsa-midnight;
+$callout-color-note: $utsa-talavera;
+$callout-color-warning: $utsa-orange;
+
+/*-- scss:rules --*/
+// orange rule under the page title only (not the sidebar chapter list)
+#title-block-header h1.title {
+  border-bottom: 3px solid $utsa-orange;
+  padding-bottom: 0.25rem;
+}
+
+.sidebar-title {
+  color: $utsa-midnight;
+}
+
+div.sourceCode {
+  border-left: 3px solid $utsa-smoke;
+}

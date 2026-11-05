@@ -18,7 +18,7 @@ I will also post data and other resources to my Github repository https://github
 ## R packages for the class
 Copy and paste the following command in Positron to install the packages we will use in this class:
 
-source("https://raw.githubusercontent.com/coreysparks/Rcode/master/install_first_7283.R")
+source("https://raw.githubusercontent.com/coreysparks/DEM7283/master/install_first_7283.R")
 
 In Positron. Please have these programs downloaded and installed prior to class.
 
