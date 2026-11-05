@@ -1,60 +1,173 @@
 # Oaxaca-Blinder and Fairlie decompositions for complex survey data.
 #
-# svy_oaxaca() splits the gap in a mean (or a proportion) between two groups
-# into a part explained by differences in characteristics and an unexplained
-# part, using survey weights, and gets standard errors from replicate weights.
-#
-#   * family = gaussian() gives the linear Oaxaca-Blinder decomposition.
-#   * family = binomial() (or quasibinomial()) gives the Fairlie (2005)
-#     decomposition for a binary outcome, with the detailed explained part
-#     split using Yun's (2004) weights.
-#
-# Both use the same counterfactual: the explained part is
-#
-#   mean over A of F(X beta*)  -  mean over B of F(X beta*)
-#
-# where beta* are the reference coefficients and F is the inverse link. With a
-# linear model F is the identity, and this is (Xbar_A - Xbar_B) beta*.
-#
-# Standard errors: if `design` is a replicate-weight design (svrepdesign(),
-# srvyr::as_survey_rep()), the whole decomposition is recomputed with each
-# replicate weight and combined with the design's own variance formula, via
-# survey::withReplicates(). If `design` is a linearization design (svydesign()),
-# it is first converted to a bootstrap replicate design with as.svrepdesign().
-#
-# The regressions are fit with weighted least squares / IRLS written out here
-# rather than lm()/glm(), because lm() and glm() refuse negative weights and a
-# few ACS replicate weights are negative. The estimates are identical.
-#
-# Arguments
-#   formula     outcome ~ predictors, as in svyglm().
-#   group       the grouping variable, as a one-sided formula (~female) or a
-#               string ("female"). It must have exactly two values in the
-#               analysis sample (or use `groups` to pick two).
-#   design      a survey design object.
-#   groups      the two group values, in order c(A, B). The gap is A minus B.
-#               Default: the sorted unique values, so for a 0/1 variable the
-#               gap is group 0 minus group 1.
-#   reference   whose coefficients are the benchmark:
-#                 "pooled"              pooled model with a group indicator
-#                                       (default; Jann 2008, Fortin 2011)
-#                 "pooled_no_indicator" pooled model without one (Neumark 1988)
-#                 a group value         that group's own coefficients,
-#                                       e.g. reference = 0
-#   family      gaussian() (default), binomial() or quasibinomial().
-#   detail      named list saying how to group terms in the detailed explained
-#               part, using the term labels from the formula, e.g.
-#               list(age = c("AGE", "I(AGE^2)"), education = "educ").
-#               Default: one row per term.
-#   replicates  number of bootstrap replicates when `design` is not already a
-#               replicate design.
-#   conf.level  confidence level for the intervals.
-#   se          FALSE skips the replicates and returns point estimates only
-#               (quick, for trying out models).
-#
-# Value: an object of class "svy_oaxaca". Print it for a summary, or use
-# as.data.frame() to get the table of estimates.
+# Source this file with source(here::here("R", "svy_oaxaca.R")). Then run
+# svy_oaxaca_help() to read the documentation below as a help page.
 
+# Remember where this file is, so svy_oaxaca_help() can find its documentation.
+.svy_oaxaca_file <- local({
+  path <- NULL
+  for (i in rev(seq_len(sys.nframe()))) {
+    of <- sys.frame(i)$ofile           # set by source() while the file runs
+    if (!is.null(of)) { path <- normalizePath(of); break }
+  }
+  path
+})
+
+#' Oaxaca-Blinder and Fairlie decompositions for survey data
+#'
+#' Splits the gap in a mean, or in a proportion, between two groups into a
+#' part *explained* by differences in the groups' characteristics and a part
+#' that is *unexplained*. It uses the survey weights for the estimates and the
+#' design's replicate weights for the standard errors.
+#'
+#' @details
+#' **Two kinds of outcome.** With `family = gaussian()` (the default) this is
+#' the linear Oaxaca-Blinder decomposition (Oaxaca 1973; Blinder 1973). With
+#' `family = binomial()` it is the Fairlie (2005) decomposition for a binary
+#' outcome. Both use the same counterfactual. The explained part is
+#'
+#' \deqn{\overline{F(X_A\beta^*)} - \overline{F(X_B\beta^*)}}{mean_A F(X beta*) - mean_B F(X beta*)}
+#'
+#' where \eqn{\beta^*}{beta*} are the reference coefficients, \eqn{F} is the
+#' inverse link function, and each bar is a weighted mean over one group. In a
+#' linear model \eqn{F} does nothing, and this is
+#' \eqn{(\bar X_A - \bar X_B)\beta^*}{(Xbar_A - Xbar_B) beta*}. The unexplained
+#' part is the gap minus the explained part.
+#'
+#' **The detailed explained part.** In the linear case, each variable's
+#' contribution is \eqn{(\bar X_{kA} - \bar X_{kB})\beta^*_k}{(Xbar_kA - Xbar_kB) beta*_k},
+#' summed over the columns that belong to it. In the binary case, the
+#' explained part is shared out in proportion to those same linear
+#' contributions, using the logit coefficients (Yun 2004). Either way, the
+#' detail rows add up to the explained total. The unexplained part is reported
+#' only as a total, because splitting it by categorical variables depends on
+#' which category is omitted (Oaxaca and Ransom 1999).
+#'
+#' **Standard errors.** The whole decomposition is computed once with the
+#' full-sample weights and again with each replicate weight, and the results
+#' are combined with the design's own variance formula through
+#' [survey::withReplicates()]. If `design` is a linearization design (from
+#' [survey::svydesign()]), it is first turned into bootstrap replicates with
+#' [survey::as.svrepdesign()], and a message says so. Run [set.seed()] first
+#' to make those repeatable.
+#'
+#' **Negative weights.** The regressions are fit with weighted least squares
+#' (linear) or iteratively reweighted least squares (binary), written out
+#' rather than with [lm()] or [glm()], because those refuse negative weights
+#' and a few ACS replicate weights are negative. The estimates are the same.
+#'
+#' @param formula The regression model, `outcome ~ predictors`, written as you
+#'   would for [survey::svyglm()]. It is fit separately to each group.
+#' @param group The variable that defines the two groups, as a one-sided
+#'   formula (`~female`) or a string (`"female"`).
+#' @param design A survey design: from [survey::svydesign()],
+#'   [survey::svrepdesign()], [srvyr::as_survey_design()] or
+#'   [srvyr::as_survey_rep()]. Subset it to the analysis sample with
+#'   `subset()` or `filter()` first.
+#' @param groups The two values of `group` to compare, in the order
+#'   `c(A, B)`. The gap is A minus B. By default, the two values in sorted
+#'   order, so for a 0/1 variable the gap is group 0 minus group 1. Use this to
+#'   flip the gap, or to pick two groups out of more.
+#' @param reference Whose coefficients are the benchmark \eqn{\beta^*}{beta*}:
+#'   * `"pooled"` (default): a regression on both groups with a group
+#'     indicator, which is then left out (Jann 2008; Fortin et al. 2011).
+#'   * `"pooled_no_indicator"`: a regression on both groups without one
+#'     (Neumark 1988).
+#'   * One of the group values, such as `0` or `"Hispanic"`: that group's own
+#'     coefficients (Oaxaca 1973).
+#' @param family `gaussian()` (default) for a continuous outcome, or
+#'   `binomial()` for a 0/1 outcome. `quasibinomial()` gives the same result
+#'   as `binomial()`, and `binomial(link = "probit")` also works.
+#' @param detail A named list saying how to group the model's terms in the
+#'   detailed explained part. Each name becomes a row of the output, and each
+#'   value is one or more term labels exactly as they appear in the formula,
+#'   such as `list(age = c("AGE", "I(AGE^2)"), education = "educ")`. Terms you
+#'   leave out don't get a row (they're still in the model and in the explained
+#'   total). By default, each term gets its own row.
+#' @param replicates The number of bootstrap replicates to make when `design`
+#'   is a linearization design. Ignored for replicate designs.
+#' @param conf.level The confidence level for `lower` and `upper`.
+#' @param se `FALSE` skips the replicates and returns point estimates only.
+#'   That's much faster, for trying out models.
+#'
+#' @return An object of class `"svy_oaxaca"`. Printing it shows a summary and
+#'   the table of estimates. It is a list with:
+#'   * `estimates`: a data frame with one row per component. `part` is
+#'     `"overall"` for the gap, explained and unexplained parts and
+#'     `"explained detail"` for the rows that split the explained part.
+#'     `estimate` is in the units of the outcome (a difference in means, or in
+#'     proportions). `se`, `lower` and `upper` are the standard error and
+#'     confidence interval, and `share_of_gap` is the estimate divided by the
+#'     gap. Get it with `as.data.frame()`.
+#'   * `group`, `groups`, `reference`, `family`: the settings used.
+#'   * `n`: the unweighted number of people in each group.
+#'   * `replicates`, `replicate_type`: how the standard errors were computed.
+#'
+#' @references
+#' Blinder, A. S. (1973). Wage discrimination: Reduced form and structural
+#' estimates. *Journal of Human Resources*, 8(4), 436-455.
+#'
+#' Fairlie, R. W. (2005). An extension of the Blinder-Oaxaca decomposition
+#' technique to logit and probit models. *Journal of Economic and Social
+#' Measurement*, 30(4), 305-316.
+#'
+#' Fortin, N., Lemieux, T., and Firpo, S. (2011). Decomposition methods in
+#' economics. In *Handbook of Labor Economics*, vol. 4A, 1-102.
+#'
+#' Jann, B. (2008). The Blinder-Oaxaca decomposition for linear regression
+#' models. *The Stata Journal*, 8(4), 453-479.
+#'
+#' Neumark, D. (1988). Employers' discriminatory behavior and the estimation
+#' of wage discrimination. *Journal of Human Resources*, 23(3), 279-295.
+#'
+#' Oaxaca, R. (1973). Male-female wage differentials in urban labor markets.
+#' *International Economic Review*, 14(3), 693-709.
+#'
+#' Oaxaca, R. L., and Ransom, M. R. (1999). Identification in detailed wage
+#' decompositions. *Review of Economics and Statistics*, 81(1), 154-157.
+#'
+#' Yun, M.-S. (2004). Decomposing differences in the first moment.
+#' *Economics Letters*, 82(2), 275-280.
+#'
+#' @seealso [svy_oaxaca_help()] to show this page. The `oaxaca` package does
+#'   the linear decomposition without survey weights.
+#'
+#' @examples
+#' library(survey)
+#' data(api)   # California schools, in the survey package
+#'
+#' # A stratified sample of schools. The gap in test scores (api00) between
+#' # schools that won an award and schools that didn't.
+#' dstrat <- svydesign(ids = ~1, strata = ~stype, weights = ~pw,
+#'                     fpc = ~fpc, data = apistrat)
+#' set.seed(1)
+#' fit <- svy_oaxaca(api00 ~ meals + ell + emer, group = ~awards,
+#'                   design = dstrat, groups = c("Yes", "No"))
+#' fit
+#' as.data.frame(fit)
+#'
+#' # The same, with the award-winning schools' coefficients as the reference
+#' svy_oaxaca(api00 ~ meals + ell + emer, group = ~awards, design = dstrat,
+#'            groups = c("Yes", "No"), reference = "Yes", se = FALSE)
+#'
+#' # A binary outcome: did the school score 700 or more?
+#' apistrat$high <- as.numeric(apistrat$api00 >= 700)
+#' dstrat <- svydesign(ids = ~1, strata = ~stype, weights = ~pw,
+#'                     fpc = ~fpc, data = apistrat)
+#' svy_oaxaca(high ~ meals + ell + emer, group = ~awards, design = dstrat,
+#'            groups = c("Yes", "No"), family = binomial(), se = FALSE)
+#'
+#' \dontrun{
+#' # The week 7 wage gap, with the ACS replicate weights
+#' acs_rep <- wages |>
+#'   srvyr::as_survey_rep(weights = PERWT, repweights = matches("REPWTP[0-9]+"),
+#'                        type = "JK1", scale = 4 / 80, rscales = rep(1, 80),
+#'                        mse = TRUE)
+#' svy_oaxaca(lnwage ~ educ + AGE + I(AGE^2) + race_eth + occ,
+#'            group = ~female, design = acs_rep,
+#'            detail = list(education = "educ", age = c("AGE", "I(AGE^2)"),
+#'                          race_eth = "race_eth", occupation = "occ"))
+#' }
 svy_oaxaca <- function(formula, group, design, groups = NULL,
                        reference = "pooled", family = gaussian(),
                        detail = NULL, replicates = 100, conf.level = 0.95,
@@ -251,8 +364,9 @@ print.svy_oaxaca <- function(x, digits = 4, ...) {
     pooled_no_indicator = "pooled model without a group indicator",
     paste0("coefficients of ", x$group, " = ", x$reference))
   cat(model, "decomposition with survey weights\n")
-  cat("Gap: ", x$group, " = ", x$groups[1], " (n = ", format(x$n[1], big.mark = ","),
-      ") minus ", x$group, " = ", x$groups[2], " (n = ", format(x$n[2], big.mark = ","),
+  grp <- as.character(x$groups)   # factors would print as numbers in cat()
+  cat("Gap: ", x$group, " = ", grp[1], " (n = ", format(x$n[1], big.mark = ","),
+      ") minus ", x$group, " = ", grp[2], " (n = ", format(x$n[2], big.mark = ","),
       ")\n", sep = "")
   cat("Reference coefficients:", ref, "\n")
   if (x$replicates > 0) {
@@ -273,3 +387,100 @@ print.svy_oaxaca <- function(x, digits = 4, ...) {
 }
 
 as.data.frame.svy_oaxaca <- function(x, ...) x$estimates
+
+
+#' Show the documentation for svy_oaxaca()
+#'
+#' `svy_oaxaca()` comes from a file you `source()`, not from a package, so
+#' `?svy_oaxaca` doesn't find it. This function reads the documentation
+#' written at the top of `svy_oaxaca.R` and shows it as a help page.
+#'
+#' If the `roxygen2` package is installed, you get a formatted help page, in
+#' the Viewer pane in RStudio or Positron, or in your web browser otherwise.
+#' Without `roxygen2`, or with `format = "text"`, the documentation is printed
+#' in the console.
+#'
+#' @param topic Which page to show: `"svy_oaxaca"` (default) or
+#'   `"svy_oaxaca_help"`.
+#' @param format `"html"` (default) for a help page, or `"text"` to print it
+#'   in the console.
+#' @param file The path to `svy_oaxaca.R`. You only need this if the function
+#'   can't find the file on its own.
+#'
+#' @return The path to the HTML file, invisibly, or `NULL` for text.
+#'
+#' @examples
+#' \dontrun{
+#' svy_oaxaca_help()
+#' svy_oaxaca_help(format = "text")
+#' }
+svy_oaxaca_help <- function(topic = c("svy_oaxaca", "svy_oaxaca_help"),
+                            format = c("html", "text"), file = NULL) {
+  topic <- match.arg(topic)
+  format <- match.arg(format)
+
+  # 1. Find the file the documentation lives in
+  if (is.null(file)) file <- .svy_oaxaca_file
+  if (is.null(file) || !file.exists(file)) {
+    file <- file.path(if (requireNamespace("here", quietly = TRUE)) here::here() else ".",
+                      "R", "svy_oaxaca.R")
+  }
+  if (!file.exists(file)) {
+    stop("Can't find svy_oaxaca.R. Tell me where it is, for example ",
+         "svy_oaxaca_help(file = \"R/svy_oaxaca.R\").")
+  }
+  src <- readLines(file, warn = FALSE)
+
+  # 2. Without roxygen2, print the comments as plain text
+  if (!requireNamespace("roxygen2", quietly = TRUE)) {
+    if (format == "html") {
+      message("Install roxygen2 for a formatted help page: install.packages(\"roxygen2\")")
+    }
+    print_roxygen_text(src, topic)
+    return(invisible(NULL))
+  }
+
+  # 3. With roxygen2, build a real help page. roc_proc_text() turns the #'
+  #    comments into R's help format (.Rd), the way it does for a package.
+  topics <- roxygen2::roc_proc_text(roxygen2::rd_roclet(), paste(src, collapse = "\n"))
+  rd_file <- tempfile(fileext = ".Rd")
+  writeLines(format(topics[[paste0(topic, ".Rd")]]), rd_file)
+
+  if (format == "text") {
+    tools::Rd2txt(rd_file, options = list(underline_titles = FALSE))
+    return(invisible(NULL))
+  }
+
+  # The viewer only shows files in the session's temporary folder
+  dir <- file.path(tempdir(), "svy_oaxaca_help")
+  dir.create(dir, showWarnings = FALSE)
+  file.copy(file.path(R.home("doc"), "html", "R.css"), dir, overwrite = TRUE)
+  writeLines(c(
+    "body { color: #032044; }",                         # UTSA Midnight
+    "h2, h3 { color: #032044; border-bottom: 2px solid #F15A22; }",
+    "a { color: #265BF7; }",                            # Talavera Blue
+    "pre, code { background: #F8F4F1; }"                # Limestone
+  ), file.path(dir, "utsa.css"))
+  html <- file.path(dir, paste0(topic, ".html"))
+  tools::Rd2HTML(rd_file, out = html, stylesheet = c("R.css", "utsa.css"))
+
+  viewer <- getOption("viewer")
+  if (is.function(viewer)) viewer(html) else utils::browseURL(html)
+  invisible(html)
+}
+
+# Fallback for svy_oaxaca_help(): print one roxygen block as plain text.
+print_roxygen_text <- function(src, topic) {
+  start <- grep(paste0("^", topic, " <- function"), src)
+  if (length(start) == 0) stop("No documentation found for ", topic, ".")
+  # the #' lines directly above the function
+  i <- start[1] - 1
+  while (i > 0 && grepl("^#'", src[i])) i <- i - 1
+  block <- sub("^#' ?", "", src[(i + 1):(start[1] - 1)])
+  # "@param x text" becomes "  x: text"; other tags become headings
+  block <- sub("^@param ([^ ]+) ?", "  \\1: ", block)
+  tags <- grepl("^@[a-z]+", block)
+  block[tags] <- sub("^@([a-z]+) ?(.*)$", "\n\\U\\1\\E\n\\2", block[tags], perl = TRUE)
+  cat(block, sep = "\n")
+  invisible(NULL)
+}

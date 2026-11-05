@@ -27,7 +27,7 @@ This week covers the two workhorses. **Kitagawa decomposition** splits a differe
 
 ## Setup
 
-We need the Texas and California mortality data from week 6, the IPUMS ACS extract for Texas from week 2, and the BRFSS. The `oaxaca` package does the linear decomposition in one line [@hlavac_oaxaca], but it doesn't know about survey weights. So for the regression decompositions, we'll use `svy_oaxaca()`, a function I wrote for this course. It's in the course's `R/` folder, next to `get_mmsa()`. It takes a survey design object, the same kind you've been passing to `svyglm()` since week 2.
+We need the Texas and California mortality data from week 6, the IPUMS ACS extract for Texas from week 2, and the BRFSS. The `oaxaca` package does the linear decomposition in one line [@hlavac_oaxaca], but it doesn't know about survey weights. So for the regression decompositions, we'll use `svy_oaxaca()`, a function I wrote for this course. It's in the course's `R/` folder, next to `get_mmsa()`. It takes a survey design object, the same kind you've been passing to `svyglm()` since week 2. Because it comes from a file you `source()` and not from a package, `?svy_oaxaca` won't find its help page. Run `svy_oaxaca_help()` instead, which opens the same kind of page in the Viewer.
 
 ```{r}
 #| label: packages
