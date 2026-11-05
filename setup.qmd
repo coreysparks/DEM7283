@@ -12,9 +12,17 @@ R does the computing. Download it from [CRAN](https://cran.r-project.org):
 
 The course uses R 4.6. If you already have an older version, install the new one.
 
-## Step 2: Install an editor
+## Step 2: Install Positron
 
-You'll write code in an editor, not in R itself. I use [Positron](https://positron.posit.co/download), Posit's newer editor, and that's what you'll see in class. [RStudio Desktop](https://posit.co/download/rstudio-desktop/) works just as well for everything in this book. Both include Quarto, so you can open and render the `.qmd` files for the course.
+You won't type code into R itself. You'll work in **Positron**, an editor made by Posit, and that's what we use in class. It includes Quarto, so you can open and render the `.qmd` files for the course, and it includes the Posit Publisher extension we'll use to share homework. Install R first (step 1), then Positron:
+
+1. Go to <https://positron.posit.co/download>, accept the license, and download the installer for your computer.
+   - **Windows:** if you're offered a *user* installer and a *system* installer, choose the user installer. It doesn't need administrator rights, which matters on a UTSA-managed laptop.
+   - **macOS:** open the downloaded `.dmg` file and drag Positron into your Applications folder.
+2. Run the installer and accept the defaults.
+3. Open Positron. The first time, it finds your R installation and starts an R session in the **Console**, the pane at the bottom of the window. If you see `R 4.6` (or similar) near the top right of the window and a `>` prompt in the Console, it's working. If it can't find R, click the interpreter button at the top right and choose your R installation, or restart Positron after checking that R installed correctly.
+
+If you've used RStudio before, most of Positron will feel familiar: the editor, the Console, plots and help are all there, laid out a little differently.
 
 ## Step 3: Windows only, install Rtools
 
@@ -22,7 +30,7 @@ A few packages (`brms` in week 12, mainly) compile code in C++, and on Windows t
 
 ## Step 4: Install the course packages
 
-Open Positron or RStudio, then copy this line into the R **Console** and press Enter:
+Open Positron, then copy this line into the R **Console** and press Enter:
 
 ```{r}
 #| label: install-script
@@ -34,11 +42,20 @@ The script installs `pak`, a faster installer that uses prebuilt packages, and t
 
 You should never run code from the internet that you haven't looked at, mine included. The script is [short](https://github.com/coreysparks/DEM7283/blob/master/install_first_7283.R).
 
-## Step 5: Get the course repository
+## Step 5: Install Git and create a GitHub account
+
+You'll keep your homework in Git and share it on GitHub, starting in week 1. If you've never used either, don't worry; [Week 1](chapters/01-intro-workflow.qmd#sec-git) explains what they are and walks through the whole setup. Before the first class, please do the first two steps from that section:
+
+1. **Create a free GitHub account** at <https://github.com>. Use an email address you'll keep after you graduate, and pick a username you'd be happy for a future employer to see.
+2. **Install Git.** On Windows, download Git for Windows from <https://git-scm.com/downloads/win> and run the installer. The defaults are fine except for two questions: for the default editor, choose Notepad instead of Vim, and for the name of the initial branch, choose to override it and type `main`. On a Mac, open the Terminal app and type `git --version`; if Git isn't there, macOS offers to install it.
+
+We'll do the rest of the setup (connecting R to your GitHub account) together in class.
+
+## Step 6: Get the course repository
 
 The data and the helper functions the chapters use live in the [course repository](https://github.com/coreysparks/DEM7283). Week 1 shows you how to clone it with Git. If you want to look around before then, the green **Code** button on the repository page has a **Download ZIP** option.
 
-## Step 6: Get a Census API key
+## Step 7: Get a Census API key
 
 A few of the chapters download data from the Census Bureau with `tidycensus`, which needs a free key. Request one at <https://api.census.gov/data/key_signup.html>; it arrives by email in a few minutes. Weeks 2 and 6 show you where to put it.
 

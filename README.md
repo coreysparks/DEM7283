@@ -29,7 +29,7 @@ The syllabus and schedule are in [`sp2027syllabus.pdf`](sp2027syllabus.pdf) and 
 
 ## Student setup
 
-Install R, Positron (or RStudio) and, on Windows, Rtools. Then paste this line into the R console to install the course packages:
+Install R, Positron, Git and, on Windows, Rtools. Then paste this line into the Positron Console to install the course packages:
 
 ```r
 source("https://raw.githubusercontent.com/coreysparks/DEM7283/master/install_first_7283.R")
