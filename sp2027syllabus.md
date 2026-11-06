@@ -15,6 +15,7 @@ format:
 # Course information
 
 **Course:** DEM 5283/7283, Statistics for Demographic Data II\
+**CRNs:** DEM 5283, 40173; DEM 7283, 40174 (cross-listed)\
 **Credit hours:** 3\
 **Modality:** Traditional in-person\
 **Meeting time:** Thursdays, 6:00--8:45 PM\
@@ -40,7 +41,7 @@ By the end of the course, you will be able to:
 # Instructor
 
 **Instructor:** Corey S. Sparks, PhD\
-**Department:** Demography\
+**Department:** Sociology and Demography\
 **Email:** corey.sparks@utsa.edu\
 **Office:** MB 2.248J\
 **Office hours:** Thursdays, 3:00--5:00 PM, or by appointment (email me to set one up)
