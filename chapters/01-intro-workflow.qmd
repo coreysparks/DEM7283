@@ -96,7 +96,7 @@ These are three different jobs, and they happen in three different places.
 
 1. **Reading the course book.** The weekly chapters are on the web at <https://coreysparks.github.io/DEM7283/>. You can read them in any browser, and you don't need anything installed. Read the week's chapter before class.
 2. **Getting the course files.** To run the code yourself, you need the course repository on your computer: the chapters' `.qmd` source files, the data in `data/` and the helper functions in `R/`. You'll clone it with Git this week ([Getting the course repository](#getting-the-course-repository)) and pull my updates each week.
-3. **Turning in homework.** Each week's exercises are the homework. You do them in **your own** homework project, not in the course repository. You turn in **two links** through Canvas: the link to your rendered homework document on **Posit Connect Cloud** (the website that hosts it; you send it there with the **Posit Publisher** tool built into Positron), and the link to your **GitHub** repository that holds the code. Homework is due before class one week after it's assigned.
+3. **Turning in homework.** Each chapter ends with that week's homework. From Homework 2 on, there are two versions: one with your own survey data and one with my data. If you're in DEM 7283, you do the version with your own data; if you're in DEM 5283, you choose. You do them in **your own** homework project, not in the course repository. You turn in **two links** through Canvas: the link to your rendered homework document on **Posit Connect Cloud** (the website that hosts it; you send it there with the **Posit Publisher** tool built into Positron), and the link to your **GitHub** repository that holds the code. Homework is due before class one week after it's assigned.
 
 ### My assumptions about you
 
@@ -839,9 +839,9 @@ brfss |>
 
 Median BMI rises through middle age and falls after 65 for both men and women, and the long right tail shows up as the cloud of outliers at every age. Is this everything R will do for describing data? No. Is this the only way to do it? Never. I'm constantly surprised by how many new functions I see students using in their own work, and it reminds me how much of the R ecosystem I have yet to explore.
 
-## Exercises
+## Homework 1
 
-These exercises are Homework 1.
+**Due:** January 28, before class. Everyone in DEM 5283 and DEM 7283 does the same Homework 1. Exercises 6 and 7 use the survey you're proposing in your survey data choice, which is due the same day (see the syllabus).
 
 **Purpose.** Read a finished analysis closely, then set up the workflow you'll use for every homework this semester.
 
@@ -905,7 +905,23 @@ brfss |>
 # YOUR CODE HERE
 ```
 
-**6.** End your document with a chunk that runs `sessionInfo()`, render the document to a self-contained HTML file, then commit and push the `.qmd` file, the rendered HTML and `renv.lock`.
+**6.** Download the survey you're proposing for your survey data choice into your project's `data/` folder, and read it into R using `here()` for the file path. How many respondents and how many variables are in the file, and what does one row of the data represent?
+
+```{r}
+#| label: ex-own-survey
+#| eval: false
+# YOUR CODE HERE
+```
+
+**7.** Using your survey's documentation, identify the design variables: the weight, and either the strata and PSU (cluster) variables or the replicate weights. Report their names and what the documentation says each one is. Then sum the weight, and say what population that total represents.
+
+```{r}
+#| label: ex-own-design
+#| eval: false
+# YOUR CODE HERE
+```
+
+**8.** End your document with a chunk that runs `sessionInfo()`, render the document to a self-contained HTML file, then commit and push the `.qmd` file, the rendered HTML and `renv.lock`.
 
 ```{r}
 #| label: ex-session
@@ -913,7 +929,7 @@ brfss |>
 # YOUR CODE HERE
 ```
 
-**7.** Create a Posit Connect Cloud account and publish the rendered, self-contained HTML file from exercise 6 (not the `.qmd`) with whichever method you prefer. Open the link in a private browser window to check that it works, then commit the `.posit/` folder or `_publish.yml` file that the publishing step created, and push.
+**9.** Create a Posit Connect Cloud account and publish the rendered, self-contained HTML file from exercise 8 (not the `.qmd`) with whichever method you prefer. Open the link in a private browser window to check that it works, then commit the `.posit/` folder or `_publish.yml` file that the publishing step created, and push.
 
 ## Session information
 

@@ -503,15 +503,36 @@ srh_diff <- srh_pred |>
 
 The three models tell the same story. The two ordinal models are nearly identical, and the proportional odds and multinomial predictions never differ by more than `r round(100 * max(srh_diff$d), 1)` percentage points. With only three categories and a large sample, the proportional odds model is a good summary of the education gradient, even though we know from the Wald test that the assumption doesn't hold exactly for age. So the choice among them comes down to what you want to say. The proportional odds model gives one coefficient per variable and is the easiest to explain. The partial proportional odds model relaxes the assumption only where the data say it needs relaxing. The multinomial is the most flexible, but it throws away the ordering and gives you twice as many coefficients to interpret.
 
-## Exercises
+## Homework 5
 
-These exercises are Homework 5.
+**Due:** February 25, before class.
+
+**Which version to do.** If you're in DEM 7283, do the version with your own survey data. If you're in DEM 5283, do either version, and say at the top of your homework which one you did. If your survey can't support this week's method, do the version with my data and say so.
 
 **Purpose.** Match the model to the kind of outcome, check the assumption the model makes, and report the results as probabilities.
 
-**What is provided.** The BRFSS data with `recode_mmsa()` and the design `des` (the outcome `genhlth3` is ordered from excellent or very good to fair or poor); the DHS design `dhs_des` and the multinomial model from this chapter, with "Using" as the reference outcome.
-
 **A satisfactory answer** says what kind of outcome each one is and why; reports predicted probabilities for every category, checking that they add up to 1 for each group; and describes results as associations.
+
+### With your own survey data
+
+Use the full survey design for every estimate unless a step says otherwise, and report each estimate with a standard error or confidence interval.
+
+1. Define an **ordinal or multinomial outcome variable** of your choosing, and explain how you recoded the original variable.
+   1. Is your outcome ordered or unordered? Explain why in a sentence or two.
+   2. If it's ordered, why shouldn't its categories be treated as equally spaced numbers?
+2. State a research question about the factors you believe will affect your outcome variable.
+3. Fit either an **ordinal logistic regression** (proportional odds model) or a **multinomial logistic regression** model to your outcome, using the survey design (`svyolr()` or `svy_vglm()`).
+   1. If you use an ordinal model, are the assumptions of the **proportional odds model** met?
+   2. How did you evaluate the proportional odds assumption? Fit the model with `parallel = FALSE` and use Wald tests to identify which variables violate it.
+   3. If a variable violates the assumption, fit a partial proportional odds model and say how your conclusions change.
+4. For the best-fitting model from the previous step:
+   - describe the results; and
+   - present a table showing **odds ratios and confidence intervals for all model parameters**.
+5. Report **predicted probabilities for every category** of your outcome for at least two groups that matter for your research question, and check that each group's probabilities add up to 1.
+
+### With my data
+
+**What is provided.** The BRFSS data with `recode_mmsa()` and the design `des` (the outcome `genhlth3` is ordered from excellent or very good to fair or poor); the DHS design `dhs_des` and the multinomial model from this chapter, with "Using" as the reference outcome.
 
 **1.** Explain in a sentence or two why `genhlth3` is an ordinal outcome, and why its categories shouldn't be treated as equally spaced numbers. Fit the proportional odds model for `genhlth3` with income (`income`) added. Using `avg_predictions()`, report the predicted probability of every health category for adults in the lowest and the highest income groups, and check that each group's probabilities add up to 1. Then describe the proportional odds assumption in your own words, and say what you would examine if it seemed unreasonable for income.
 

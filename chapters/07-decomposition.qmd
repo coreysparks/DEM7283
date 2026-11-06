@@ -482,15 +482,37 @@ I said this at the start, and I'll say it again because it matters. Every number
 
 Kitagawa decomposition splits a difference in crude rates into a rate effect and a composition effect, using the average of the two populations as the weights so the two parts add up exactly. Oaxaca-Blinder decomposition does the same thing for a regression, splitting a gap in means into a part explained by characteristics and an unexplained part, and the split depends on the reference coefficients you choose. For binary outcomes, the explained part comes from a counterfactual average predicted probability, not from multiplying means by coefficients. In all three cases, the estimate is a function of survey data, so it needs a design-based standard error, and replicate weights give you one without any new formulas. The unexplained part is a residual, not a measure of discrimination, and the explained part is a description, not a causal effect.
 
-## Exercises
+## Homework 7
 
-These exercises are Homework 7. **Homework 7 is due before class on March 18, after spring break.**
+**Due:** March 18, the first class after spring break, before class.
+
+**Which version to do.** If you're in DEM 7283, do the version with your own survey data. If you're in DEM 5283, do either version, and say at the top of your homework which one you did. If your survey can't support this week's method, do the version with my data and say so.
 
 **Purpose.** Decompose a difference between two groups, report the components honestly, and say what they do and don't mean.
 
-**What is provided.** The Texas and California mortality data, the IPUMS wage data and replicate design `acs_rep`, and the BRFSS design `des_boot` from this chapter, with `svy_oaxaca()` from the course's `R/` folder.
-
 **A satisfactory answer** reports the total gap and every component in the units of the outcome; shows that the components add up to the gap (allowing for rounding); names the reference used; and doesn't describe the explained part as a cause or the unexplained part as discrimination.
+
+### With your own survey data
+
+Use the full survey design for every estimate unless a step says otherwise, and report each estimate with a standard error or confidence interval.
+
+1. Choose an outcome (continuous or binary) and two groups that differ on it, and state a research question about the gap between them.
+2. **Kitagawa decomposition.** Choose a composition variable that differs between the two groups (for example, age group or education).
+   1. Calculate the weighted rate (or mean) of your outcome within each category of the composition variable, and the weighted share of each group in each category.
+   2. Decompose the difference into a rate effect and a composition effect, and show that they add up to the total difference.
+   3. Interpret each effect in a sentence.
+3. **Oaxaca-Blinder decomposition.** Use `svy_oaxaca()` (with `family = binomial()` for a binary outcome) and the predictors from your earlier models.
+   1. Report the total gap, the explained and unexplained parts, and the detailed explained part by variable group, all in the units of the outcome and with standard errors.
+   2. Show that the components add up to the gap, allowing for rounding.
+   3. Name the reference coefficients you used.
+4. Redo the decomposition with a different reference.
+   1. How do the explained and unexplained parts change?
+   2. Explain in two or three sentences how the reference can change the parts without changing the observed gap.
+5. In a paragraph, explain why the explained part isn't a causal effect and the unexplained part isn't a measure of discrimination. Name one variable that's missing from your model and how leaving it out could change the results.
+
+### With my data
+
+**What is provided.** The Texas and California mortality data, the IPUMS wage data and replicate design `acs_rep`, and the BRFSS design `des_boot` from this chapter, with `svy_oaxaca()` from the course's `R/` folder.
 
 **1.** Collapse the 13 age groups in the Texas and California data into five broad groups (under 25, 25-44, 45-64, 65-84, and 85+) and redo the Kitagawa decomposition. How much do the rate and composition effects change, and why would wider age groups move part of the composition effect into the rate effect?
 

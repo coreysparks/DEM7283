@@ -695,15 +695,49 @@ The test-set numbers are close to the cross-validated ones, which is what we hop
 A predictive model is only as fair as the data and the decision it feeds. A model that is well calibrated overall can be poorly calibrated for a particular group, and a threshold that looks fine on average can miss most of the people in a group the program most needs to reach. Before a model like this informs anyone's access to services, check its performance separately by region, wealth and education. Exercise 4 starts on this.
 :::
 
-## Exercises
+## Homework 4
 
-These exercises are Homework 4.
+**Due:** February 18, before class.
+
+**Which version to do.** If you're in DEM 7283, do the version with your own survey data. If you're in DEM 5283, do either version, and say at the top of your homework which one you did. If your survey can't support this week's method, do the version with my data and say so.
 
 **Purpose.** Compare nested models in a way that means what it says, and judge a prediction model by how it will be used.
 
-**What is provided.** The BRFSS data with `recode_mmsa()`, the complete-case design `des_cc`, and the code for Models 1 and 2 from this chapter; the DHS prediction data, split, folds and workflow from Part 2.
-
 **A satisfactory answer** compares models on the probability scale for the same people; describes changes in a comparison as associations, not as what a variable "explains" or "causes"; and, for prediction, says which kind of performance (discrimination, calibration or classification) each number measures.
+
+### With your own survey data
+
+Use the full survey design for every estimate unless a step says otherwise, and report each estimate with a standard error or confidence interval.
+
+#### Part 1: Nested models and interactions
+
+1. Use your binary outcome from Homework 3, and choose one key predictor (for example, race and ethnicity, sex, or nativity) whose association with the outcome you want to understand.
+2. Construct relevant control variables for your outcome, based on the literature in your area of interest, and group them into two sets: basic demographic controls, and variables that might account for part of the key predictor's association (for example, education and income).
+3. Fit two nested models: one with the key predictor and basic controls, and one that adds the second set.
+   1. Report the average marginal effects of the key predictor from both models, for the same complete-case sample.
+   2. How does the association change when the second set is added?
+   3. Why can't you compare the logit coefficients from the two models directly? Use the **KHB method** to make the comparison on a common scale.
+4. Examine an **interaction** between your key predictor and one other predictor.
+   1. Test the interaction terms jointly with `regTermTest()`.
+   2. Present predicted probabilities that show what the interaction means.
+5. **Stratify** your model by one predictor.
+   1. What evidence do you use to justify the stratification?
+   2. Is there evidence for **homogeneity of regression effects across the strata**? How do you know?
+   3. Explain and discuss the implications, interpreting the models both within and between the strata.
+
+#### Part 2: Prediction
+
+6. Treat your outcome as something to predict, rather than explain. Split your data into training and test sets, and fit a logistic regression on the training data with `tidymodels`.
+7. Use 10-fold cross-validation on the training data to estimate how well the model predicts.
+8. On the test data, report:
+   - the area under the ROC curve (discrimination);
+   - a calibration plot (calibration); and
+   - the sensitivity and specificity at a threshold you choose, and why you chose it (classification).
+9. In two or three sentences, explain why a good model for explanation (Part 1) isn't necessarily a good model for prediction, and the reverse.
+
+### With my data
+
+**What is provided.** The BRFSS data with `recode_mmsa()`, the complete-case design `des_cc`, and the code for Models 1 and 2 from this chapter; the DHS prediction data, split, folds and workflow from Part 2.
 
 **1.** Repeat the nested comparison for obesity (`obese`) as the outcome, using Models 1 and 2 (age and sex, then add education and income). Report the Hispanic-White and Black-White average marginal effects from both models, in percentage points, for the same complete-case sample. Describe how each estimated difference changes when education and income are added. Then, in two or three sentences, explain why a coefficient that shrinks when variables are added doesn't by itself show that those variables mediate the difference. (Optional: also report the naive and KHB changes in the logit coefficients, and say whether rescaling is bigger or smaller than it was for self-rated health.)
 

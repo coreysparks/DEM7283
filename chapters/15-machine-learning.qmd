@@ -859,15 +859,38 @@ I ignored the survey weights here, which is common in prediction, where the goal
 
 Prediction is a different goal from explanation: we judge models on data they haven't seen, using a held-out test set and cross-validation, and flexibility is a tool rather than a danger. Trees split the data into groups with a series of yes/no questions; random forests average many trees grown on bootstrap samples, and boosted trees add up many shallow trees fit to each other's errors. In survey data with a few categorical predictors, a well-specified logit model often predicts as well as either, so always fit a baseline. Check calibration as well as discrimination, and check both for each group the model will be used on. A prediction is not a causal effect, and a model that predicts well on average can still fail the people who most need it to work. @james2021 is a free, readable introduction to the methods, and @kuhn_silge2022 covers `tidymodels`.
 
-## Exercises
+## Homework 15
 
-These exercises are Homework 15.
+**Due:** May 6, before class.
+
+**Which version to do.** If you're in DEM 7283, do the version with your own survey data. If you're in DEM 5283, do either version, and say at the top of your homework which one you did. If your survey can't support this week's method, do the version with my data and say so.
 
 **Purpose.** Build and evaluate prediction models for a stated use, and judge them by what the use needs.
 
-**What is provided.** The BRFSS sample `brfss`, the split, training and test data and folds, the recipe and model specifications, and the tuned models from this chapter.
-
 **A satisfactory answer** ties each evaluation to a prediction use; keeps discrimination, calibration and decision consequences separate; compares flexible models with a simple baseline; and treats subgroup differences as estimates with uncertainty, not as settled facts.
+
+### With your own survey data
+
+Use the full survey design for every estimate unless a step says otherwise, and report each estimate with a standard error or confidence interval.
+
+1. Choose a binary outcome to **predict**, and say who would use the predictions and what they would do with them.
+2. Split your data into training and test sets, stratified on the outcome, and write a `recipe` to prepare your predictors.
+3. Fit three models on the training data:
+   - a logistic regression;
+   - a **random forest**; and
+   - a **boosted tree** model.
+4. **Tune** the random forest and boosted tree with 5- or 10-fold cross-validation, and compare all three models by cross-validated ROC AUC. Which do you choose?
+5. Evaluate your chosen model on the test data:
+   1. Report the ROC AUC and show the ROC curve.
+   2. Show a calibration plot. Are the predicted probabilities trustworthy?
+   3. Choose a classification threshold for the use you described in step 1, justify it, and report the confusion matrix, sensitivity, specificity and positive predictive value.
+6. Show the **variable importance** for your chosen model. Explain why importance isn't the same as a causal effect.
+7. Compare the model's performance across two or more groups (for example, by race and ethnicity or sex). Does it perform equally well for everyone? What would the consequences be if it didn't?
+8. These models don't use the survey design. What population does your model's performance describe, and how would you adjust your evaluation to describe the population the survey represents?
+
+### With my data
+
+**What is provided.** The BRFSS sample `brfss`, the split, training and test data and folds, the recipe and model specifications, and the tuned models from this chapter.
 
 **1.** @fig-depth chose a tree depth using a single fold. Do it properly: tune `tree_depth` from 1 to 12 with `tune_grid()` and all five folds (set `cost_complexity = -1`, and use `grid = tibble(tree_depth = 1:12)`). Which depth gives the best cross-validated AUC? Draw that tree with `rpart.plot()` and describe its first three questions in words. How does its cross-validated AUC compare with the random forest's?
 

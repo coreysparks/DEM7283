@@ -439,15 +439,41 @@ Multiple imputation doesn't create information. It uses the information in the o
 
 Complete-case analysis is the default everywhere. It's guaranteed to be unbiased only when the data are MCAR, which they almost never are, and whether it's biased otherwise depends on what you're estimating and why the data are missing. Mean and modal imputation keep the sample size but distort distributions and shrink variances, so don't use them. Multiple imputation fills in the missing values several times, analyzes each completed data set, and combines the results with Rubin's rules, so the standard errors include the uncertainty from the missing data. With survey data, put the design variables in the imputation model and analyze each imputed data set with the design, using `imputationList()` and `MIcombine()`. You can show that data aren't MCAR, but you can never show from the data that they're MAR, so you have to argue for it. For more, @allison2002 is a short and readable introduction, @schafer_graham2002 is a classic review, and @vanbuuren2018 covers `mice` in detail and is free online.
 
-## Exercises
+## Homework 9
 
-These exercises are Homework 9.
+**Due:** March 25, before class.
+
+**Which version to do.** If you're in DEM 7283, do the version with your own survey data. If you're in DEM 5283, do either version, and say at the top of your homework which one you did. If your survey can't support this week's method, do the version with my data and say so.
 
 **Purpose.** Reason about why data are missing, impute them in a way that keeps the survey design, and be honest about what the imputation assumes.
 
-**What is provided.** The Texas BRFSS data `tx`, the imputation data `imp_data`, the analysis formula `f_health`, the function `analyze_mi()`, and the 20 imputations in `imp` from this chapter.
-
 **A satisfactory answer** states the missingness assumption behind each analysis; reports estimates with standard errors or confidence intervals; and doesn't claim that a test, or agreement between two analyses, proves that the data are MAR.
+
+### With your own survey data
+
+Use the full survey design for every estimate unless a step says otherwise, and report each estimate with a standard error or confidence interval.
+
+1. Use your survey data.
+2. Measure an **outcome variable and at least five predictors**.
+3. Report the **pattern of missingness** among all of these variables.
+   1. What share of cases would a complete-case analysis drop?
+   2. Make a flag for missingness on the variable with the most missing data, and model the flag with the other variables. Is that variable MCAR? Who is less likely to answer it?
+   3. Describe one plausible reason for the missing data that would make it MAR, and one that would make it MNAR.
+4. Perform a **mean imputation** for numeric data or a **modal imputation** for categorical data for all missing values.
+   - Perform the analysis using the imputed data and the survey design.
+   - What are your results?
+5. Perform a **multiple imputation** of all missing values with `mice()`, including the design variables (weight, strata and PSU) in the imputation model.
+   - Check the convergence of the imputations.
+   - Perform the analysis on each imputed dataset with the survey design, and combine the results with Rubin's rules.
+   - What are your results?
+6. Compare the approaches:
+   - Were the results similar between the mean/modal-imputed and multiply imputed datasets? Compare the standard errors as well as the estimates.
+   - How do these results compare with the complete-case model fit using the original data with missing values?
+   - Explain why agreement (or disagreement) between the analyses doesn't prove that the data are MAR.
+
+### With my data
+
+**What is provided.** The Texas BRFSS data `tx`, the imputation data `imp_data`, the analysis formula `f_health`, the function `analyze_mi()`, and the 20 imputations in `imp` from this chapter.
 
 **1.** Describe one plausible explanation for missing income that would make it MAR, and one that would make it MNAR, using what you know about how people answer surveys. Then compare the complete-case and multiple-imputation estimates of the income coefficients from this chapter, including their standard errors. Explain in two or three sentences why agreement (or disagreement) between the two doesn't prove that the missingness assumption is correct.
 

@@ -93,7 +93,7 @@ Journal articles are available through the [UTSA Libraries](https://lib.utsa.edu
 | Final paper | 20% |
 | **Total** | **100%** |
 
-**Homework (60%).** Each week's materials end with a set of exercises, and those exercises are the homework. Starting with Homework 2, students in DEM 7283 do the exercises with the survey data they chose in week 2, and students in DEM 5283 can use either my data or their own (see "Your survey data" below). There are 14 sets (weeks 1--7 and 9--15). I drop your lowest score, and the remaining 13 count equally. Each homework is a Quarto document that renders from top to bottom without errors. Through Canvas, turn in two links: the link to your rendered homework on Posit Connect Cloud (published from Positron with Posit Publisher), and the link to the GitHub repository that holds your homework code. Homework is due before class one week after it's assigned. I grade on whether the code runs and is correct, and just as much on whether your written interpretation is correct and says what the numbers mean.
+**Homework (60%).** Each chapter of the course book ends with that week's homework. Starting with Homework 2, each homework comes in two versions, one with your own survey data and one with my data. Students in DEM 7283 do the version with the survey data they chose in week 2, and students in DEM 5283 can do either version (see "Your survey data" below). There are 14 sets (weeks 1--7 and 9--15). I drop your lowest score, and the remaining 13 count equally. Each homework is a Quarto document that renders from top to bottom without errors. Through Canvas, turn in two links: the link to your rendered homework on Posit Connect Cloud (published from Positron with Posit Publisher), and the link to the GitHub repository that holds your homework code. Homework is due before class one week after it's assigned. I grade on whether the code runs and is correct, and just as much on whether your written interpretation is correct and says what the numbers mean.
 
 **Final paper (40% total).** The final paper is an original analysis of demographic data using one or more of the methods from this course. It should read like a short research article: a research question and its motivation, a brief literature review, data and methods, results, and a discussion. I expect about 15--20 double-spaced pages, plus tables and figures, along with the Quarto document and code that produce every number in the paper. The paper has three graded parts:
 
@@ -118,10 +118,10 @@ It isn't graded on its own, but you need it approved before you start Homework 2
 
 **How the homework uses your data.**
 
-- **DEM 7283 (doctoral students).** You do every homework from Homework 2 on with your own survey. The exercises are written for my data, so adapt each one: use the same method and answer the same questions with your own outcome and predictors. When an exercise names a specific variable, use the closest one in your data and say what you used.
-- **DEM 5283 (master's students).** For each homework, you choose. You can do the exercises as written with my data, or adapt them to your own survey the way the doctoral students do. Say at the top of each homework which one you chose.
+- **DEM 7283 (doctoral students).** From Homework 2 on, you do the version of each homework that uses your own survey. It asks you to apply the week's methods to your own outcome and predictors.
+- **DEM 5283 (master's students).** For each homework, you choose: the version with your own survey, or the version with my data. Say at the top of each homework which one you did.
 
-Some weeks' methods need data that your survey may not have. Longitudinal models (week 10) need repeated measurements of the same people, and multilevel models (weeks 12 and 13) need a grouping variable with enough groups. When your survey can't support a week's method, use my data for those exercises and say so in your homework.
+Some weeks' methods need data that your survey may not have. Longitudinal models (week 10) need repeated measurements of the same people, and multilevel models (weeks 12 and 13) need a grouping variable with enough groups. When your survey can't support a week's method, do the version with my data and say so in your homework.
 
 ## Grade distribution
 

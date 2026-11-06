@@ -693,15 +693,37 @@ Here is where the two parts earn their keep. Look at college graduates, compared
 Because the outcome can't exceed 30, a model for "days out of 30" is a natural alternative. The plain binomial will be badly overdispersed, but the beta-binomial allows for people who are mostly at one end or the other, which is exactly the U shape these data have. `glmmTMB(cbind(ment_days, 30 - ment_days) ~ ..., family = betabinomial)` fits it, and comparing its predicted distribution with the ones above is a good project.
 :::
 
-## Exercises
+## Homework 6
 
-These exercises are Homework 6.
+**Due:** March 4, before class.
+
+**Which version to do.** If you're in DEM 7283, do the version with your own survey data. If you're in DEM 5283, do either version, and say at the top of your homework which one you did. If your survey can't support this week's method, do the version with my data and say so.
 
 **Purpose.** Model counts and rates with the right denominator, and interpret the results as rates.
 
-**What is provided.** The AHRF county data (`ahrf_cc`, with suppressed counties removed) and the models from Part 1; the BRFSS data and design from Part 2.
-
 **A satisfactory answer** identifies the event, denominator or exposure, period and unit for each model; interprets exponentiated coefficients as rate ratios in a full sentence; says whether the model respects the outcome's limits; and describes county-level results as associations for counties, not for individuals.
+
+### With your own survey data
+
+Use the full survey design for every estimate unless a step says otherwise, and report each estimate with a standard error or confidence interval.
+
+1. Define a **count outcome** for your data (for example, the number of days of poor health, the number of children ever born, or the number of doctor visits).
+   1. State a research question about your outcome.
+   2. Describe its distribution: the mean, the variance, the share of zeros, and any heaping or ceiling.
+   3. Is an **offset term** necessary? Why or why not? If it is, what is the exposure?
+2. Consider a **Poisson regression model** for the outcome.
+   1. Evaluate the level of dispersion in the outcome.
+   2. Is the Poisson model a good choice?
+3. Fit a population-average model with `svyglm()` and `family = quasipoisson`, and interpret the exponentiated coefficients for your key predictor as rate ratios in full sentences.
+4. Fit a **negative binomial model** with `glm.nb()`, using rescaled weights as in the chapter.
+5. Fit a **zero-inflated or hurdle negative binomial model**.
+   1. Compare how well the Poisson, negative binomial and zero-inflated or hurdle models reproduce the observed distribution of your outcome, especially the share of zeros and the upper tail.
+   2. Why don't we compare these weighted models by AIC?
+6. Which model would you use for your research question, and why?
+
+### With my data
+
+**What is provided.** The AHRF county data (`ahrf_cc`, with suppressed counties removed) and the models from Part 1; the BRFSS data and design from Part 2.
 
 **1.** For the low birth weight model in this chapter, identify (a) the event being counted, (b) the denominator, (c) the period it's counted over, and (d) the unit of analysis, and explain in a sentence why `log(births)` is an offset rather than a predictor. Then fit a negative binomial model that adds the number of general OB-GYNs per 10,000 population (from `obgyn` and `popn_est_23`). Interpret its exponentiated coefficient as a rate ratio, explain why you might expect this association to be confounded by county size even with the offset, and say whether the model respects the limits of the outcome (a low birth weight count can't exceed the number of births).
 

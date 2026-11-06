@@ -1033,15 +1033,37 @@ Summing `PERWT` over everyone gives `r fmt(weight_sums$people / 1e6, 1)` million
 
 Survey weights fix *bias*: they make estimates describe the population instead of whoever answered the phone. If we don't account for weighting, the parameters themselves are wrong. Design variables fix *precision*: they make standard errors reflect how the sample was actually drawn. If we don't account for the design, the standard errors are wrong. With unequal weights and clusters they're usually too small, though stratification on its own can make them too large. Never use the sum of the weights as the sample size in a textbook formula: it pretends you interviewed the whole population. In the BRFSS most of the precision story is about unequal weights, while in clustered surveys like the DHS the clusters matter as much or more. Build the design object once, on the full data, subset it for subgroups, and pass it to every function you use. Replicate weights are another way to carry the same information, and for many federal surveys they are the only way you'll get it.
 
-## Exercises
+## Homework 2
 
-These exercises are Homework 2.
+**Due:** February 4, before class.
+
+**Which version to do.** If you're in DEM 7283, do the version with your own survey data. If you're in DEM 5283, do either version, and say at the top of your homework which one you did. If your survey can't support this week's method, do the version with my data and say so.
 
 **Purpose.** Practice the three things every survey estimate needs: the right weights for the point estimate, the right design for its uncertainty, and a sentence that says which population it describes.
 
-**What is provided.** The 2024 MMSA data and the `des` design object from this chapter (stratum `ststr`, weight `mmsawt`, no clusters); the Texas ACS replicate design `acs_svy`; and the DHS full design. Use these unless a question says otherwise.
-
 **A satisfactory answer** reports each estimate with its uncertainty, in percentages or other meaningful units; says what population each weighted estimate describes; and answers every "explain" question in two or three complete sentences.
+
+### With your own survey data
+
+Use the full survey design for every estimate unless a step says otherwise, and report each estimate with a standard error or confidence interval.
+
+1. Define a **binary outcome variable** of your choosing, and explain how you recoded the original variable, including what you did with missing and "don't know" codes.
+2. State a research question about what factors you believe will affect your outcome variable.
+3. Define **at least three predictor variables**, based on your research question. These can be a mixture of continuous and categorical variables.
+4. Create the survey design object for your data with `svydesign()` or `as_survey_design()` (or `svrepdesign()` if your survey uses replicate weights), and explain each argument you used.
+5. Calculate descriptive statistics for each variable:
+   - using no weights or survey design;
+   - using the weights only; and
+   - using the full survey design and weights.
+6. Calculate percentages or means for each predictor at each level of your outcome variable. Present these results in a table, like Table 1 in a demography journal article, with appropriate survey-corrected test statistics (`svychisq()` for categorical variables, `svyttest()` for continuous ones).
+7. Report the **design effect** for the overall prevalence of your outcome, and interpret it as a comparison of variances.
+8. Are there substantive differences between the unweighted results and the results that use the survey design?
+   1. Which estimates changed the most, and why?
+   2. What population do your weighted estimates describe?
+
+### With my data
+
+**What is provided.** The 2024 MMSA data and the `des` design object from this chapter (stratum `ststr`, weight `mmsawt`, no clusters); the Texas ACS replicate design `acs_svy`; and the DHS full design. Use these unless a question says otherwise.
 
 **1.** Current smoking status is in `_SMOKER3` (`smoker3`), where codes 1 and 2 are current smokers, 3 and 4 are not, and 9 is missing. Create a binary current smoking variable. For each race and ethnicity group, report (a) the unweighted number of respondents, (b) the unweighted prevalence, (c) the weighted prevalence with a 95% confidence interval from the full design, and (d) the design effect. Explain in a sentence what the weighted prevalence describes that the unweighted one doesn't. Then interpret one design effect as a comparison of variances, and explain why it doesn't by itself tell you that clustering is the cause (the BRFSS has no clusters).
 

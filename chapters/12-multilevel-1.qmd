@@ -452,15 +452,39 @@ fit_bayes <- brm(bmi ~ college_cwc + college_mean + age_c + female + (1 | mmsa),
 
 Multilevel models put individuals inside places and estimate how much of the variation in an outcome is between places, through the variance of the random intercepts and the ICC. The predicted group effects are shrunk toward the overall mean, more so for small groups. Person-level predictors that vary within and between groups should be split by group-mean centering into within and between parts, as in week 10, and the difference between the two is the contextual effect. Random slopes let the effect of a predictor vary across groups, and cross-level interactions ask whether that variation is related to characteristics of the groups. `lmer()` can't use sampling weights; for weighted multilevel models, use `WeMix` with a weight at each level. @raudenbush_bryk2002 and @gelman_hill2007 are the standard references.
 
-## Exercises
+## Homework 12
 
-These exercises are Homework 12.
+**Due:** April 15, before class.
+
+**Which version to do.** If you're in DEM 7283, do the version with your own survey data. If you're in DEM 5283, do either version, and say at the top of your homework which one you did. If your survey can't support this week's method, do the version with my data and say so.
 
 **Purpose.** Fit and interpret multilevel models, keeping the person-level and metro-level comparisons apart.
 
-**What is provided.** The BRFSS data `brfss` with metro context, `college_mean`, `college_cwc` and `college_cgm`, and the models from this chapter.
-
 **A satisfactory answer** names the two levels; interprets the random intercept variance and the ICC as a split of the variance, not a causal share; interprets within-metro and between-metro terms separately; and says which population of metros the conclusions describe.
+
+### With your own survey data
+
+Use the full survey design for every estimate unless a step says otherwise, and report each estimate with a standard error or confidence interval.
+
+This homework needs a grouping variable with enough groups (at least 30 or so). If your survey doesn't have one, use the BRFSS metro-area data from the chapter.
+
+1. Identify the grouping variable in your data (for example, state, county, metro area or survey cluster), and how many people are in each group.
+2. Construct at least one **group-level variable**, either by aggregating your survey data or by merging contextual data (for example, from the ACS with `tidycensus`). Explain how you scaled it.
+3. Fit a **null (random intercept only) model** for a continuous outcome.
+   1. Report the variance components and the **intraclass correlation**.
+   2. Interpret the ICC in a sentence.
+4. Add individual-level predictors, then your group-level variable.
+   1. How do the variance components change at each step?
+   2. Interpret the coefficient for your group-level variable.
+5. **Centering.** Choose one individual-level predictor and fit the model with it grand-mean centered and then group-mean centered (with the group mean added as a level-2 predictor). How do the coefficients and their interpretations differ?
+6. Fit a **random slope** for one individual-level predictor.
+   1. Is there evidence that its association varies across groups? How do you know?
+   2. Plot the group-specific slopes.
+7. Fit your final model with **level-specific weights** using `WeMix`, if your survey supplies them, and compare it with the unweighted model. If your survey doesn't supply weights at each level, explain what you would need, and what that means for the population your estimates describe.
+
+### With my data
+
+**What is provided.** The BRFSS data `brfss` with metro context, `college_mean`, `college_cwc` and `college_cgm`, and the models from this chapter.
 
 **1.** Fit an empty model for the number of poor mental health days in the past month (`ment_days`), with a random intercept for metro area. Identify the two levels of the data. Interpret the random intercept variance and the ICC, and compare the ICC with BMI's. Then add the group-mean centered college variable and the metro share of college graduates, and interpret the within-metro and between-metro terms separately, in days. Explain shrinkage in a sentence, using what happens to the predicted intercepts for the smallest metros. Finally, say which population of metro areas your conclusions can reasonably describe.
 

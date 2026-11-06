@@ -389,15 +389,40 @@ Everything this week models a repeated *measurement*. If the outcome is an *even
 
 Longitudinal data violate the independence assumption, and ordinary regression gets the standard errors wrong. GEEs estimate population-average effects with a working correlation and robust standard errors. Fixed effects models compare each person to themselves, removing every time-constant confounder, but can't estimate time-constant effects. Random effects models are efficient but assume the person effects are unrelated to the predictors, and when they aren't, the coefficients mix within and between relationships. The within-between model separates the two explicitly and is usually the best place to start. In this example, the gap in math scores between poor and non-poor children is large, but it's almost entirely between children, not within them.
 
-## Exercises
+## Homework 10
 
-These exercises are Homework 10.
+**Due:** April 1, before class.
+
+**Which version to do.** If you're in DEM 7283, do the version with your own survey data. If you're in DEM 5283, do either version, and say at the top of your homework which one you did. If your survey can't support this week's method, do the version with my data and say so.
 
 **Purpose.** Separate the between-child and within-child parts of a relationship, and say what each one can and can't tell you.
 
-**What is provided.** The long-format ECLS-K data `eclsk` (with the longitudinal weight `wt`, `psu`, and `poor_mean` and `poor_within`), and the models from this chapter.
-
 **A satisfactory answer** interprets each coefficient in score units; says which variation (between children or within children) identifies it; and doesn't describe a fixed effects estimate as the effect of a variable without saying what it does and doesn't control for.
+
+### With your own survey data
+
+Use the full survey design for every estimate unless a step says otherwise, and report each estimate with a standard error or confidence interval.
+
+This homework needs repeated measurements of the same people. If your survey doesn't have them, use the ECLS-K data from the chapter.
+
+1. Define an outcome that is measured at least three times for each person, and a time-varying predictor of interest. State a research question about how they're related.
+2. Reshape your data to long format (one row per person per wave), and describe:
+   1. how many people and how many person-waves you have; and
+   2. how much of the variation in your outcome and your key predictor is between people and how much is within people.
+3. Fit a **GEE** model with an exchangeable working correlation and with an AR(1) working correlation.
+   1. Compare them with QIC. Which do you prefer, and why?
+   2. Interpret the coefficient for your key predictor.
+4. Fit a **fixed effects** model with person fixed effects.
+   1. Interpret the coefficient for your key predictor. What variation identifies it?
+   2. What happened to the time-constant predictors, and why?
+5. Fit a **within-between** (hybrid) model, with the person mean and the deviation from the person mean of your key predictor.
+   1. Interpret the within and between coefficients in the units of the outcome.
+   2. Are they different? What would it mean substantively if they were?
+6. Explain one source of bias that the person fixed effects would *not* remove.
+
+### With my data
+
+**What is provided.** The long-format ECLS-K data `eclsk` (with the longitudinal weight `wt`, `psu`, and `poor_mean` and `poor_within`), and the models from this chapter.
 
 **1.** In the within-between model from this chapter, identify the within-child poverty term and the between-child poverty term. Interpret each in math score units, and say which variation in the data identifies each one (changes within the same child, or differences between children). Then explain one source of bias that the child fixed effects would *not* remove.
 

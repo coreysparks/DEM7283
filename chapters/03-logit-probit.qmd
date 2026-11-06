@@ -479,15 +479,36 @@ rr_val <- as_tibble(rr)$estimate
 
 The odds ratio for a college degree was `r round(or[["educCollege graduate"]], 2)`, but the ratio of average predicted probabilities is `r round(rr_val, 2)`. "College graduates are `r pct(1 - rr_val, 0)` less likely to report fair or poor health" is a correct sentence. "College graduates are `r pct(1 - or[["educCollege graduate"]], 0)` less likely" is not, even though you could read it straight off the odds ratio. If you report odds ratios, call them odds ratios, and give the probabilities too.
 
-## Exercises
+## Homework 3
 
-These exercises are Homework 3.
+**Due:** February 11, before class.
+
+**Which version to do.** If you're in DEM 7283, do the version with your own survey data. If you're in DEM 5283, do either version, and say at the top of your homework which one you did. If your survey can't support this week's method, do the version with my data and say so.
 
 **Purpose.** Fit a logit model to survey data and report its results on the scale readers understand, without claiming more than the data show.
 
-**What is provided.** The BRFSS data with `recode_mmsa()`, and the design object `des` from this chapter. The reference groups are non-Hispanic White, less than high school, ages 18 to 24, men, and never smokers.
-
 **A satisfactory answer** names the comparison group for every odds ratio or difference; gives probability differences in percentage points; describes results as associations ("is associated with," "are more likely"), not effects; and includes a confidence interval with each estimate.
+
+### With your own survey data
+
+Use the full survey design for every estimate unless a step says otherwise, and report each estimate with a standard error or confidence interval.
+
+1. Specify a research question for your analysis, using the binary outcome from Homework 2 or a new one.
+2. Generate appropriate predictor variables to examine your research question, and state the reference group for each categorical predictor.
+3. Fit a **logistic regression** with `svyglm()` using the full survey design. Then fit the same model as a **probit regression**.
+4. Present the results in tabular form, including:
+   - parameter estimates from both models;
+   - odds ratios from the logit model; and
+   - 95% confidence intervals for the odds ratios.
+5. Do the logit and probit models lead you to the same substantive conclusions? Compare them on the probability scale, not by their coefficients.
+6. Generate **predicted probabilities** for some interesting cases from your analysis to highlight the effects from the model and your stated research question.
+7. Calculate the **average marginal effect** of your key predictor with `avg_comparisons()`.
+   1. Report it in percentage points with a confidence interval.
+   2. Explain in two or three sentences why the odds ratio and the average marginal effect answer different questions.
+
+### With my data
+
+**What is provided.** The BRFSS data with `recode_mmsa()`, and the design object `des` from this chapter. The reference groups are non-Hispanic White, less than high school, ages 18 to 24, men, and never smokers.
 
 **1.** Fit a survey-weighted logit model for obesity (`obese`) with race and ethnicity, education, age group, sex and smoking status (`smoke`) as predictors. For college graduates compared with adults who didn't finish high school, report (a) the odds ratio and (b) the average marginal effect (the adjusted difference in probability), each with a 95% confidence interval. State the reference group, express the probability difference in percentage points, and explain in two or three sentences why the two numbers answer different questions. Describe the result as an association.
 

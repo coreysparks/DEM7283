@@ -633,15 +633,36 @@ Sensitivity analyses like this don't prove anything. They translate "there might
 
 A causal effect compares potential outcomes that we can never see together, so we estimate averages, like the ATE, ATT or ATC, and need assumptions to do it: conditional exchangeability and positivity. A DAG makes the assumptions explicit and tells you what to adjust for, and what not to: for a total effect, not mediators, and never colliders. Propensity scores summarize the confounders in one number, and weighting or matching on them lets you check balance before looking at the outcome. Matching with `MatchIt` builds a comparison group of people who look like the group you care about, and it makes positivity problems visible as people who can't be matched. With survey data, use the survey weights in the propensity model and in the outcome model: `WeightIt` leaves them out of its weights, so you multiply them in, and `MatchIt`'s `match.data()` already includes them. Different adjustment methods should give similar answers if the model is reasonable, but they all share the assumption of no unmeasured confounding, and an E-value tells you how strong a confounder would have to be to change your conclusion.
 
-## Exercises
+## Homework 14
 
-These exercises are Homework 14.
+**Due:** April 29, before class.
+
+**Which version to do.** If you're in DEM 7283, do the version with your own survey data. If you're in DEM 5283, do either version, and say at the top of your homework which one you did. If your survey can't support this week's method, do the version with my data and say so.
 
 **Purpose.** Practice stating a causal question and its assumptions, estimating an effect with propensity scores, and being clear about what the analysis can and can't establish.
 
-**What is provided.** The BRFSS analysis data `brfss`, the propensity score formula `f_ps`, the weights `w_glm` and the matched data from this chapter.
-
 **A satisfactory answer** defines the causal question before estimating anything; states the assumptions the estimate needs; reports balance and overlap; and explains what those checks don't prove, including the timing limitation of these data.
+
+### With your own survey data
+
+Use the full survey design for every estimate unless a step says otherwise, and report each estimate with a standard error or confidence interval.
+
+1. Choose a binary **exposure** (treatment) and an **outcome** in your data, and state a causal question about them. Define the target population and whether you want the average treatment effect (ATE) or the average treatment effect on the treated (ATT).
+2. Draw a **DAG** for your question with `dagitty` and `ggdag`.
+   1. Include the confounders you think matter, and at least one mediator or collider if your question has one.
+   2. Find a minimal adjustment set. Which variables should you *not* adjust for, and why?
+   3. Which important confounders aren't measured in your data?
+3. Estimate **propensity scores** for the exposure with the variables in your adjustment set, and the survey weights, using `WeightIt`.
+   1. Plot the distribution of propensity scores for the exposed and unexposed groups. Is there good overlap?
+   2. Check **balance** before and after weighting with `cobalt`, and show a Love plot. Is balance acceptable?
+4. Estimate the effect of the exposure using the combined propensity score and survey weights, and report it on the scale of the outcome (for example, in percentage points with `avg_comparisons()`) with a confidence interval.
+5. Compare it with the estimate from an ordinary survey-weighted regression with the same covariates. Are they similar?
+6. Calculate an **E-value** for your estimate, and interpret it. How strong would an unmeasured confounder need to be to explain away your result? Is that plausible for the confounders you named in step 2?
+7. In a paragraph, state the assumptions your estimate depends on (exchangeability, positivity, consistency) and how believable each one is here.
+
+### With my data
+
+**What is provided.** The BRFSS analysis data `brfss`, the propensity score formula `f_ps`, the weights `w_glm` and the matched data from this chapter.
 
 **1.** In your own words, define the causal question this chapter estimates: the treatment, outcome, eligible population, follow-up period and causal contrast. Draw a DAG for it (you can adapt the one in this chapter) and state the three assumptions the estimate needs, in plain language. Using the propensity score weights, show the overlap of the propensity scores and the balance of the covariates, and explain in two or three sentences why good balance and overlap don't prove the estimate is causal. Finally, explain the timing limitation of using current insurance and a past-year checkup.
 

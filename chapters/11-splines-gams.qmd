@@ -388,15 +388,34 @@ The spline fits much better (its AIC is `r fmt(AIC(fit_quad) - AIC(fit_ns))` poi
 
 Splines let a curve bend where the data bend, with smooth joins at the knots. Natural splines (`ns()`) behave better than B-splines at the edges of the data, and 4 to 6 degrees of freedom are enough for most demographic curves. Splines are just extra columns in the design matrix, so they work in `svyglm()` and every other model we've used, and you can compare a spline to a straight line with a design-based likelihood ratio test. GAMs choose the amount of smoothing from the data and are excellent for exploring, but `mgcv` doesn't do design-based standard errors, so confirm what you find with regression splines in a survey model. Whatever you fit, interpret the curve by predicting from it and plotting, not by reading the coefficients.
 
-## Exercises
+## Homework 11
 
-These exercises are Homework 11.
+**Due:** April 8, before class.
+
+**Which version to do.** If you're in DEM 7283, do the version with your own survey data. If you're in DEM 5283, do either version, and say at the top of your homework which one you did. If your survey can't support this week's method, do the version with my data and say so.
 
 **Purpose.** Describe nonlinear relationships with curves, choose how flexible the curves should be, and interpret them without overclaiming.
 
-**What is provided.** The BRFSS data with `age` and the design `des`, the prediction data `newdat` and the function `predict_curve()`, and the Texas wage data `wages` from this chapter.
-
 **A satisfactory answer** shows and interprets predicted curves rather than spline coefficients; says what each curve holds fixed; and doesn't describe a cross-sectional age pattern as how individuals change as they age.
+
+### With your own survey data
+
+Use the full survey design for every estimate unless a step says otherwise, and report each estimate with a standard error or confidence interval.
+
+1. Choose an outcome and a continuous predictor (for example, age or income) whose relationship you suspect isn't a straight line, and state a research question about it.
+2. Fit a model with the predictor entered as a straight line, and a model with a natural spline `ns(x, df = k)` for `k` = 2, 3, 4 and 6, using the survey design.
+   1. Plot the predicted curves on one graph.
+   2. Where do the curves agree, and where do they differ (especially at the extremes of the predictor)?
+   3. How many degrees of freedom would you use, and why?
+3. Fit a **GAM** with `mgcv::gam()` and a smooth term for the predictor, using rescaled weights as in the chapter.
+   1. What effective degrees of freedom does it choose?
+   2. Plot the smooth and compare it with your spline models.
+4. Does the shape of the curve differ between two groups (for example, by sex or education)? Fit a model that allows it to, show the curves, and interpret the difference.
+5. Interpret your preferred curve in two or three sentences, and say what it holds fixed. If your predictor is age and your data are cross-sectional, explain why the curve can't tell you how an individual's outcome changes as that person ages.
+
+### With my data
+
+**What is provided.** The BRFSS data with `age` and the design `des`, the prediction data `newdat` and the function `predict_curve()`, and the Texas wage data `wages` from this chapter.
 
 **1.** Fit the self-rated health model with `ns(age, df = k)` for `k` = 2, 3, 4, 6 and 8, and plot the predicted curves on one graph with `predict_curve()`. Identify where the curves agree and where they differ, especially at the youngest and oldest ages. How many degrees of freedom would you use, and why? Then explain in two or three sentences why none of these curves can establish how an individual's health changes as that person ages.
 

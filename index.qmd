@@ -1,6 +1,6 @@
 # Preface {.unnumbered}
 
-These are the course notes for DEM 5283/7283, *Statistics for Demographic Data II*, the second semester of the graduate statistics sequence in the Department of Demography at the University of Texas at San Antonio, as I'm teaching it in Spring 2027. Each chapter is one week of the course: the handout I talk through in class, with the code, the output and the exercises.
+These are the course notes for DEM 5283/7283, *Statistics for Demographic Data II*, the second semester of the graduate statistics sequence in the Department of Demography at the University of Texas at San Antonio, as I'm teaching it in Spring 2027. Each chapter is one week of the course: the handout I talk through in class, with the code, the output and the homework.
 
 The first course gave you the linear model and the logic of inference. This one takes those tools to the places demographic data actually live: complex surveys, binary and categorical outcomes, counts and rates, people nested inside places, and the same people measured over time. The organizing idea is that every method comes with a real data source and the design that produced it. So the survey design from week 2 doesn't go away after week 2. It follows us into the logit models, the decompositions, the imputations and the multilevel models, because a model fit to survey data that ignores the design describes the sample, not the population, and its standard errors are usually too small.
 
@@ -16,7 +16,7 @@ Every chapter opens with a box that states the week's question, what you should 
 - **Longitudinal, nonlinear and multilevel models** (weeks 10 to 13) covers GEE, fixed effects and within-between models, splines and GAMs, and two weeks of multilevel models, ending with growth curves and the age-period-cohort identification problem.
 - **Causal inference and prediction** (weeks 14 to 16) covers DAGs and propensity score weighting, tree-based machine learning with `tidymodels`, and a guide to the final paper.
 
-Each chapter ends with exercises, which are that week's homework. Each set starts with its purpose, what's provided, and what a satisfactory answer looks like. The code chunks are left empty for you to fill in, and some have hints you can open.
+Each chapter ends with that week's homework. Each one starts with its purpose and what a satisfactory answer looks like. From week 2 on, the homework comes in two versions: one you do with the complex survey data you chose in week 2, and one with my data. Students in DEM 7283 do the version with their own data, and students in DEM 5283 can do either. The code chunks are left empty for you to fill in, and some have hints you can open.
 
 ## Getting set up
 

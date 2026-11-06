@@ -420,15 +420,34 @@ There's no technical fix, so the advice from the recent literature [@fosse_winsh
 
 Generalized linear mixed models extend multilevel models to binary, count and other outcomes, with the latent-scale ICC and the median odds ratio to describe how much places matter. They're slower and more fragile than linear mixed models, so rescale predictors and try other optimizers when they don't converge. Growth curve models are random slope models with time at level 1, and cross-level interactions with time show how trajectories differ between groups. Hierarchical APC models are multilevel models with crossed random effects for period and cohort, but they don't solve the age-period-cohort identification problem; they hide it, and different specifications that fit equally well can give different answers. The only honest approaches are explicit assumptions, a focus on the nonlinear components, measured mechanisms, and sensitivity analyses.
 
-## Exercises
+## Homework 13
 
-These exercises are Homework 13.
+**Due:** April 22, before class.
+
+**Which version to do.** If you're in DEM 7283, do the version with your own survey data. If you're in DEM 5283, do either version, and say at the top of your homework which one you did. If your survey can't support this week's method, do the version with my data and say so.
 
 **Purpose.** Extend multilevel models to a binary outcome and to growth over time, and report what they show without overstating it.
 
-**What is provided.** The BRFSS data with metro context and the GLMM `glmm1`, the ECLS-K growth data `growth` and models `gc0` and `gc1`, and (for the extension) the NHIS data and HAPC models from this chapter.
-
 **A satisfactory answer** reports predicted probabilities and says whether they're for a typical metro or averaged over metros; states where time starts in any growth model; and, for exercise 4, explains competing interpretations instead of picking one by fit statistics.
+
+### With your own survey data
+
+Use the full survey design for every estimate unless a step says otherwise, and report each estimate with a standard error or confidence interval.
+
+1. Using the grouping variable from Homework 12 (or the chapter's data), fit a **generalized linear mixed model** for a binary outcome with `glmer()`.
+   1. Start with a random intercept only model and report the ICC on the latent scale.
+   2. Add individual-level and group-level predictors, and present the results as odds ratios with confidence intervals.
+2. Report **predicted probabilities** for some interesting cases, and explain the difference between predictions for a typical group (random effect set to zero) and predictions averaged over groups.
+3. Compare the GLMM's fixed effects with a `svyglm()` logit for the same outcome and predictors. Why are the GLMM's coefficients typically larger in magnitude?
+4. **Growth curves.** Using repeated measurements (from your data, or the ECLS-K data from the chapter), fit a **growth curve model** with time as a level-1 variable.
+   1. Fit random intercepts, then random intercepts and slopes for time.
+   2. Does the shape of growth need to be nonlinear? Try a quadratic or spline term for time.
+   3. Add a time-constant predictor and its interaction with time, and interpret it.
+   4. Plot the predicted trajectories for two groups.
+
+### With my data
+
+**What is provided.** The BRFSS data with metro context and the GLMM `glmm1`, the ECLS-K growth data `growth` and models `gc0` and `gc1`, and (for the extension) the NHIS data and HAPC models from this chapter.
 
 **1.** Add a cross-level interaction between race and ethnicity and the metro poverty rate (`race_eth * z_pct_poverty`) to the obesity GLMM. Are the racial and ethnic differences in obesity larger in poorer metros? Show the answer as predicted probabilities, not odds ratios.
 
