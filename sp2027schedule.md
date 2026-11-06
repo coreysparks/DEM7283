@@ -11,7 +11,7 @@ We will be using R. R is the language in which most research statisticians work 
 
 Please update your R version (4.6.2) to the latest release and update all your packages.
 
-We will use R through Positron (https://positron.posit.co/download) and we will use Posit Publisher for turning in all assignments.
+We will use R through Positron (https://positron.posit.co/download), and we will use Posit Publisher to publish homework to Posit Connect Cloud. You turn in two links for each homework through Canvas: the published document and your GitHub repository.
 
 I will also post data and other resources to my Github repository https://github.com/coreysparks/DEM7283 
 
@@ -20,7 +20,7 @@ Copy and paste the following command in Positron to install the packages we will
 
 source("https://raw.githubusercontent.com/coreysparks/DEM7283/master/install_first_7283.R")
 
-In Positron. Please have these programs downloaded and installed prior to class.
+In Positron. Please have these programs downloaded and installed prior to class, and create a free GitHub account. The setup page of the course book, https://coreysparks.github.io/DEM7283/setup.html, walks you through each step.
 
 ## Revised calendar
 
@@ -33,7 +33,7 @@ In Positron. Please have these programs downloaded and installed prior to class.
 | 5 | Ordinal and multinomial models |
 | 6 | Counts and rates: Poisson, negative binomial, offsets, zero inflation |
 | 7 | Decomposition analysis: Kitagawa and Oaxaca-Blinder |
-| 8 | Spring break |
+| 8 | Spring break (optional review in the course book) |
 | 9 | Missing data and multiple imputation with survey designs |
 | 10 | Longitudinal models: GEE, fixed effects, within-between models |
 | 11 | Nonlinear regression: Splines and GAMs |

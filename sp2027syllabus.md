@@ -49,7 +49,7 @@ Email is the best way to reach me. I'll usually answer within one business day. 
 
 # Software
 
-We use R for everything in this course, through [Positron](https://positron.posit.co/download). Please install the current release of R (4.6.2 as of this writing), Positron and Git before the first class. On Windows, also install [Rtools](https://cran.r-project.org/bin/windows/Rtools/), which you'll need for week 12.
+We use R for everything in this course, through [Positron](https://positron.posit.co/download). Before the first class, please install the current release of R (4.6.2 as of this writing), Positron and Git, and create a free GitHub account. The [Before the First Class](https://coreysparks.github.io/DEM7283/setup.html) page of the course book walks you through each step. On Windows, also install [Rtools](https://cran.r-project.org/bin/windows/Rtools/), which you'll need for week 12.
 
 To install the packages we'll use this semester, paste this line into the Positron console:
 
@@ -57,7 +57,7 @@ To install the packages we'll use this semester, paste this line into the Positr
 source("https://raw.githubusercontent.com/coreysparks/DEM7283/master/install_first_7283.R")
 ```
 
-The script skips anything you already have, so it's safe to run again if it gets interrupted. All the course materials, data and exercises are in the course repository at <https://github.com/coreysparks/DEM7283>. We'll go over the setup, including `renv` and Git, in the first class.
+The script skips anything you already have, so it's safe to run again if it gets interrupted. All the course materials, data and exercises are in the course repository at <https://github.com/coreysparks/DEM7283>. We'll go over the rest of the setup, including `renv` and connecting R to your GitHub account, in the first class.
 
 # Course materials
 
@@ -125,7 +125,7 @@ Readings should be done before the class meeting in the week they're listed. The
 | 5 | Feb 18 | Ordinal and multinomial models | Homework 4 |
 | 6 | Feb 25 | Counts and rates: Poisson, negative binomial, offsets, zero inflation | Homework 5; **paper proposal** |
 | 7 | Mar 4 | Decomposition analysis: Kitagawa and Oaxaca-Blinder | Homework 6 |
-| 8 | Mar 11 | **Spring break, no class** | |
+| 8 | Mar 11 | **Spring break, no class** (optional review in the course book) | |
 | 9 | Mar 18 | Missing data and multiple imputation with survey designs | Homework 7 |
 | 10 | Mar 25 | Longitudinal models: GEE, fixed effects, within-between models | Homework 9 |
 | 11 | Apr 1 | Nonlinear regression: splines and GAMs | Homework 10 |
@@ -161,7 +161,7 @@ Homework is numbered by the week it's assigned, so there is no Homework 8.
 
 **Week 12. Multilevel models I.** @enders_tofighi2007; @rabe_hesketh_skrondal2006.
 
-**Week 13. Multilevel models II.** @austin_merlo2017; @singer_willett2003, chapters 3--4; @fosse_winship2019; @bell_jones2014.
+**Week 13. Multilevel models II.** @austin_merlo2017; @singer_willett2003, chapters 3--4. Optional, for the age-period-cohort extension: @fosse_winship2019; @bell_jones2014.
 
 **Week 14. Causal inference.** @hernan_robins2020, chapters 1--7; @austin2011; @elwert_winship2014; @vanderweele_ding2017.
 
