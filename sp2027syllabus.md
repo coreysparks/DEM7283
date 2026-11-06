@@ -93,15 +93,35 @@ Journal articles are available through the [UTSA Libraries](https://lib.utsa.edu
 | Final paper | 20% |
 | **Total** | **100%** |
 
-**Homework (60%).** Each week's materials end with a set of exercises, and those exercises are the homework. There are 14 sets (weeks 1--7 and 9--15). I drop your lowest score, and the remaining 13 count equally. Each homework is a Quarto document that renders from top to bottom without errors. Through Canvas, turn in two links: the link to your rendered homework on Posit Connect Cloud (published from Positron with Posit Publisher), and the link to the GitHub repository that holds your homework code. Homework is due before class one week after it's assigned. I grade on whether the code runs and is correct, and just as much on whether your written interpretation is correct and says what the numbers mean.
+**Homework (60%).** Each week's materials end with a set of exercises, and those exercises are the homework. Starting with Homework 2, students in DEM 7283 do the exercises with the survey data they chose in week 2, and students in DEM 5283 can use either my data or their own (see "Your survey data" below). There are 14 sets (weeks 1--7 and 9--15). I drop your lowest score, and the remaining 13 count equally. Each homework is a Quarto document that renders from top to bottom without errors. Through Canvas, turn in two links: the link to your rendered homework on Posit Connect Cloud (published from Positron with Posit Publisher), and the link to the GitHub repository that holds your homework code. Homework is due before class one week after it's assigned. I grade on whether the code runs and is correct, and just as much on whether your written interpretation is correct and says what the numbers mean.
 
 **Final paper (40% total).** The final paper is an original analysis of demographic data using one or more of the methods from this course. It should read like a short research article: a research question and its motivation, a brief literature review, data and methods, results, and a discussion. I expect about 15--20 double-spaced pages, plus tables and figures, along with the Quarto document and code that produce every number in the paper. The paper has three graded parts:
 
-- **Proposal (10%), due February 25 (week 6).** One to two pages: your research question, the data you'll use, the outcome and key predictors, and the model you expect to fit. Talk to me before then if you're unsure about any of it.
+- **Proposal (10%), due February 25 (week 6).** One to two pages: your research question, the data you'll use (usually the survey you chose in week 2), the outcome and key predictors, and the model you expect to fit. Talk to me before then if you're unsure about any of it.
 - **Presentation (10%), May 6 (week 16).** A 15-minute presentation of your analysis and results, followed by questions from the class.
 - **Paper (20%), due May 6 (week 16).** The written paper and the files that reproduce it.
 
 The [week 16 chapter](https://coreysparks.github.io/DEM7283/chapters/16-final-paper.html) of the course book has an annotated outline, the criteria I use to grade the paper, suggested (ungraded) checkpoints, and what the presentation should cover. One well-justified model can fully meet the goals of the paper; complex methods don't earn extra credit for being complex.
+
+## Your survey data
+
+Everyone in the course chooses a complex survey data set to work with this semester: a survey with sampling weights, plus either strata and clusters or replicate weights. It will usually be the data for your final paper too, so pick one that can answer a question you care about. Good places to start are the BRFSS, NHIS, NHANES, the ACS and CPS microdata from IPUMS, the Demographic and Health Surveys (DHS) and the ECLS-K. Something else is fine, as long as its sampling design is documented.
+
+**Survey data choice, due January 28 (week 2).** Turn in a short description through Canvas (a paragraph or a list is fine) that gives:
+
+- the survey, the year or years you'll use, and how you'll get the data;
+- the variables that define the design: the weight, and either the strata and PSU (cluster) variables or the replicate weights;
+- two or three outcomes you might study, at least one of them binary; and
+- any geographic or other grouping variables (state, county, metro area, survey cluster), which you'll want for the multilevel models in weeks 12 and 13.
+
+It isn't graded on its own, but you need it approved before you start Homework 2. I'll approve your choice or suggest changes within a few days. If you can't find the design variables, ask me; some surveys bury them deep in the documentation. If your data are restricted (covered by a data use agreement), talk to me before you choose them, because your homework repository and published homework are public.
+
+**How the homework uses your data.**
+
+- **DEM 7283 (doctoral students).** You do every homework from Homework 2 on with your own survey. The exercises are written for my data, so adapt each one: use the same method and answer the same questions with your own outcome and predictors. When an exercise names a specific variable, use the closest one in your data and say what you used.
+- **DEM 5283 (master's students).** For each homework, you choose. You can do the exercises as written with my data, or adapt them to your own survey the way the doctoral students do. Say at the top of each homework which one you chose.
+
+Some weeks' methods need data that your survey may not have. Longitudinal models (week 10) need repeated measurements of the same people, and multilevel models (weeks 12 and 13) need a grouping variable with enough groups. When your survey can't support a week's method, use my data for those exercises and say so in your homework.
 
 ## Grade distribution
 
@@ -120,7 +140,7 @@ Readings should be done before the class meeting in the week they're listed. The
 | Week | Date | Topic | Due |
 |:---:|---|---|---|
 | 1 | Jan 21 | Course introduction; reproducible workflow with Quarto, renv and Git | |
-| 2 | Jan 28 | Complex survey design, weights, replicate variance | Homework 1 |
+| 2 | Jan 28 | Complex survey design, weights, replicate variance | Homework 1; **survey data choice** |
 | 3 | Feb 4 | Binary outcomes: logit and probit, predicted probabilities, average marginal effects | Homework 2 |
 | 4 | Feb 11 | Comparing nested logit models (KHB); prediction and cross validation | Homework 3 |
 | 5 | Feb 18 | Ordinal and multinomial models | Homework 4 |
